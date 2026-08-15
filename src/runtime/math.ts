@@ -211,3 +211,21 @@ export function mathFixnan(x: Cell): Cell {
   if (x === null || !Number.isFinite(x)) return 0;
   return x;
 }
+
+/**
+ * Uniform random. No args → [0, 1). One arg → [0, max]. Two args → [min, max]
+ * via `lo + (hi - lo) * u` (Python `random.uniform`). Any na / non-finite → na.
+ * `rng` is a [0, 1) source (default `Math.random`).
+ */
+export function mathRandom(a?: Cell, b?: Cell, rng: () => number = Math.random): Cell {
+  if (a === undefined && b === undefined) return finiteOut(rng());
+  if (b === undefined) {
+    const hi = finite(a as Cell);
+    if (hi === null) return null;
+    return finiteOut(hi * rng());
+  }
+  const lo = finite(a as Cell);
+  const hi = finite(b);
+  if (lo === null || hi === null) return null;
+  return finiteOut(lo + (hi - lo) * rng());
+}

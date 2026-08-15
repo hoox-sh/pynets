@@ -129,21 +129,32 @@ export function colorByName(name: string): Color | null {
   return found ? { ...found } : null;
 }
 
-export function colorR(c: Color | null): number | null {
-  return isColor(c) ? clampByte(c.r) : null;
+/** Coerce Color | `#RRGGBB(AA)` | named (`red` / `color.red`). Unknown / na → `null`. */
+export function asColor(c: unknown): Color | null {
+  if (isColor(c)) return c;
+  if (typeof c !== "string") return null;
+  return parseColor(c) ?? colorByName(c);
 }
 
-export function colorG(c: Color | null): number | null {
-  return isColor(c) ? clampByte(c.g) : null;
+export function colorR(c: unknown): number | null {
+  const col = asColor(c);
+  return col ? clampByte(col.r) : null;
 }
 
-export function colorB(c: Color | null): number | null {
-  return isColor(c) ? clampByte(c.b) : null;
+export function colorG(c: unknown): number | null {
+  const col = asColor(c);
+  return col ? clampByte(col.g) : null;
+}
+
+export function colorB(c: unknown): number | null {
+  const col = asColor(c);
+  return col ? clampByte(col.b) : null;
 }
 
 /** Transparency 0–100 derived from alpha (255 → 0, 0 → 100). */
-export function colorT(c: Color | null): number | null {
-  return isColor(c) ? alphaToTransp(c.a) : null;
+export function colorT(c: unknown): number | null {
+  const col = asColor(c);
+  return col ? alphaToTransp(col.a) : null;
 }
 
 /** `#RRGGBB`, or `#RRGGBBAA` when alpha is not 255. */

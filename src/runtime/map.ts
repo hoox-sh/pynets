@@ -75,4 +75,11 @@ export class PineMap {
     for (const k of this.order) out.put(decodeKey(k), this.data.get(k)!);
     return out;
   }
+
+  putAll(other: PineMap): void {
+    if (!(other instanceof PineMap)) return;
+    const keys = other.keys();
+    const values = other.values();
+    for (let i = 0; i < keys.length; i++) this.put(keys[i]!, values[i]!);
+  }
 }

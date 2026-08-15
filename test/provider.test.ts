@@ -18,6 +18,13 @@ const SAMPLE: ProviderBar[] = [
   { time: 3, open: 12, high: 14, low: 11, close: 13, volume: 120 },
 ];
 
+/** `mapJsonBars` stores Unix seconds as milliseconds. */
+const SAMPLE_MS: ProviderBar[] = [
+  { time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+  { time: 2000, open: 11, high: 13, low: 10, close: 12, volume: 110 },
+  { time: 3000, open: 12, high: 14, low: 11, close: 13, volume: 120 },
+];
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -86,7 +93,7 @@ describe("StaticMapProvider", () => {
 
 describe("mapJsonBars", () => {
   test("object-array body", () => {
-    expect(mapJsonBars(SAMPLE)).toEqual(SAMPLE);
+    expect(mapJsonBars(SAMPLE)).toEqual(SAMPLE_MS);
   });
 
   test("tuple-array body", () => {
@@ -96,29 +103,63 @@ describe("mapJsonBars", () => {
         [2, 11, 13, 10, 12, 110],
       ]),
     ).toEqual([
-      { time: 1, open: 10, high: 12, low: 9, close: 11, volume: 100 },
-      { time: 2, open: 11, high: 13, low: 10, close: 12, volume: 110 },
+      { time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      { time: 2000, open: 11, high: 13, low: 10, close: 12, volume: 110 },
     ]);
   });
 
   test("tuple without volume", () => {
     expect(mapJsonBars([[1, 10, 12, 9, 11]])).toEqual([
-      { time: 1, open: 10, high: 12, low: 9, close: 11 },
+      { time: 1000, open: 10, high: 12, low: 9, close: 11 },
+    ]);
+  });
+
+  test("12-number tuple uses first 6", () => {
+    expect(
+      mapJsonBars([
+        [1_700_000_000, 10, 12, 9, 11, 100, 99, 98, 97, 96, 95, 94],
+      ]),
+    ).toEqual([
+      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+    ]);
+  });
+
+  test("unix seconds become milliseconds", () => {
+    expect(mapJsonBars([{ time: 1_700_000_000, close: 11 }])).toEqual([
+      { time: 1_700_000_000_000, close: 11 },
+    ]);
+    expect(mapJsonBars([{ t: 1_700_000_000, c: 11 }])).toEqual([
+      { time: 1_700_000_000_000, close: 11 },
+    ]);
+    expect(mapJsonBars([[1_700_000_000, 10, 12, 9, 11, 100]])).toEqual([
+      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+    ]);
+  });
+
+  test("already-ms time is unchanged", () => {
+    expect(mapJsonBars([{ time: 1_700_000_000_000, close: 11 }])).toEqual([
+      { time: 1_700_000_000_000, close: 11 },
+    ]);
+    expect(mapJsonBars([{ t: 1_700_000_000_000, c: 11 }])).toEqual([
+      { time: 1_700_000_000_000, close: 11 },
+    ]);
+    expect(mapJsonBars([[1_700_000_000_000, 10, 12, 9, 11, 100]])).toEqual([
+      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
     ]);
   });
 
   test("{ bars: [...] } wrapper", () => {
-    expect(mapJsonBars({ bars: SAMPLE })).toEqual(SAMPLE);
+    expect(mapJsonBars({ bars: SAMPLE })).toEqual(SAMPLE_MS);
   });
 
   test("{ data: [...] } wrapper", () => {
-    expect(mapJsonBars({ data: SAMPLE })).toEqual(SAMPLE);
+    expect(mapJsonBars({ data: SAMPLE })).toEqual(SAMPLE_MS);
   });
 
   test("t/o/h/l/c/v keys", () => {
     expect(
       mapJsonBars([{ t: 1, o: 10, h: 12, l: 9, c: 11, v: 100 }]),
-    ).toEqual([{ time: 1, open: 10, high: 12, low: 9, close: 11, volume: 100 }]);
+    ).toEqual([{ time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 }]);
   });
 
   test("non-finite numbers omit that field", () => {
@@ -144,7 +185,7 @@ describe("JsonBarProvider", () => {
       url: () => "https://example.test/bars",
       fetch: stubFetch(() => jsonResponse(SAMPLE)),
     });
-    expect(await p.fetch({ symbol: "AAPL" })).toEqual(SAMPLE);
+    expect(await p.fetch({ symbol: "AAPL" })).toEqual(SAMPLE_MS);
   });
 
   test("tuple-array body", async () => {
@@ -153,7 +194,7 @@ describe("JsonBarProvider", () => {
       fetch: stubFetch(() => jsonResponse([[1, 10, 12, 9, 11, 100]])),
     });
     expect(await p.fetch({ symbol: "AAPL" })).toEqual([
-      { time: 1, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      { time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
     ]);
   });
 
@@ -162,7 +203,7 @@ describe("JsonBarProvider", () => {
       url: () => "https://example.test/bars",
       fetch: stubFetch(() => jsonResponse({ data: SAMPLE })),
     });
-    expect(await p.fetch({ symbol: "AAPL" })).toEqual(SAMPLE);
+    expect(await p.fetch({ symbol: "AAPL" })).toEqual(SAMPLE_MS);
   });
 
   test("t/o/h/l/c/v keys", async () => {
@@ -173,7 +214,7 @@ describe("JsonBarProvider", () => {
       ),
     });
     expect(await p.fetch({ symbol: "AAPL" })).toEqual([
-      { time: 1, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      { time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
     ]);
   });
 
@@ -220,7 +261,7 @@ describe("JsonBarProvider", () => {
       url: () => "https://example.test/bars",
       fetch: stubFetch(() => jsonResponse(SAMPLE)),
     });
-    expect(await p.fetch({ symbol: "AAPL", limit: 2 })).toEqual(SAMPLE.slice(-2));
+    expect(await p.fetch({ symbol: "AAPL", limit: 2 })).toEqual(SAMPLE_MS.slice(-2));
   });
 
   test("url builder receives symbol/timeframe/limit", async () => {

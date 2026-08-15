@@ -35,11 +35,15 @@ import type {
 } from "../ast/nodes.ts";
 import { PineArray } from "./array.ts";
 import {
+  asColor,
   colorByName,
   colorFromGradient,
   colorNew,
+  colorB,
+  colorG,
   colorR,
   colorRgb,
+  colorT,
   parseColor,
   type Color,
 } from "./color.ts";
@@ -61,12 +65,16 @@ import {
   timeframeMultiplier as tfMultiplier,
 } from "./timeframe.ts";
 import { DrawingBook, type DrawingEvent } from "./drawings.ts";
-import { LogBook, formatLogParts, type LogRecord } from "./log.ts";
+import { LogBook, formatLogParts, runtimeError, type LogRecord } from "./log.ts";
 import { MemoryProvider, type BarProvider } from "./provider.ts";
 import {
   TickerId,
   tickerHeikinashi,
+  tickerKagi,
+  tickerLinebreak,
+  tickerModify,
   tickerNew,
+  tickerPointfigure,
   tickerRenko,
   tickerStandard,
 } from "./ticker.ts";
@@ -87,6 +95,7 @@ import {
   mathMax,
   mathMin,
   mathPow,
+  mathRandom,
   mathRound,
   mathRoundToMintick,
   mathSign,
@@ -1577,7 +1586,7 @@ function evalCall(node: Call, env: Env): Value {
       const v = evalExpr(a.value, env);
       return typeof v === "string" ? v : unwrap(v);
     });
-    throw new Error(formatLogParts(parts) || "runtime.error");
+    runtimeError(formatLogParts(parts) || "runtime.error");
   }
   if (fname === "ticker.new") {
     const sym = evalAsString(callArg(node.args, 0, ["symbol"]), env) ?? env.symbol;
@@ -1598,6 +1607,31 @@ function evalCall(node: Call, env: Env): Value {
     const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
     const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
     return tickerRenko(sym);
+  }
+  if (fname === "ticker.kagi") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerKagi(sym);
+  }
+  if (fname === "ticker.linebreak") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerLinebreak(sym);
+  }
+  if (fname === "ticker.pointfigure") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerPointfigure(sym);
+  }
+  if (fname === "ticker.modify") {
+    const raw = evalExpr(callArg(node.args, 0, ["ticker", "tickerid"]), env);
+    const base = raw instanceof TickerId ? raw : (typeof raw === "string" ? raw : env.symbol);
+    return tickerModify(base, {
+      symbol: evalAsString(callArg(node.args, 1, ["symbol"]), env) ?? undefined,
+      session: evalAsString(callArg(node.args, 2, ["session"]), env) ?? undefined,
+      adjust:
+        evalAsString(callArg(node.args, 3, ["adjust", "adjustment"]), env) ?? undefined,
+    });
   }
   const mapVal = evalMapCall(fname, node, env);
   if (mapVal !== undefined) return mapVal;
@@ -2063,6 +2097,14 @@ function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefi
   if (fname === "math.todegrees") return mathToDegrees(cellArg(node, env, 0, ["radians", "x"]));
   if (fname === "math.toradians") return mathToRadians(cellArg(node, env, 0, ["degrees", "x"]));
   if (fname === "math.isfinite") return mathIsFinite(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.random") {
+    const a0 = callArg(node.args, 0, ["min"]);
+    const a1 = callArg(node.args, 1, ["max"]);
+    return mathRandom(
+      a0 == null ? undefined : unwrap(evalExpr(a0, env)),
+      a1 == null ? undefined : unwrap(evalExpr(a1, env)),
+    );
+  }
   if (fname === "math.round_to_mintick") {
     const tick = typeof env.ctx["syminfo.mintick"] === "number" ? (env.ctx["syminfo.mintick"] as number) : 0.01;
     return mathRoundToMintick(cellArg(node, env, 0, ["number", "x"]), tick);
@@ -2958,6 +3000,30 @@ function evalMapCall(fname: string | null, node: Call, env: Env): Value | undefi
     asMap(evalExpr(callArg(node.args, 0, ["id"]), env))?.clear();
     return NA;
   }
+  if (fname === "map.put_all") {
+    const m = asMap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asMap(evalExpr(callArg(node.args, 1, ["id2", "other"]), env));
+    if (m && other) m.putAll(other);
+    return NA;
+  }
+  if (fname === "map.keys") {
+    const m = asMap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (!m) return NA;
+    const arr = new PineArray();
+    for (const k of m.keys()) arr.push(typeof k === "number" ? k : null);
+    return arr;
+  }
+  if (fname === "map.values") {
+    const m = asMap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (!m) return NA;
+    const arr = new PineArray();
+    for (const v of m.values()) arr.push(v);
+    return arr;
+  }
+  if (fname === "map.copy") {
+    const m = asMap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.copy() : NA;
+  }
   return undefined;
 }
 
@@ -3368,14 +3434,13 @@ function evalAlertMessage(node: expr | undefined, env: Env): string {
 }
 
 function evalColorCall(fname: string | null, node: Call, env: Env): Value | undefined {
-  if (fname === "color.r") {
+  if (fname === "color.r" || fname === "color.g" || fname === "color.b" || fname === "color.t") {
     const v = evalExpr(callArg(node.args, 0, ["color"]), env);
-    if (v && typeof v === "object" && "r" in v) return colorR(v as Color);
-    if (typeof v === "string") {
-      const c = parseColor(v);
-      return c ? colorR(c) : NA;
-    }
-    return NA;
+    const raw = typeof v === "string" ? v : v && typeof v === "object" && "r" in v ? v : null;
+    if (fname === "color.r") return colorR(raw);
+    if (fname === "color.g") return colorG(raw);
+    if (fname === "color.b") return colorB(raw);
+    return colorT(raw);
   }
   if (fname === "color.rgb") {
     return colorRgb(
@@ -3401,15 +3466,12 @@ function evalColorCall(fname: string | null, node: Call, env: Env): Value | unde
       asColor(c2) ?? { r: 255, g: 255, b: 255, a: 255 },
     );
   }
-  if (fname === "color.new") {
+  if (fname === "color.new" || fname === "color") {
     const raw = evalExpr(callArg(node.args, 0, ["color"]), env);
-    if (typeof raw === "string") {
-      const parsed = parseColor(raw);
-      if (!parsed) return NA;
-      const t = unwrap(evalExpr(callArg(node.args, 1, ["transp"]), env));
-      return colorNew(parsed.r, parsed.g, parsed.b, t ?? undefined);
-    }
-    return NA;
+    const parsed = asColor(raw);
+    if (!parsed) return NA;
+    const t = unwrap(evalExpr(callArg(node.args, 1, ["transp"]), env));
+    return colorNew(parsed.r, parsed.g, parsed.b, t ?? undefined);
   }
   return undefined;
 }

@@ -40,5 +40,16 @@ export { timestamp, timestampFromComponents, parseTimestampString, weekOfYear, t
 export type { UtcParts } from "./runtime/time.ts";
 export { LogBook } from "./runtime/log.ts";
 export type { LogLevel, LogRecord } from "./runtime/log.ts";
-export { TickerId, tickerNew, tickerHeikinashi, tickerStandard } from "./runtime/ticker.ts";
+export {
+  TickerId,
+  tickerNew,
+  tickerHeikinashi,
+  tickerStandard,
+  tickerRenko,
+  tickerKagi,
+  tickerLinebreak,
+  tickerPointfigure,
+  tickerModify,
+} from "./runtime/ticker.ts";
+export { RuntimeError, runtimeError } from "./runtime/log.ts";
 export { UdtType, UdtInstance, EnumType, EnumMember } from "./runtime/udt.ts";

@@ -62,6 +62,51 @@ describe("PineMap", () => {
     expect(m.remove("missing")).toBeNull();
   });
 
+  test("putAll merges and overwrites", () => {
+    const other = new PineMap();
+    other.put("a", 1);
+    other.put("b", 2);
+    const m = new PineMap();
+    m.put("a", 999);
+    m.put("c", 3);
+    m.putAll(other);
+    expect(m.size()).toBe(3);
+    expect(m.get("a")).toBe(1);
+    expect(m.get("b")).toBe(2);
+    expect(m.get("c")).toBe(3);
+  });
+
+  test("putAll keeps old key order and appends new keys", () => {
+    const other = new PineMap();
+    other.put("a", 1);
+    other.put("d", 4);
+    const m = new PineMap();
+    m.put("c", 3);
+    m.put("a", 999);
+    m.putAll(other);
+    expect(m.keys()).toEqual(["c", "a", "d"]);
+    expect(m.values()).toEqual([3, 1, 4]);
+  });
+
+  test("putAll empty other is no-op", () => {
+    const m = new PineMap();
+    m.put("a", 1);
+    m.putAll(new PineMap());
+    expect(m.size()).toBe(1);
+    expect(m.get("a")).toBe(1);
+    expect(m.keys()).toEqual(["a"]);
+  });
+
+  test("putAll invalid or null other is no-op", () => {
+    const m = new PineMap();
+    m.put("a", 1);
+    m.putAll(null as unknown as PineMap);
+    m.putAll(undefined as unknown as PineMap);
+    m.putAll({} as PineMap);
+    expect(m.size()).toBe(1);
+    expect(m.get("a")).toBe(1);
+  });
+
   test("user keys do not pollute Object.prototype", () => {
     const m = new PineMap();
     m.put("__proto__", 1);

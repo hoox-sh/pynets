@@ -21,6 +21,7 @@ import {
   mathMax,
   mathMin,
   mathPow,
+  mathRandom,
   mathRound,
   mathSign,
   mathSin,
@@ -242,6 +243,28 @@ describe("math non-finite in → na", () => {
     expect(mathLog(8, null)).toBeNull();
     expect(mathSin(null)).toBeNull();
     expect(mathTan(Number.NaN)).toBeNull();
+  });
+});
+
+describe("math.random", () => {
+  test("no args → [0, 1) via rng", () => {
+    expect(mathRandom(undefined, undefined, () => 0.25)).toBe(0.25);
+  });
+
+  test("one arg max → [0, max]", () => {
+    expect(mathRandom(10, undefined, () => 0.5)).toBe(5);
+  });
+
+  test("two args → [min, max] via lo + (hi - lo) * u", () => {
+    expect(mathRandom(2, 6, () => 0.25)).toBe(3);
+  });
+
+  test("na / non-finite arg → na", () => {
+    expect(mathRandom(null)).toBeNull();
+    expect(mathRandom(null, 6)).toBeNull();
+    expect(mathRandom(2, null)).toBeNull();
+    expect(mathRandom(Number.NaN, 6)).toBeNull();
+    expect(mathRandom(2, Number.POSITIVE_INFINITY)).toBeNull();
   });
 });
 

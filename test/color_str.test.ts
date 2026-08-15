@@ -173,6 +173,13 @@ describe("color channels / hex", () => {
     expect(colorT(null)).toBeNull();
   });
 
+  test("colorR / G / B / T accept hex and named strings", () => {
+    expect(colorR("#FF0000")).toBe(255);
+    expect(Number.isFinite(colorG("color.lime"))).toBe(true);
+    expect(colorT(null)).toBeNull();
+    expect(colorR("nope")).toBeNull();
+  });
+
   test("colorToHex omits AA when opaque", () => {
     expect(colorToHex({ r: 255, g: 0, b: 0, a: 255 })).toBe("#FF0000");
     expect(colorToHex({ r: 0, g: 255, b: 0, a: 128 })).toBe("#00FF0080");

@@ -151,8 +151,10 @@ const BAR_KEYS = ["open", "high", "low", "close", "volume", "time"] as const;
 
 /**
  * Accept arrays of `{open,high,low,close,volume,time}` (or `t/o/h/l/c/v`),
- * tuples `[time, open, high, low, close, volume?]`, and `{ bars | data }`
- * wrappers. Non-finite numbers omit that field. Unknown shape → `[]`.
+ * tuples `[time, open, high, low, close, volume, ...]`, and `{ bars | data }`
+ * wrappers. Extra trailing tuple fields are ignored. Finite `time`/`t` values
+ * below `1e12` are treated as Unix seconds and stored as milliseconds.
+ * Non-finite numbers omit that field. Unknown shape → `[]`.
  */
 export function mapJsonBars(json: unknown): ProviderBar[] {
   const rows = unwrapRows(json);
@@ -207,7 +209,13 @@ function assignFinite(
   value: unknown,
 ): void {
   const n = asFinite(value);
-  if (n !== undefined) bar[key] = n;
+  if (n === undefined) return;
+  bar[key] = key === "time" ? normalizeBarTime(n) : n;
+}
+
+/** Unix seconds (`< 1e12`) → milliseconds; already-ms values are unchanged. */
+function normalizeBarTime(msOrSec: number): number {
+  return msOrSec < 1e12 ? msOrSec * 1000 : msOrSec;
 }
 
 function asFinite(value: unknown): number | undefined {

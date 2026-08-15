@@ -27,6 +27,30 @@ export class LogBook {
   error(bar: number, message: string): void {
     this.records.push({ level: "ERROR", bar, message });
   }
+
+  /** Drop all records (Python `Logger.clear`). */
+  clear(): void {
+    this.records.length = 0;
+  }
+
+  /** Copy of records (Python `Logger.get_logs`). */
+  snapshot(): LogRecord[] {
+    return this.records.slice();
+  }
+}
+
+/** Pine `runtime.error` abort (Python `RuntimeError`). */
+export class RuntimeError extends Error {
+  override readonly name = "RuntimeError";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/** Halt with `RuntimeError` (Python `runtime_error`). */
+export function runtimeError(message: string): never {
+  throw new RuntimeError(message);
 }
 
 export function formatLogParts(parts: unknown[]): string {
