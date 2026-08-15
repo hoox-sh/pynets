@@ -12,7 +12,7 @@ const MUTED = [203, 204, 189] as const;
 const FAIL = [231, 0, 11] as const;
 const WARN = [235, 169, 65] as const;
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 type Rgb = readonly [number, number, number];
 

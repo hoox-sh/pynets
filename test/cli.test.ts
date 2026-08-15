@@ -94,7 +94,7 @@ describe("pynets CLI", () => {
     expect(r.code).toBe(0);
     const payload = JSON.parse(r.stdout) as { name: string; version: string };
     expect(payload.name).toBe("pynets");
-    expect(payload.version).toBe("0.1.0");
+    expect(payload.version).toBe("0.2.0");
   });
 
   test("dump contains Script / Call", () => {

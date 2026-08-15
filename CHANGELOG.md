@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-16
+
+JS compile backend (`mode: "compile" | "auto"`). Interpret unchanged.
+
 ### Added
 
 - JS compile backend (`mode: "compile" | "auto"`) — emit a bar-loop function. No Numba.
@@ -17,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compile Heikin-Ashi `ticker.heikinashi` + `timestamp` / `timeframe.in_seconds` / `weekofyear`
 - Compile `import`: inline registered library sources; unresolved aliases stub to `na`. `str.format` / `str.format_time`
 - Compile `session.*` / `chart.*`, `log.*` (result `logs`), `ticker.new/standard`, `request.currency_rate`, `alertcondition`
+
+### Notes
+
+- Compile is JS emit (Python object-mode analog), not Numba
+- `import` / foreign `request.*` stay interpret-or-na; no invented bars
 
 ## [0.1.0] - 2026-08-15
 
