@@ -72,6 +72,109 @@ export class PineArray {
     return this.cells.includes(value);
   }
 
+  first(): Cell {
+    return this.cells.length === 0 ? null : this.cells[0]!;
+  }
+
+  last(): Cell {
+    return this.cells.length === 0 ? null : this.cells[this.cells.length - 1]!;
+  }
+
+  insert(index: number, value: Cell): void {
+    if (!Number.isFinite(index)) return;
+    let i = Math.trunc(index);
+    if (i < 0) i = this.cells.length + i;
+    if (i < 0) i = 0;
+    if (i > this.cells.length) i = this.cells.length;
+    this.cells.splice(i, 0, value);
+  }
+
+  remove(index: number): Cell {
+    const i = resolveIndex(index, this.cells.length);
+    if (i === null) return null;
+    return this.cells.splice(i, 1)[0]!;
+  }
+
+  fill(value: Cell): void {
+    for (let i = 0; i < this.cells.length; i++) this.cells[i] = value;
+  }
+
+  slice(from: number, to?: number): PineArray {
+    const start = Number.isFinite(from) ? Math.trunc(from) : 0;
+    const end = to === undefined || !Number.isFinite(to) ? this.cells.length : Math.trunc(to);
+    const out = new PineArray();
+    for (const v of this.cells.slice(start, end)) out.push(v);
+    return out;
+  }
+
+  copy(): PineArray {
+    const out = new PineArray();
+    for (const v of this.cells) out.push(v);
+    return out;
+  }
+
+  reverse(): void {
+    this.cells.reverse();
+  }
+
+  sort(order: "asc" | "desc" = "asc"): void {
+    this.cells.sort((a, b) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return order === "desc" ? b - a : a - b;
+    });
+  }
+
+  indexof(value: Cell): Cell {
+    const i = this.cells.indexOf(value);
+    return i < 0 ? null : i;
+  }
+
+  avg(): Cell {
+    if (this.cells.length === 0) return null;
+    let sum = 0;
+    for (const v of this.cells) {
+      if (v === null || !Number.isFinite(v)) return null;
+      sum += v;
+    }
+    return sum / this.cells.length;
+  }
+
+  min(): Cell {
+    if (this.cells.length === 0) return null;
+    let best: number | null = null;
+    for (const v of this.cells) {
+      if (v === null || !Number.isFinite(v)) return null;
+      if (best === null || v < best) best = v;
+    }
+    return best;
+  }
+
+  max(): Cell {
+    if (this.cells.length === 0) return null;
+    let best: number | null = null;
+    for (const v of this.cells) {
+      if (v === null || !Number.isFinite(v)) return null;
+      if (best === null || v > best) best = v;
+    }
+    return best;
+  }
+
+  sum(): Cell {
+    if (this.cells.length === 0) return null;
+    let acc = 0;
+    for (const v of this.cells) {
+      if (v === null || !Number.isFinite(v)) return null;
+      acc += v;
+    }
+    return acc;
+  }
+
+  join(sep = ","): string {
+    return this.cells.map((v) => (v === null ? "na" : String(v))).join(sep);
+  }
+
   toValues(): Cell[] {
     return this.cells.slice();
   }

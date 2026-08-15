@@ -16,7 +16,7 @@ export interface BrokerSettings {
 }
 
 export interface StrategyEvent {
-  type: "entry" | "close" | "exit";
+  type: "entry" | "close" | "exit" | "cancel" | "close_all" | "cancel_all";
   id: string;
   direction?: StrategyDirection;
   qty?: number | null;
@@ -52,6 +52,8 @@ export class StrategyBook {
   readonly fills: Fill[] = [];
   commissionPaid = 0;
   realizedPnl = 0;
+  closedCount = 0;
+  initialCapital = 1_000_000;
 
   private commission: number;
   private slippage: number;
@@ -62,6 +64,14 @@ export class StrategyBook {
     this.commission = settings?.commission ?? 0;
     this.slippage = settings?.slippage ?? 0;
     this.pyramiding = settings?.pyramiding;
+  }
+
+  /** Mark-to-market equity: initial + realized − commission + open PnL. */
+  equity(mark: number): number {
+    const q = this.position.qty;
+    const avg = this.position.avgPrice;
+    const open = q === 0 || avg == null ? 0 : q * (mark - avg);
+    return this.initialCapital + this.realizedPnl - this.commissionPaid + open;
   }
 
   configure(settings: BrokerSettings): void {
@@ -92,6 +102,19 @@ export class StrategyBook {
 
   exit(bar: number, id: string): void {
     this.events.push({ type: "exit", id, bar });
+  }
+
+  cancel(bar: number, id: string): void {
+    this.events.push({ type: "cancel", id, bar });
+  }
+
+  closeAll(bar: number, mark?: number): void {
+    if (mark != null && this.position.qty !== 0) this.fillClose(bar, "close_all", mark);
+    else this.events.push({ type: "close_all", id: "", bar });
+  }
+
+  cancelAll(bar: number): void {
+    this.events.push({ type: "cancel_all", id: "", bar });
   }
 
   /** Market entry at `price`. Flat/same-dir adds qty; opposite closes then reverses. */
@@ -132,6 +155,7 @@ export class StrategyBook {
       this.position.qty = 0;
       this.position.avgPrice = null;
       this.sameDirAdds = 0;
+      this.closedCount += 1;
     }
     this.close(bar, id);
   }

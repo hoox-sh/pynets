@@ -2,10 +2,11 @@
  * Copyright (C) 2024-2026 jango_blockchained
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * Tiny interpret host: indicator/plot, series lookback, var/:=, ta.*,
+ * Interpret host: indicator/plot, series lookback, var/:=, ta.*,
  * tuple unpack, ternary, for-to / for-in / while, switch, and/or,
- * arrays, color/str, strategy events, input*, math.*, request.security,
- * UDF FunctionDef, matrix.*, extra TA, drawings/alert.
+ * arrays, color/str, strategy events + position series, input*, math.*,
+ * request.security, UDF FunctionDef, matrix.*, extra TA, drawings/alert,
+ * derived prices, calendar, Pine na-compare.
  * Not a port of runtime/host.py — same public envelope, interpret only.
  */
 import { parse } from "../ast/helper.ts";
@@ -35,12 +36,31 @@ import { DrawingBook, type DrawingEvent } from "./drawings.ts";
 import { isInputBuiltin, resolveInputDefault, inputAsCell, type InputValue } from "./input.ts";
 import {
   mathAbs,
+  mathAcos,
+  mathAsin,
+  mathAtan,
+  mathAvg,
+  mathCeil,
+  mathCos,
+  mathExp,
+  mathFloor,
+  mathIsFinite,
   mathLog,
+  mathLog10,
   mathMax,
   mathMin,
   mathPow,
+  mathRound,
+  mathRoundToMintick,
+  mathSign,
+  mathSin,
   mathSqrt,
+  mathSum,
+  mathTan,
+  mathToDegrees,
+  mathToRadians,
 } from "./math.ts";
+import { utcPartsFromMs } from "./time.ts";
 import { isRequestBuiltin, resolveSecurity } from "./request.ts";
 import { NA, PineSeries, type Cell } from "./series.ts";
 import {
@@ -161,6 +181,7 @@ interface Env {
   inputStore: Map<string, InputValue>;
   udfs: Map<string, UdfDef>;
   barCount: number;
+  lastBarTime: number;
 }
 
 export class Runtime {
@@ -244,6 +265,7 @@ export function interpretTree(
     inputStore: new Map(),
     udfs: new Map(),
     barCount: ohlcv.length,
+    lastBarTime: ohlcv.length === 0 ? 0 : (ohlcv[ohlcv.length - 1]!.time ?? (ohlcv.length - 1) * 60_000),
   };
 
   const n = ohlcv.length;
@@ -281,13 +303,19 @@ export function interpretTree(
 
 function beginBar(env: Env, bar: OHLCVBar, i: number): void {
   env.barIndex = i;
+  const o = bar.open ?? 0;
+  const h = bar.high ?? 0;
+  const l = bar.low ?? 0;
+  const c = bar.close ?? 0;
+  const vol = bar.volume ?? 1;
+  const t = bar.time ?? i * 60_000;
   const values: Record<(typeof OHLCV_KEYS)[number], number> = {
-    open: bar.open ?? 0,
-    high: bar.high ?? 0,
-    low: bar.low ?? 0,
-    close: bar.close ?? 0,
-    volume: bar.volume ?? 1,
-    time: bar.time ?? i * 60_000,
+    open: o,
+    high: h,
+    low: l,
+    close: c,
+    volume: vol,
+    time: t,
   };
   for (const key of OHLCV_KEYS) {
     const v = values[key];
@@ -300,12 +328,43 @@ function beginBar(env: Env, bar: OHLCVBar, i: number): void {
     s.push(v);
   }
   env.ctx.bar_index = i;
+  env.ctx.last_bar_index = env.barCount - 1;
+  env.ctx.last_bar_time = env.lastBarTime;
+
+  bindDerived(env, "hl2", (h + l) / 2);
+  bindDerived(env, "hlc3", (h + l + c) / 3);
+  bindDerived(env, "ohlc4", (o + h + l + c) / 4);
+  bindDerived(env, "hlcc4", (h + l + c + c) / 4);
+
+  const parts = utcPartsFromMs(t);
+  env.ctx.year = parts.year;
+  env.ctx.month = parts.month;
+  env.ctx.dayofmonth = parts.dayofmonth;
+  env.ctx.dayofweek = parts.dayofweek;
+  env.ctx.hour = parts.hour;
+  env.ctx.minute = parts.minute;
+  env.ctx.second = parts.second;
 
   for (const id of env.varInited) {
     const s = env.series.get(id);
     if (s == null) continue;
     if (s.length === i) s.push(s.current);
     env.ctx[id] = s.current;
+  }
+}
+
+function bindDerived(env: Env, id: string, value: Cell): void {
+  env.ctx[id] = value;
+  let s = env.series.get(id);
+  if (!s) {
+    s = new PineSeries();
+    env.series.set(id, s);
+  }
+  if (s.length === env.barIndex) s.push(value);
+  else if (s.length === env.barIndex + 1) s.setCurrent(value);
+  else {
+    while (s.length < env.barIndex) s.push(NA);
+    s.push(value);
   }
 }
 
@@ -462,6 +521,8 @@ function applyStrategyDecl(stmt: { kind: string; value?: expr | null }, env: Env
   if (slip != null) settings.slippage = slip;
   if (pyr != null) settings.pyramiding = Math.trunc(pyr);
   if (Object.keys(settings).length) env.book.configure(settings);
+  const capital = unwrap(evalExpr(callArg(stmt.value.args, -1, ["initial_capital"]), env));
+  if (capital != null && Number.isFinite(capital)) env.book.initialCapital = capital;
 }
 
 function captureDecl(stmt: { kind: string; value?: expr | null }): { name: string | null; kind: string } | null {
@@ -497,7 +558,15 @@ function execStmt(
   if (value.kind === "Call") {
     const fname = callName(value);
     if (fname === "indicator" || fname === "strategy" || fname === "library") return NA;
-    if (fname === "plot" || fname === "plotshape" || fname === "hline" || fname === "plotchar") {
+    if (
+      fname === "plot" ||
+      fname === "plotshape" ||
+      fname === "hline" ||
+      fname === "plotchar" ||
+      fname === "plotarrow" ||
+      fname === "bgcolor" ||
+      fname === "barcolor"
+    ) {
       const plotArgs = asArgs(value.args);
       const title = namedStringArg(plotArgs, "title") ?? firstStringArg(plotArgs.slice(1)) ?? "plot";
       const cell = unwrap(evalExpr(plotArgs[0]?.value, env));
@@ -533,8 +602,13 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       return NA;
     }
     case "BinOp": {
-      const l = unwrap(evalExpr(node.left, env));
-      const r = unwrap(evalExpr(node.right, env));
+      const leftV = evalExpr(node.left, env);
+      const rightV = evalExpr(node.right, env);
+      if (node.op.kind === "Add" && (typeof leftV === "string" || typeof rightV === "string")) {
+        return stringifyVal(leftV) + stringifyVal(rightV);
+      }
+      const l = unwrap(leftV);
+      const r = unwrap(rightV);
       if (l == null || r == null) return NA;
       switch (node.op.kind) {
         case "Add":
@@ -552,9 +626,11 @@ function evalExpr(node: expr | undefined, env: Env): Value {
     }
     case "UnaryOp": {
       const v = unwrap(evalExpr(node.operand, env));
+      if (node.op.kind === "Not") return isTruthy(v) ? 0 : 1;
       if (v == null) return NA;
       if (node.op.kind === "USub") return -v;
       if (node.op.kind === "UAdd") return v;
+      if (node.op.kind === "Invert") return ~Math.trunc(v);
       return NA;
     }
     case "Subscript": {
@@ -738,23 +814,57 @@ function evalForIn(node: ForIn, env: Env): Value {
 /** `strategy.long` / `strategy.short` → "long"/"short"; other attrs are na. */
 function evalAttribute(node: Attribute, env: Env): Value {
   if (node.value.kind === "Name") {
-    if (node.value.id === "strategy" && (node.attr === "long" || node.attr === "short")) {
-      return node.attr;
+    if (node.value.id === "strategy") {
+      if (node.attr === "long" || node.attr === "short") return node.attr;
+      if (node.attr === "position_size") return env.book.position.qty;
+      if (node.attr === "position_avg_price") return env.book.position.avgPrice;
+      if (node.attr === "netprofit") return env.book.realizedPnl;
+      if (node.attr === "openprofit") {
+        const q = env.book.position.qty;
+        const avg = env.book.position.avgPrice;
+        const mark = num(env.ctx.close);
+        if (q === 0 || avg == null || mark == null) return 0;
+        return q * (mark - avg);
+      }
+      if (node.attr === "equity") return env.book.equity(num(env.ctx.close) ?? 0);
+      if (node.attr === "opentrades") return env.book.position.qty === 0 ? 0 : 1;
+      if (node.attr === "closedtrades") return env.book.closedCount;
+      if (node.attr === "initial_capital") return env.book.initialCapital;
+      if (node.attr === "commission") return 0;
     }
-    if (node.value.id === "syminfo" && (node.attr === "ticker" || node.attr === "tickerid")) {
-      return env.symbol;
+    if (node.value.id === "syminfo") {
+      if (node.attr === "ticker" || node.attr === "tickerid") return env.symbol;
+      if (node.attr === "timezone") return "Etc/UTC";
+      if (node.attr === "currency") return "USD";
+      if (node.attr === "mintick") return 0.01;
+      if (node.attr === "type") return "stock";
     }
-    if (node.value.id === "timeframe" && node.attr === "period") {
-      return env.timeframe ?? "";
+    if (node.value.id === "timeframe") {
+      if (node.attr === "period") return env.timeframe ?? "";
+      if (node.attr === "multiplier") return timeframeMultiplier(env.timeframe);
+      if (node.attr === "isintraday") {
+        const p = env.timeframe ?? "";
+        return p === "" || /[SHm]/.test(p) || /^\d+$/.test(p) ? 1 : 0;
+      }
     }
     if (node.value.id === "barstate") {
+      const last = env.barIndex === env.barCount - 1;
       if (node.attr === "isfirst") return env.barIndex === 0 ? 1 : 0;
-      if (node.attr === "islast") return env.barIndex === env.barCount - 1 ? 1 : 0;
-      if (node.attr === "ishistory") return env.barIndex < env.barCount - 1 ? 1 : 0;
+      if (node.attr === "islast") return last ? 1 : 0;
+      if (node.attr === "ishistory") return last ? 0 : 1;
       if (node.attr === "isconfirmed") return 1;
+      if (node.attr === "isnew") return 1;
+      if (node.attr === "isrealtime") return 0;
+      if (node.attr === "islastconfirmedhistory") return last ? 1 : 0;
     }
   }
   return NA;
+}
+
+function timeframeMultiplier(period: string | null): number {
+  if (period == null || period === "") return 1;
+  const m = period.match(/^(\d+)/);
+  return m ? Number(m[1]) : 1;
 }
 
 function evalDirection(node: expr | undefined, env: Env): string {
@@ -775,21 +885,32 @@ function evalId(node: expr | undefined): string {
   return "entry";
 }
 
+function stringifyVal(value: Value): string {
+  if (typeof value === "string") return value;
+  const cell = unwrap(value);
+  return cell == null ? "na" : String(cell);
+}
+
 function cmp(left: Cell, op: string, right: Cell): boolean | null {
-  if (left == null || right == null) return null;
+  const lNa = left == null;
+  const rNa = right == null;
   switch (op) {
     case "Eq":
+      if (lNa && rNa) return true;
+      if (lNa || rNa) return false;
       return left === right;
     case "NotEq":
+      if (lNa && rNa) return false;
+      if (lNa || rNa) return true;
       return left !== right;
     case "Lt":
-      return left < right;
+      return lNa || rNa ? false : left! < right!;
     case "LtE":
-      return left <= right;
+      return lNa || rNa ? false : left! <= right!;
     case "Gt":
-      return left > right;
+      return lNa || rNa ? false : left! > right!;
     case "GtE":
-      return left >= right;
+      return lNa || rNa ? false : left! >= right!;
     default:
       return null;
   }
@@ -838,10 +959,37 @@ function evalCall(node: Call, env: Env): Value {
   const strVal = evalStrCall(fname, node, env);
   if (strVal !== undefined) return strVal;
   if (fname === "na") {
-    const v = evalExpr(callArg(node.args, 0, ["x", "source"]), env);
+    const arg = callArg(node.args, 0, ["x", "source"]);
+    if (arg == null) return NA;
+    const v = evalExpr(arg, env);
     if (v == null) return 1;
     if (typeof v === "number" && !Number.isFinite(v)) return 1;
     return 0;
+  }
+  if (fname === "iff") {
+    const t = unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env));
+    if (t == null) return NA;
+    return isTruthy(t)
+      ? evalExpr(callArg(node.args, 1, ["then", "if_true"]), env)
+      : evalExpr(callArg(node.args, 2, ["else", "if_false"]), env);
+  }
+  if (fname === "fixnan") {
+    const v = unwrap(evalExpr(callArg(node.args, 0, ["source", "x"]), env));
+    return v == null ? 0 : v;
+  }
+  if (fname === "int") {
+    const v = unwrap(evalExpr(callArg(node.args, 0, ["x", "source"]), env));
+    return v == null ? NA : Math.trunc(v);
+  }
+  if (fname === "float") {
+    return unwrap(evalExpr(callArg(node.args, 0, ["x", "source"]), env));
+  }
+  if (fname === "bool") {
+    const v = unwrap(evalExpr(callArg(node.args, 0, ["x", "source"]), env));
+    return isTruthy(v) ? 1 : 0;
+  }
+  if (fname === "string" || fname === "str") {
+    return stringifyVal(evalExpr(callArg(node.args, 0, ["x", "source"]), env));
   }
   const mapVal = evalMapCall(fname, node, env);
   if (mapVal !== undefined) return mapVal;
@@ -875,6 +1023,18 @@ function evalCall(node: Call, env: Env): Value {
   }
   if (fname === "strategy.exit") {
     env.book.exit(env.barIndex, evalId(callArg(node.args, 0, ["id"])));
+    return NA;
+  }
+  if (fname === "strategy.close_all") {
+    env.book.closeAll(env.barIndex, num(env.ctx.close) ?? undefined);
+    return NA;
+  }
+  if (fname === "strategy.cancel") {
+    env.book.cancel(env.barIndex, evalId(callArg(node.args, 0, ["id"])));
+    return NA;
+  }
+  if (fname === "strategy.cancel_all") {
+    env.book.cancelAll(env.barIndex);
     return NA;
   }
   if (fname != null) {
@@ -1112,15 +1272,44 @@ function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefi
   if (fname === "math.abs" || fname === "abs") {
     return mathAbs(cellArg(node, env, 0, ["number", "x"]));
   }
-  if (fname === "math.max") return mathMax(...allCellArgs(node, env));
-  if (fname === "math.min") return mathMin(...allCellArgs(node, env));
-  if (fname === "math.sqrt") return mathSqrt(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.log") return mathLog(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.pow") {
+  if (fname === "math.max" || fname === "max") return mathMax(...allCellArgs(node, env));
+  if (fname === "math.min" || fname === "min") return mathMin(...allCellArgs(node, env));
+  if (fname === "math.sqrt" || fname === "sqrt") return mathSqrt(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.log" || fname === "log") return mathLog(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.log10" || fname === "log10") return mathLog10(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.exp" || fname === "exp") return mathExp(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.pow" || fname === "pow") {
     return mathPow(
       cellArg(node, env, 0, ["base", "number", "x"]),
       cellArg(node, env, 1, ["exponent", "exp", "y"]),
     );
+  }
+  if (fname === "math.round" || fname === "round") {
+    const prec = callArg(node.args, 1, ["precision"]);
+    return mathRound(cellArg(node, env, 0, ["number", "x"]), prec == null ? undefined : unwrap(evalExpr(prec, env)));
+  }
+  if (fname === "math.floor" || fname === "floor") return mathFloor(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.ceil" || fname === "ceil") return mathCeil(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.sign" || fname === "sign") return mathSign(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.avg" || fname === "avg") return mathAvg(...allCellArgs(node, env));
+  if (fname === "math.sum") {
+    const first = evalExpr(callArg(node.args, 0, ["source", "id", "array"]), env);
+    const arr = asArray(first);
+    if (arr) return arr.sum();
+    return mathSum(...allCellArgs(node, env));
+  }
+  if (fname === "math.sin" || fname === "sin") return mathSin(cellArg(node, env, 0, ["angle", "x"]));
+  if (fname === "math.cos" || fname === "cos") return mathCos(cellArg(node, env, 0, ["angle", "x"]));
+  if (fname === "math.tan" || fname === "tan") return mathTan(cellArg(node, env, 0, ["angle", "x"]));
+  if (fname === "math.asin" || fname === "asin") return mathAsin(cellArg(node, env, 0, ["x"]));
+  if (fname === "math.acos" || fname === "acos") return mathAcos(cellArg(node, env, 0, ["x"]));
+  if (fname === "math.atan" || fname === "atan") return mathAtan(cellArg(node, env, 0, ["x"]));
+  if (fname === "math.todegrees") return mathToDegrees(cellArg(node, env, 0, ["radians", "x"]));
+  if (fname === "math.toradians") return mathToRadians(cellArg(node, env, 0, ["degrees", "x"]));
+  if (fname === "math.isfinite") return mathIsFinite(cellArg(node, env, 0, ["number", "x"]));
+  if (fname === "math.round_to_mintick") {
+    const tick = typeof env.ctx["syminfo.mintick"] === "number" ? (env.ctx["syminfo.mintick"] as number) : 0.01;
+    return mathRoundToMintick(cellArg(node, env, 0, ["number", "x"]), tick);
   }
   return undefined;
 }
@@ -1324,6 +1513,51 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       lenOrDefault(node, env, 1, ["length"], 1),
     );
   }
+  if (fname === "ta.cross" || fname === "cross") {
+    if (typeof ta.cross !== "function") return NA;
+    return (ta.cross as TaEngine["cross"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
+    );
+  }
+  if (fname === "ta.bbw" || fname === "bbw") {
+    if (typeof ta.bbw !== "function") return NA;
+    return (ta.bbw as TaEngine["bbw"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+      lenOrDefault(node, env, 2, ["mult", "multiplier"], 2),
+    );
+  }
+  if (fname === "ta.dema" || fname === "dema") {
+    if (typeof ta.dema !== "function") return NA;
+    return (ta.dema as TaEngine["dema"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.tema" || fname === "tema") {
+    if (typeof ta.tema !== "function") return NA;
+    return (ta.tema as TaEngine["tema"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.highestbars" || fname === "highestbars") {
+    if (typeof ta.highestbars !== "function") return NA;
+    return (ta.highestbars as TaEngine["highestbars"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+    );
+  }
+  if (fname === "ta.lowestbars" || fname === "lowestbars") {
+    if (typeof ta.lowestbars !== "function") return NA;
+    return (ta.lowestbars as TaEngine["lowestbars"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+    );
+  }
   return undefined;
 }
 
@@ -1385,6 +1619,96 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   if (fname === "array.clear") {
     asArray(evalExpr(callArg(node.args, 0, ["id"]), env))?.clear();
     return NA;
+  }
+  if (fname === "array.unshift") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    arr?.unshift(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env)));
+    return NA;
+  }
+  if (fname === "array.shift") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.shift() : NA;
+  }
+  if (fname === "array.includes") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr?.includes(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) ? 1 : 0;
+  }
+  if (fname === "array.first") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.first() : NA;
+  }
+  if (fname === "array.last") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.last() : NA;
+  }
+  if (fname === "array.insert") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
+    const v = unwrap(evalExpr(callArg(node.args, 2, ["value"]), env));
+    if (arr && i != null) arr.insert(i, v);
+    return NA;
+  }
+  if (fname === "array.remove") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
+    return arr && i != null ? arr.remove(i) : NA;
+  }
+  if (fname === "array.fill") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    arr?.fill(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env)));
+    return NA;
+  }
+  if (fname === "array.slice") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const from = unwrap(evalExpr(callArg(node.args, 1, ["index_from", "from"]), env)) ?? 0;
+    const toArg = callArg(node.args, 2, ["index_to", "to"]);
+    const to = toArg == null ? undefined : unwrap(evalExpr(toArg, env)) ?? undefined;
+    return arr ? arr.slice(from, to) : NA;
+  }
+  if (fname === "array.copy") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.copy() : NA;
+  }
+  if (fname === "array.reverse") {
+    asArray(evalExpr(callArg(node.args, 0, ["id"]), env))?.reverse();
+    return NA;
+  }
+  if (fname === "array.sort") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const orderRaw = evalExpr(callArg(node.args, 1, ["order"]), env);
+    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
+    arr?.sort(order);
+    return NA;
+  }
+  if (fname === "array.indexof") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.indexof(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.avg") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.avg() : NA;
+  }
+  if (fname === "array.min") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.min() : NA;
+  }
+  if (fname === "array.max") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.max() : NA;
+  }
+  if (fname === "array.sum") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.sum() : NA;
+  }
+  if (fname === "array.join") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const sep = evalAsString(callArg(node.args, 1, ["separator", "sep"]), env);
+    return arr ? arr.join(sep ?? ",") : NA;
+  }
+  if (fname === "array.new_bool" || fname === "array.new_string") {
+    const size = unwrap(evalExpr(callArg(node.args, 0, ["size"]), env)) ?? 0;
+    const initial = unwrap(evalExpr(callArg(node.args, 1, ["initial_value"]), env));
+    return new PineArray(size, initial);
   }
   return undefined;
 }

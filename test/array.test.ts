@@ -100,4 +100,22 @@ describe("PineArray constructor / helpers", () => {
     expect(a.size()).toBe(0);
     expect(a.shift()).toBeNull();
   });
+
+  test("sum / first / last / indexof / sort", () => {
+    const a = new PineArray();
+    a.push(3);
+    a.push(1);
+    a.push(2);
+    expect(a.sum()).toBe(6);
+    expect(a.first()).toBe(3);
+    expect(a.last()).toBe(2);
+    expect(a.indexof(1)).toBe(1);
+    expect(a.indexof(9)).toBeNull();
+    a.sort("asc");
+    expect(a.toValues()).toEqual([1, 2, 3]);
+    const b = a.copy();
+    b.reverse();
+    expect(b.toValues()).toEqual([3, 2, 1]);
+    expect(a.toValues()).toEqual([1, 2, 3]);
+  });
 });

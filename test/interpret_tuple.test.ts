@@ -3,23 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { dump, parse, Runtime } from "../src/index.ts";
+import { firstPartyBars, readFirstParty } from "./helpers/first_party.ts";
 
-const FIX = join(import.meta.dir, "../../tests/fixtures/first_party");
-const KELTNER_SRC = readFileSync(join(FIX, "keltner.pine"), "utf8");
+const KELTNER_SRC = readFirstParty("keltner.pine") ?? "";
 const TUPLE_LIT = "[a, b] = [1, 2]";
 
 function bars(n: number) {
-  return Array.from({ length: n }, (_, i) => ({
-    open: 100 + i * 0.2,
-    high: 101 + i * 0.2,
-    low: 99 + i * 0.2,
-    close: 100.5 + i * 0.2,
-    volume: 1000,
-    time: 1_700_000_000_000 + i * 60_000,
-  }));
+  return firstPartyBars(n);
 }
 
 function tryParse(src: string) {

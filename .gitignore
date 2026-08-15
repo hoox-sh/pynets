@@ -5,3 +5,5 @@ dist/
 .DS_Store
 .private/
 .grok/
+CLAUDE.local.md
+

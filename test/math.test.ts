@@ -5,10 +5,15 @@
 import { describe, expect, test } from "bun:test";
 import {
   mathAbs,
+  mathAcos,
+  mathAsin,
+  mathAtan,
   mathAvg,
   mathCeil,
+  mathCos,
   mathExp,
   mathFloor,
+  mathIsFinite,
   mathLog,
   mathLog10,
   mathMax,
@@ -16,7 +21,12 @@ import {
   mathPow,
   mathRound,
   mathSign,
+  mathSin,
   mathSqrt,
+  mathSum,
+  mathTan,
+  mathToDegrees,
+  mathToRadians,
 } from "../src/runtime/math.ts";
 
 describe("math.abs", () => {
@@ -171,6 +181,27 @@ describe("math.ceil", () => {
 
   test("na in → na", () => {
     expect(mathCeil(null)).toBeNull();
+  });
+});
+
+describe("math.trig / sum / isfinite", () => {
+  test("sin/cos/atan", () => {
+    expect(mathSin(0)).toBe(0);
+    expect(mathCos(0)).toBe(1);
+    expect(mathTan(0)).toBe(0);
+    expect(mathAtan(0)).toBe(0);
+    expect(mathAsin(0)).toBe(0);
+    expect(mathAcos(1)).toBe(0);
+    expect(mathAsin(2)).toBeNull();
+  });
+
+  test("degree conversion + sum + isfinite", () => {
+    expect(mathToDegrees(Math.PI)).toBeCloseTo(180);
+    expect(mathToRadians(180)).toBeCloseTo(Math.PI);
+    expect(mathSum(1, 2, 3)).toBe(6);
+    expect(mathSum(1, null)).toBeNull();
+    expect(mathIsFinite(1)).toBe(1);
+    expect(mathIsFinite(null)).toBeNull();
   });
 });
 

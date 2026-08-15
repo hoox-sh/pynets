@@ -768,4 +768,79 @@ export class TaEngine {
     st.started = true;
     return hit;
   }
+
+  /** 1 if crossover or crossunder this bar. */
+  cross(site: string, a: Cell, b: Cell): Cell {
+    const up = this.crossover(`${site}:up`, a, b);
+    const down = this.crossunder(`${site}:down`, a, b);
+    return up === 1 || down === 1 ? 1 : 0;
+  }
+
+  /** `(up - lo) / mid` from `bb`. */
+  bbw(site: string, source: Cell, length: number, mult = 2): Cell {
+    const r = this.bb(site, source, length, mult);
+    if (r.mid === null || r.up === null || r.lo === null || r.mid === 0) return null;
+    return (r.up - r.lo) / r.mid;
+  }
+
+  /** `2*ema - ema(ema)`. */
+  dema(site: string, source: Cell, period: number): Cell {
+    const e1 = this.ema(`${site}:e1`, source, period);
+    const e2 = this.ema(`${site}:e2`, e1, period);
+    if (e1 === null || e2 === null) return null;
+    return 2 * e1 - e2;
+  }
+
+  /** `3*ema - 3*ema(ema) + ema(ema(ema))`. */
+  tema(site: string, source: Cell, period: number): Cell {
+    const e1 = this.ema(`${site}:e1`, source, period);
+    const e2 = this.ema(`${site}:e2`, e1, period);
+    const e3 = this.ema(`${site}:e3`, e2, period);
+    if (e1 === null || e2 === null || e3 === null) return null;
+    return 3 * e1 - 3 * e2 + e3;
+  }
+
+  /**
+   * Offset (negative, TradingView style) of the highest in the window.
+   * `0` = current bar is the high; `-n+1` = oldest bar.
+   */
+  highestbars(site: string, source: Cell, period: number): Cell {
+    return this.extremeBars(this.highestSites, site, source, period, true);
+  }
+
+  /** Offset of the lowest in the window (negative TV style). */
+  lowestbars(site: string, source: Cell, period: number): Cell {
+    return this.extremeBars(this.lowestSites, site, source, period, false);
+  }
+
+  private extremeBars(
+    sites: Map<string, HighestLowestState>,
+    site: string,
+    source: Cell,
+    period: number,
+    highest: boolean,
+  ): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = sites.get(`${site}:bars`);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      sites.set(`${site}:bars`, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n) return null;
+    let bestI = -1;
+    let best: number | null = null;
+    for (let i = 0; i < st.window.length; i++) {
+      const v = st.window[i];
+      if (v === null) continue;
+      if (best === null || (highest ? v >= best : v <= best)) {
+        best = v;
+        bestI = i;
+      }
+    }
+    if (bestI < 0) return null;
+    return bestI - (st.window.length - 1);
+  }
 }

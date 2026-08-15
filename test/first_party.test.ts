@@ -3,32 +3,23 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { parse, Runtime } from "../src/index.ts";
+import { firstPartyBars, readFirstParty } from "./helpers/first_party.ts";
 
-const FIX = join(import.meta.dir, "../../tests/fixtures/first_party");
-
-function bars(n: number) {
-  return Array.from({ length: n }, (_, i) => ({
-    open: 100 + i * 0.2,
-    high: 101 + i * 0.2,
-    low: 99 + i * 0.2,
-    close: 100.5 + i * 0.2,
-    volume: 1000,
-    time: 1_700_000_000_000 + i * 60_000,
-  }));
-}
+const HAS_FIXTURES = readFirstParty("plot_close.pine") != null;
 
 function runFixture(name: string, n = 40) {
-  const src = readFileSync(join(FIX, name), "utf8");
+  const src = readFirstParty(name);
+  if (src == null) throw new Error(`missing first-party fixture ${name}`);
   parse(src);
-  return new Runtime("TEST").run(src, bars(n));
+  return new Runtime("TEST").run(src, firstPartyBars(n));
 }
 
 function parseOk(name: string): boolean {
+  const src = readFirstParty(name);
+  if (src == null) return false;
   try {
-    parse(readFileSync(join(FIX, name), "utf8"));
+    parse(src);
     return true;
   } catch {
     return false;
@@ -36,7 +27,7 @@ function parseOk(name: string): boolean {
 }
 
 describe("first-party fixtures", () => {
-  test("plot_close.pine", () => {
+  test.skipIf(!HAS_FIXTURES)("plot_close.pine", () => {
     const out = runFixture("plot_close.pine", 8);
     expect(out.error).toBeUndefined();
     expect(out.script_name).toBe("fp_plot_close");
@@ -44,7 +35,7 @@ describe("first-party fixtures", () => {
     expect(out.plots[7]).toBeCloseTo(100.5 + 7 * 0.2);
   });
 
-  test("sma.pine", () => {
+  test.skipIf(!HAS_FIXTURES)("sma.pine", () => {
     const out = runFixture("sma.pine", 20);
     expect(out.error).toBeUndefined();
     expect(out.series.sma).toHaveLength(20);
@@ -52,7 +43,7 @@ describe("first-party fixtures", () => {
     expect(out.series.sma![13]).not.toBeNull();
   });
 
-  test("ema.pine", () => {
+  test.skipIf(!HAS_FIXTURES)("ema.pine", () => {
     const out = runFixture("ema.pine", 20);
     expect(out.error).toBeUndefined();
     expect(out.series.ema).toHaveLength(20);
@@ -60,7 +51,7 @@ describe("first-party fixtures", () => {
     expect(typeof out.series.ema![13]).toBe("number");
   });
 
-  test("rsi.pine", () => {
+  test.skipIf(!HAS_FIXTURES)("rsi.pine", () => {
     const out = runFixture("rsi.pine", 20);
     expect(out.error).toBeUndefined();
     expect(out.series.rsi).toHaveLength(20);
@@ -71,7 +62,7 @@ describe("first-party fixtures", () => {
     expect(last!).toBeLessThanOrEqual(100);
   });
 
-  test("atr.pine", () => {
+  test.skipIf(!HAS_FIXTURES)("atr.pine", () => {
     const out = runFixture("atr.pine", 20);
     expect(out.error).toBeUndefined();
     expect(out.series.atr).toHaveLength(20);

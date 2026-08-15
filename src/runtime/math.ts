@@ -124,3 +124,71 @@ export function mathAvg(...xs: Cell[]): Cell {
   }
   return finiteOut(sum / xs.length);
 }
+
+export function mathSum(...xs: Cell[]): Cell {
+  if (xs.length === 0) return null;
+  let sum = 0;
+  for (const x of xs) {
+    const n = finite(x);
+    if (n === null) return null;
+    sum += n;
+  }
+  return finiteOut(sum);
+}
+
+function trig(x: Cell, fn: (n: number) => number): Cell {
+  const n = finite(x);
+  return n === null ? null : finiteOut(fn(n));
+}
+
+export function mathSin(x: Cell): Cell {
+  return trig(x, Math.sin);
+}
+
+export function mathCos(x: Cell): Cell {
+  return trig(x, Math.cos);
+}
+
+export function mathTan(x: Cell): Cell {
+  return trig(x, Math.tan);
+}
+
+export function mathAsin(x: Cell): Cell {
+  const n = finite(x);
+  if (n === null || n < -1 || n > 1) return null;
+  return finiteOut(Math.asin(n));
+}
+
+export function mathAcos(x: Cell): Cell {
+  const n = finite(x);
+  if (n === null || n < -1 || n > 1) return null;
+  return finiteOut(Math.acos(n));
+}
+
+export function mathAtan(x: Cell): Cell {
+  return trig(x, Math.atan);
+}
+
+export function mathToDegrees(x: Cell): Cell {
+  const n = finite(x);
+  return n === null ? null : finiteOut((n * 180) / Math.PI);
+}
+
+export function mathToRadians(x: Cell): Cell {
+  const n = finite(x);
+  return n === null ? null : finiteOut((n * Math.PI) / 180);
+}
+
+/** `na` in → `na`. Else 1 if finite, 0 otherwise. */
+export function mathIsFinite(x: Cell): Cell {
+  if (x === null) return null;
+  return Number.isFinite(x) ? 1 : 0;
+}
+
+/** Default mintick 0.01 when the host does not supply one. */
+export function mathRoundToMintick(x: Cell, mintick: Cell = 0.01): Cell {
+  const n = finite(x);
+  const tick = finite(mintick);
+  if (n === null || tick === null || tick <= 0) return n === null ? null : finiteOut(Number(n.toFixed(8)));
+  return finiteOut(Math.round(n / tick) * tick);
+}

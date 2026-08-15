@@ -71,6 +71,8 @@ bun run src/cli.ts info
 
 ## Development
 
+Agent brief: [`AGENTS.md`](AGENTS.md).
+
 ```bash
 git clone https://github.com/hoox-sh/pynets.git
 cd pynets
