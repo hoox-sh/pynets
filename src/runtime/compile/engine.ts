@@ -61,17 +61,20 @@ type CompiledExecuteFn = (
 ) => Record<string, unknown>;
 
 export function compileEligible(source: string): CompileEligibility {
-  const src = source ?? "";
-  // Python auto-mode also rejects `request.`; compile_script still emits
-  // request.security (same-symbol passthrough / else na). Match compile_script.
-  if (/^\s*import\s+\S+/m.test(src)) {
-    return { ok: false, reason: "import statements not supported in compile path" };
-  }
+  // Python compile_script accepts `import` (library stubs in object mode).
+  // Only the auto-mode host prefilter rejects import — not this gate.
+  // request.security is also eligible (same-symbol passthrough / else na).
+  // Empty source is still ok; emit/load report later failures.
+  void source;
   return { ok: true };
 }
 
-export function transpile(source: string): string {
-  return transpileSource(source).code;
+export type CompileScriptExtras = {
+  getLibrary?: (namespace: string, name: string, version: number) => string | null;
+};
+
+export function transpile(source: string, extras?: CompileScriptExtras): string {
+  return transpileSource(source, extras).code;
 }
 
 export function clearCompileCache(): void {
@@ -172,10 +175,22 @@ class JsCompiledScript implements CompiledScript {
   }
 }
 
-export function compileScript(source: string): CompiledScript {
+function libraryCacheTail(
+  source: string,
+  getLibrary?: CompileScriptExtras["getLibrary"],
+): string {
+  if (getLibrary == null) return "";
+  const parts: string[] = [];
+  for (const m of source.matchAll(/import\s+(\S+)\/(\S+)\/(\d+)/g)) {
+    parts.push(getLibrary(m[1]!, m[2]!, Number(m[3])) ?? "");
+  }
+  return `\0${parts.join("\0")}`;
+}
+
+export function compileScript(source: string, extras?: CompileScriptExtras): CompiledScript {
   const elig = compileEligible(source);
   if (!elig.ok) throw new CompileIneligibleError(elig.reason ?? "ineligible");
-  const key = sha256(source);
+  const key = sha256(source + libraryCacheTail(source, extras?.getLibrary));
   const hit = cache.get(key);
   if (hit) {
     cache.delete(key);
@@ -185,7 +200,7 @@ export function compileScript(source: string): CompiledScript {
   let code: string;
   let ctx: { errors: string[]; plots: CompilePlotMeta[] };
   try {
-    ({ code, ctx } = transpileSource(source));
+    ({ code, ctx } = transpileSource(source, extras));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CompileEmitError(msg);

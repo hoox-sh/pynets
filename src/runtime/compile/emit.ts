@@ -21,6 +21,7 @@ import type {
   ForTo,
   FunctionDef,
   If,
+  Import,
   Name,
   ReAssign,
   Script,
@@ -148,6 +149,7 @@ export function newEmitCtx(): EmitCtx {
     enumTypes: new Map(),
     udtMethodNames: new Set(),
     needsHeikinashi: false,
+    importAliases: new Set(),
   };
 }
 
@@ -164,9 +166,13 @@ export function emitScript(tree: Script, ctx?: EmitCtx): string {
   return assemble(c, body);
 }
 
-export function transpileSource(source: string): { code: string; ctx: EmitCtx } {
+export function transpileSource(
+  source: string,
+  extras?: { getLibrary?: EmitCtx["getLibrary"] },
+): { code: string; ctx: EmitCtx } {
   const tree = parse(source);
   const ctx = newEmitCtx();
+  ctx.getLibrary = extras?.getLibrary;
   if (tree.kind !== "Script") {
     ctx.errors.push("not a Script");
     return { code: emitScript(tree as Script, ctx), ctx };
@@ -290,8 +296,7 @@ function emitStmt(state: State, node: stmt | expr): string {
     case "EnumDef":
       return emitEnumDef(state, node as EnumDef);
     case "Import":
-      state.ctx.errors.push("import statements not supported in compile path");
-      return "";
+      return emitImport(state, node as Import);
     case "Break":
       return "break;";
     case "Continue":
@@ -563,6 +568,10 @@ function emitSyminfo(attr: string): string {
 }
 
 function emitAttribute(state: State, node: Attribute): string {
+  // Import alias.member is not a JS object — calls go through emit_call; loads are na.
+  if (node.value.kind === "Name" && state.ctx.importAliases.has(node.value.id)) {
+    return "null";
+  }
   if (node.value.kind === "Name" && node.value.id === "barstate") {
     return emitBarstate(node.attr);
   }
@@ -668,6 +677,37 @@ function emitEnumDef(state: State, node: EnumDef): string {
     }
   }
   state.ctx.enumTypes.set(node.name, members);
+  return "";
+}
+
+/** Record the alias; optionally inline library FunctionDef / TypeDef / EnumDef / Assign. No errors. */
+function emitImport(state: State, node: Import): string {
+  const alias = node.alias || node.name;
+  state.ctx.importAliases.add(alias);
+  const getLibrary = state.ctx.getLibrary;
+  if (getLibrary) {
+    const src = getLibrary(node.namespace, node.name, node.version);
+    if (src) {
+      let tree: ReturnType<typeof parse>;
+      try {
+        tree = parse(src);
+      } catch {
+        return "";
+      }
+      if (tree.kind === "Script") {
+        for (const s of (tree as Script).body ?? []) {
+          if (
+            s.kind === "FunctionDef" ||
+            s.kind === "TypeDef" ||
+            s.kind === "EnumDef" ||
+            s.kind === "Assign"
+          ) {
+            emitStmt(state, s);
+          }
+        }
+      }
+    }
+  }
   return "";
 }
 

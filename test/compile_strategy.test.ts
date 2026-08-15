@@ -156,18 +156,21 @@ describe("compile vs interpret strategy", () => {
     expect(isNonZero(lastPlot(compiled.plots))).toBe(true);
   });
 
-  test("import / request still ineligible", () => {
+  test("import is eligible; request stays eligible", () => {
     const importElig = compileEligible(IMPORT_SRC);
-    expect(importElig.ok).toBe(false);
-    expect(importElig.reason ?? "").toMatch(/import/i);
+    expect(importElig.ok).toBe(true);
 
     const requestElig = compileEligible(REQUEST_SRC);
     expect(requestElig.ok).toBe(true);
 
-    expect(() => compileToResult(IMPORT_SRC, BARS)).toThrow(/import/i);
+    const fromCompile = compileToResult(IMPORT_SRC, BARS);
+    expect(fromCompile.mode).toBe("compile");
+    expect(lastPlot(fromCompile.plots)).toBe(BARS[BARS.length - 1]!.close);
 
     const importRun = new Runtime("TEST", { mode: "compile" }).run(IMPORT_SRC, BARS);
-    expect(importRun.error ?? "").toMatch(/import/i);
+    expect(importRun.error).toBeUndefined();
+    expect(importRun.mode).toBe("compile");
+    expect(lastPlot(importRun.plots)).toBe(BARS[BARS.length - 1]!.close);
     const requestRun = new Runtime("TEST", { mode: "compile" }).run(REQUEST_SRC, BARS);
     expect(requestRun.error).toBeUndefined();
     expect(requestRun.mode).toBe("compile");

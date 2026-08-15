@@ -1947,8 +1947,11 @@ function packCompiled(
   source: string,
   ohlcv: OHLCVBar[],
   inputs?: InputOverrides,
+  libraries?: LibraryRegistry,
 ): RuntimeResult {
-  const compiled = compileScript(source);
+  const compiled = compileScript(source, {
+    getLibrary: (ns, name, ver) => libraries?.getSource(ns, name, ver) ?? null,
+  });
   const cols = barsToColumns(ohlcv);
   // compileScript().run() is the raw dict (engine CompileHostResult may already strip).
   const raw = compiled.run(cols.open, cols.high, cols.low, cols.close, cols.volume, cols.time, {
@@ -2000,12 +2003,12 @@ function packCompiled(
 function runCompiled(
   source: string,
   ohlcv: OHLCVBar[],
-  host: { inputs?: InputOverrides },
+  host: { inputs?: InputOverrides; libraries?: LibraryRegistry },
 ): RuntimeResult {
   const elig = compileEligible(source);
   if (!elig.ok) return emptyCompileResult(ohlcv.length, elig.reason ?? "ineligible");
   try {
-    return packCompiled(source, ohlcv, host.inputs);
+    return packCompiled(source, ohlcv, host.inputs, host.libraries);
   } catch (err) {
     const msg = err instanceof CompileError ? err.message : formatRunError(err);
     return emptyCompileResult(ohlcv.length, msg);
@@ -2027,7 +2030,7 @@ function runAuto(
   const elig = compileEligible(source);
   if (elig.ok) {
     try {
-      const compiled = packCompiled(source, ohlcv, host.inputs);
+      const compiled = packCompiled(source, ohlcv, host.inputs, host.libraries);
       compiled.auto_backend = "compile";
       return compiled;
     } catch (err) {

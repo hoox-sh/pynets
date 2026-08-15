@@ -78,6 +78,8 @@ export interface EmitCtx {
   /** Method names collected from TypeDef FunctionDefs. */
   udtMethodNames: Set<string>;
   needsHeikinashi: boolean;
+  importAliases: Set<string>;
+  getLibrary?: (namespace: string, name: string, version: number) => string | null;
 }
 
 export interface EmitFns {

@@ -29,4 +29,5 @@ export {
   runScript,
   compileToResult,
 } from "./engine.ts";
+export type { CompileScriptExtras, CompileRunExtras } from "./engine.ts";
 export { emitScript } from "./emit.ts";

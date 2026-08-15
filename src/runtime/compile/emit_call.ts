@@ -201,6 +201,18 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   const { name: rawName, methodSrc } = resolveCallee(node.func);
   const args = collectArgs(node, visit);
 
+  // `import lib as alias` → alias.foo. Inlined export is a user func; else stub null.
+  // Must run before methodSrc unshift / UDT-method (do not pass alias as receiver).
+  if (methodSrc != null && methodSrc.kind === "Name") {
+    const alias = (methodSrc as Name).id;
+    if (ctx.importAliases.has(alias)) {
+      if (ctx.userFuncs.has(rawName)) {
+        return emitUserFuncCall(ctx, rawName, packUserFuncArgs(ctx, rawName, args));
+      }
+      return "null";
+    }
+  }
+
   const drawn = emitDraw(ctx, rawName, methodSrc, args);
   if (drawn != null) return drawn;
   const udt = emitUdt(ctx, rawName, methodSrc, args);
@@ -270,6 +282,18 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   if (name === "str_tostring" || name === "tostring") {
     const x = pick(args, 0, ["value", "source", "x"], "null");
     return `String(${x} ?? "")`;
+  }
+  if (name === "str_format" || name === "format") {
+    const fmt = pick(args, 0, ["formatString", "format", "fmt"], "null");
+    const fmtFromKw =
+      Object.hasOwn(args.kw, "formatString") ||
+      Object.hasOwn(args.kw, "format") ||
+      Object.hasOwn(args.kw, "fmt");
+    const extras = fmtFromKw ? args.pos.slice() : args.pos.slice(1);
+    return extras.length > 0 ? `__h.strFormat(${fmt}, ${extras.join(", ")})` : `__h.strFormat(${fmt})`;
+  }
+  if (name === "str_format_time" || name === "format_time") {
+    return `__h.strFormatTime(${pick(args, 0, ["time", "timestamp"], "null")}, ${pick(args, 1, ["format"], "undefined")}, ${pick(args, 2, ["timezone"], "undefined")})`;
   }
   if (name.startsWith("str_")) {
     const meth = name.slice(4);

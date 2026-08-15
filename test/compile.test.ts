@@ -67,48 +67,15 @@ function interpretPlots(source: string): Array<number | null> {
   return out.plots;
 }
 
-function pythonRuntimePlots(source: string): Array<number | null> | null {
-  const py = `
-import json, math, os, sys
-sys.path.insert(0, ${JSON.stringify("/home/jango/Git/pynescript/src")})
-from pynescript.runtime import Runtime
-src = ${JSON.stringify(source)}
-bars = ${JSON.stringify(BARS)}
-out = Runtime().run(src, bars)
-plots = out.get("plots") or []
-def cell(v):
-    if v is None:
-        return None
-    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
-        return None
-    return v
-print(json.dumps([cell(v) for v in plots]))
-`;
-  try {
-    const proc = Bun.spawnSync(["python3", "-c", py], {
-      cwd: "/home/jango/Git/pynescript",
-      env: { ...process.env, PYTHONPATH: "/home/jango/Git/pynescript/src" },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (proc.exitCode !== 0) return null;
-    const parsed = JSON.parse(proc.stdout.toString().trim());
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 describe("compileEligible", () => {
-  test("rejects import foo/bar/1", () => {
+  test("accepts import foo/bar/1", () => {
     const src = `//@version=5
 indicator("lib")
 import foo/bar/1
 plot(close)
 `;
     const elig = compileEligible(src);
-    expect(elig.ok).toBe(false);
-    expect(elig.reason ?? "").toMatch(/import/i);
+    expect(elig.ok).toBe(true);
   });
 
   test("accepts source containing request.security", () => {
@@ -134,8 +101,6 @@ describe("compile vs interpret plots", () => {
     const interpreted = interpretPlots(SMA_SRC);
     expect(interpreted).toEqual([null, null, 2, 3]);
     expect(compiled).toEqual(interpreted);
-    const py = pythonRuntimePlots(SMA_SRC);
-    if (py != null) expect(compiled).toEqual(py);
   });
 
   test("ema(close, 2) matches interpret Runtime.run plots", () => {
@@ -212,7 +177,7 @@ describe("Runtime mode", () => {
     expect(compiled.plots).toEqual(interpreted.plots);
   });
 
-  test("mode=auto compiles SMA and falls back on import", () => {
+  test("mode=auto compiles SMA and import", () => {
     const ok = new Runtime("TEST", { mode: "auto" }).run(SMA_SRC, BARS);
     expect(ok.error).toBeUndefined();
     expect(ok.auto_backend).toBe("compile");
@@ -221,9 +186,10 @@ indicator("lib")
 import foo/bar/1
 plot(close)
 `;
-    const fb = new Runtime("TEST", { mode: "auto" }).run(src, BARS);
-    expect(fb.mode).toBe("interpret");
-    expect(fb.auto_backend).toBe("interpret");
-    expect(fb.compile_fallback_reason ?? "").toMatch(/import/i);
+    const imported = new Runtime("TEST", { mode: "auto" }).run(src, BARS);
+    expect(imported.error).toBeUndefined();
+    expect(imported.mode).toBe("compile");
+    expect(imported.auto_backend).toBe("compile");
+    expect(imported.plots.at(-1)).toBe(CLOSES.at(-1));
   });
 });

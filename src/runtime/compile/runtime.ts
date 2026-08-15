@@ -43,6 +43,8 @@ import {
 import {
   strContains,
   strEndsWith,
+  strFormat,
+  strFormatTime,
   strLength,
   strLower,
   strReplace,
@@ -165,6 +167,8 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     strSubstring,
     strToNumber,
     strTrim,
+    strFormat,
+    strFormatTime,
     tostring: strTostring,
     str: {
       length: strLength,
@@ -178,6 +182,8 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
       tonumber: strToNumber,
       trim: strTrim,
       tostring: strTostring,
+      format: strFormat,
+      format_time: strFormatTime,
     },
     hold,
     array: compileArray,
