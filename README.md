@@ -24,6 +24,8 @@ const out = new Runtime("AAPL").run(src, [
   { close: 1 }, { close: 2 }, { close: 3 }, { close: 4 },
 ]);
 // out.plots, out.series, out.count
+// new Runtime("AAPL", { mode: "compile" }) — JS bar-loop emit (not Numba)
+// mode: "auto" tries compile, then interpret
 ```
 
 Install with Bun (published TypeScript source — no bundle needed):
@@ -82,9 +84,9 @@ Family map — library vs edge host, same SoT:
 | | [pynescript](https://github.com/hoox-sh/pyne) | [pyne-worker](https://github.com/hoox-sh/pyne-worker) | **PyneTS** |
 |---|---|---|---|
 | Role | SoT library | Production **Python** Cloudflare Worker | TS / Bun library + CLI |
-| Engine | interpret + Numba compile | Vendors `pynescript.runtime` | interpret only |
+| Engine | interpret + Numba compile | Vendors `pynescript.runtime` | interpret + **JS compile** |
 | Grammar | `*.g4` | Same Python engine (not a fork) | **same `.g4`**, TS ANTLR target |
-| How you call it | `Runtime.run` | `POST /run` (`interpret` / `compile` / `auto`) | `Runtime.run` / `stream` / `runProvider` |
+| How you call it | `Runtime.run` | `POST /run` (`interpret` / `compile` / `auto`) | `Runtime.run` (`interpret` / `compile` / `auto`) |
 | Extra | LSP, Pro API | R2 OHLCV, 1m cron, alerts, trade-worker | Local TTY (`check` / `format` / `run` / `dump`) |
 
 [pyne-worker](https://github.com/hoox-sh/pyne-worker) is the edge evaluate host of the **Python** engine. PyneTS is the TypeScript library you import and the CLI you run on a laptop. They share the PYNE contract; this repo is not a Worker.
@@ -318,7 +320,7 @@ After a plain clone: `git submodule update --init --recursive`.
 
 ## Non-goals
 
-Numba / compile, Worker packaging, ASDL codegen. Interpret is the only backend.
+Numba nopython, Worker packaging, ASDL codegen. Compile is JS emit (Python object-mode analog), not a JIT.
 
 ---
 

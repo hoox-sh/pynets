@@ -7,7 +7,8 @@
  * arrays, color/str, strategy events + position series, input*, math.*,
  * request.security, UDF FunctionDef, matrix.*, extra TA, drawings/alert,
  * derived prices, calendar, Pine na-compare.
- * Not a port of runtime/host.py — same public envelope, interpret only.
+ * Not a port of runtime/host.py — same public envelope.
+ * Compile is JS emit in ./compile/ (mode compile|auto).
  */
 import { parse } from "../ast/helper.ts";
 import type {
@@ -141,6 +142,12 @@ import { StrategyBook, type BrokerSettings, type StrategyEvent, type StrategySum
 import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
 import { TaEngine } from "./ta.ts";
+import {
+  CompileError,
+  compileEligible,
+  compileScript,
+} from "./compile/index.ts";
+import type { RuntimeMode } from "./compile/types.ts";
 
 export type { DrawingEvent };
 
@@ -162,6 +169,8 @@ export interface RuntimeOptions {
   broker?: BrokerSettings;
   timeframe?: string | null;
   libraries?: LibraryRegistry;
+  /** interpret (default) | compile (JS emit) | auto (compile, fallback interpret). */
+  mode?: RuntimeMode;
 }
 
 export interface RuntimeFill {
@@ -180,7 +189,9 @@ export interface RuntimeResult {
   count: number;
   script_name: string | null;
   script_type: string;
-  mode: "interpret";
+  mode: "interpret" | "compile";
+  auto_backend?: "interpret" | "compile";
+  compile_fallback_reason?: string;
   events?: StrategyEvent[];
   fills?: RuntimeFill[];
   drawings?: DrawingEvent[];
@@ -290,6 +301,7 @@ export class Runtime {
   readonly broker: BrokerSettings;
   readonly timeframe: string | null;
   readonly libraries: LibraryRegistry;
+  readonly mode: RuntimeMode;
 
   constructor(
     public readonly symbol = "AAPL",
@@ -299,6 +311,7 @@ export class Runtime {
     this.broker = options?.broker ?? {};
     this.timeframe = options?.timeframe ?? null;
     this.libraries = options?.libraries ?? new LibraryRegistry();
+    this.mode = options?.mode ?? "interpret";
   }
 
   /** Store Pine source for `import namespace/name/version`. */
@@ -328,14 +341,23 @@ export class Runtime {
       };
     }
     const extraOpts = extra && !isPlainInputs(extra) ? extra : undefined;
+    const mode = extraOpts?.mode ?? this.mode;
+    const inputs = mergeInputs(this.inputs, extra);
+    const host = {
+      symbol: this.symbol,
+      inputs,
+      broker: extraOpts?.broker ?? this.broker,
+      timeframe: extraOpts?.timeframe ?? this.timeframe,
+      libraries: extraOpts?.libraries ?? this.libraries,
+    };
+    if (mode === "compile") {
+      return runCompiled(source, ohlcv, host);
+    }
+    if (mode === "auto") {
+      return runAuto(source, tree, ohlcv, host);
+    }
     try {
-      return interpretTree(tree, ohlcv, {
-        symbol: this.symbol,
-        inputs: mergeInputs(this.inputs, extra),
-        broker: extraOpts?.broker ?? this.broker,
-        timeframe: extraOpts?.timeframe ?? this.timeframe,
-        libraries: extraOpts?.libraries ?? this.libraries,
-      });
+      return interpretTree(tree, ohlcv, host);
     } catch (err) {
       return {
         series: {},
@@ -1865,7 +1887,161 @@ function formatRunError(err: unknown): string {
 }
 
 function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOverrides {
-  return !("inputs" in extra) && !("broker" in extra) && !("timeframe" in extra) && !("libraries" in extra);
+  return (
+    !("inputs" in extra) &&
+    !("broker" in extra) &&
+    !("timeframe" in extra) &&
+    !("libraries" in extra) &&
+    !("mode" in extra)
+  );
+}
+
+function emptyCompileResult(
+  n: number,
+  error: string,
+  extra?: Pick<RuntimeResult, "auto_backend" | "compile_fallback_reason">,
+): RuntimeResult {
+  return {
+    series: {},
+    plots: [],
+    plot_meta: [],
+    count: n,
+    script_name: null,
+    script_type: "indicator",
+    mode: "compile",
+    error,
+    error_kind: "compile",
+    ...extra,
+  };
+}
+
+function barsToColumns(ohlcv: OHLCVBar[]): {
+  open: Array<number | null>;
+  high: Array<number | null>;
+  low: Array<number | null>;
+  close: Array<number | null>;
+  volume: Array<number | null>;
+  time: Array<number | null>;
+} {
+  const n = ohlcv.length;
+  const open: Array<number | null> = new Array(n);
+  const high: Array<number | null> = new Array(n);
+  const low: Array<number | null> = new Array(n);
+  const close: Array<number | null> = new Array(n);
+  const volume: Array<number | null> = new Array(n);
+  const time: Array<number | null> = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const b = ohlcv[i]!;
+    const c = b.close ?? null;
+    close[i] = c;
+    open[i] = b.open ?? c;
+    high[i] = b.high ?? c;
+    low[i] = b.low ?? c;
+    volume[i] = b.volume ?? 1;
+    time[i] = b.time ?? i * 60_000;
+  }
+  return { open, high, low, close, volume, time };
+}
+
+function packCompiled(
+  source: string,
+  ohlcv: OHLCVBar[],
+  inputs?: InputOverrides,
+): RuntimeResult {
+  const compiled = compileScript(source);
+  const cols = barsToColumns(ohlcv);
+  // compileScript().run() is the raw dict (engine CompileHostResult may already strip).
+  const raw = compiled.run(cols.open, cols.high, cols.low, cols.close, cols.volume, cols.time, {
+    inputs,
+  }) as Record<
+    string,
+    unknown
+  > & {
+    __events?: StrategyEvent[];
+    __fills?: Array<{ bar: number; id: string; side: "buy" | "sell"; qty: number; price: number; type?: "fill" }>;
+    __position_size?: number;
+    __netprofit?: number;
+    __equity?: number;
+    __strategy?: StrategySummary;
+    __drawings?: DrawingEvent[];
+  };
+  const events = raw.__events;
+  const fillsIn = raw.__fills;
+  const strategy = raw.__strategy;
+  const drawings = raw.__drawings;
+  const series: Record<string, Array<number | null>> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key.startsWith("__")) continue;
+    series[key] = value as Array<number | null>;
+  }
+  const plot_meta = compiled.plots;
+  const first = plot_meta[0]?.title;
+  return {
+    series,
+    plots: first != null ? (series[first] ?? []) : [],
+    plot_meta,
+    count: ohlcv.length,
+    script_name: null,
+    script_type: events != null || strategy != null ? "strategy" : "indicator",
+    mode: "compile",
+    ...(events != null ? { events } : {}),
+    ...(fillsIn != null
+      ? {
+          fills: fillsIn.map((f) =>
+            f.type === "fill" ? (f as RuntimeFill) : { type: "fill" as const, ...f },
+          ),
+        }
+      : {}),
+    ...(strategy != null ? { strategy } : {}),
+    ...(drawings != null ? { drawings } : {}),
+  };
+}
+
+function runCompiled(
+  source: string,
+  ohlcv: OHLCVBar[],
+  host: { inputs?: InputOverrides },
+): RuntimeResult {
+  const elig = compileEligible(source);
+  if (!elig.ok) return emptyCompileResult(ohlcv.length, elig.reason ?? "ineligible");
+  try {
+    return packCompiled(source, ohlcv, host.inputs);
+  } catch (err) {
+    const msg = err instanceof CompileError ? err.message : formatRunError(err);
+    return emptyCompileResult(ohlcv.length, msg);
+  }
+}
+
+function runAuto(
+  source: string,
+  tree: AST,
+  ohlcv: OHLCVBar[],
+  host: {
+    symbol?: string;
+    inputs?: InputOverrides;
+    broker?: BrokerSettings;
+    timeframe?: string | null;
+    libraries?: LibraryRegistry;
+  },
+): RuntimeResult {
+  const elig = compileEligible(source);
+  if (elig.ok) {
+    try {
+      const compiled = packCompiled(source, ohlcv, host.inputs);
+      compiled.auto_backend = "compile";
+      return compiled;
+    } catch (err) {
+      const reason = err instanceof CompileError ? err.message : formatRunError(err);
+      const out = interpretTree(tree, ohlcv, host);
+      out.auto_backend = "interpret";
+      out.compile_fallback_reason = reason;
+      return out;
+    }
+  }
+  const out = interpretTree(tree, ohlcv, host);
+  out.auto_backend = "interpret";
+  out.compile_fallback_reason = elig.reason;
+  return out;
 }
 
 function mergeInputs(

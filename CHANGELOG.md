@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- JS compile backend (`mode: "compile" | "auto"`) — emit a bar-loop function. No Numba.
+- Compile object-mode strategy (`__h.strategy` / fills / events) and UDF series state (`src[1]`, `var` locals)
+- Compile array / map / matrix, UDT (`Type.new` / field get-set), drawings (`label`/`line`/`box`), named UDF kwargs
+- Compile input overrides, `color.*` / named colors, enums, extra array/matrix/drawing mutators; `mode: "auto"` no longer skips compile when inputs are set
+
 ## [0.1.0] - 2026-08-15
 
 First public `@hoox-sh/pynets` release. TypeScript / Bun port of PYNE interpret.

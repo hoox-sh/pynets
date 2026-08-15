@@ -231,8 +231,24 @@ describe("cli parse helpers", () => {
     const got = parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "200000", "--commission", "0.001"]);
     expect(got.bars).toBe(MAX_BARS);
     expect(got.commission).toBe(0.001);
+    expect(got.mode).toBe("interpret");
     expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "NaN"])).toThrow(UsageError);
     expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--slippage", "Infinity"])).toThrow(
+      UsageError,
+    );
+  });
+
+  test("parseArgs --mode interpret|compile|auto", () => {
+    expect(parseArgs(["bun", "cli.ts", "run", "x.pine"]).mode).toBe("interpret");
+    expect(parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "compile"]).mode).toBe("compile");
+    expect(parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=auto"]).mode).toBe("auto");
+  });
+
+  test("parseArgs rejects invalid --mode and unknown flags", () => {
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "numba"])).toThrow(UsageError);
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=jit"])).toThrow(UsageError);
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode"])).toThrow(UsageError);
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "compile", "--nope"])).toThrow(
       UsageError,
     );
   });

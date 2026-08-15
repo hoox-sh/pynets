@@ -20,6 +20,27 @@ export type {
   StrategyEvent,
   StreamEvent,
 } from "./runtime/interpret.ts";
+export {
+  compileScript,
+  transpile,
+  compileEligible,
+  clearCompileCache,
+  compileCacheStats,
+  runScript,
+  compileToResult,
+  CompileError,
+  CompileEmitError,
+  CompileIneligibleError,
+  CompileLoadError,
+} from "./runtime/compile/index.ts";
+export type {
+  CompileBackend,
+  CompileCacheStats,
+  CompileEligibility,
+  CompilePlotMeta,
+  CompiledScript,
+  RuntimeMode,
+} from "./runtime/compile/index.ts";
 export { NA, PineSeries } from "./runtime/series.ts";
 export { TaEngine } from "./runtime/ta.ts";
 export type { BrokerSettings, StrategySummary } from "./runtime/strategy.ts";

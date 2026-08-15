@@ -20,6 +20,8 @@ import {
   useRich,
 } from "./cli/rich.ts";
 
+export type RunMode = "interpret" | "compile" | "auto";
+
 export const MAX_BARS = 100_000;
 
 export class UsageError extends Error {
@@ -155,6 +157,11 @@ function takeValue(args: string[], i: number, flag: string): { raw: string | und
   return { raw: a.slice(flag.length + 1), next: i };
 }
 
+function requireMode(raw: string | undefined): RunMode {
+  if (raw === "interpret" || raw === "compile" || raw === "auto") return raw;
+  throw new UsageError("error: --mode must be interpret|compile|auto");
+}
+
 export function parseArgs(argv: string[]): {
   cmd: string;
   file: string | undefined;
@@ -162,6 +169,7 @@ export function parseArgs(argv: string[]): {
   json: boolean;
   indent: number;
   full: boolean;
+  mode: RunMode;
   commission: number | undefined;
   slippage: number | undefined;
   pyramiding: number | undefined;
@@ -174,13 +182,14 @@ export function parseArgs(argv: string[]): {
   let json = false;
   let indent = 2;
   let full = false;
+  let mode: RunMode = "interpret";
   let commission: number | undefined;
   let slippage: number | undefined;
   let pyramiding: number | undefined;
   for (let i = 1; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--help" || a === "-h") {
-      return { cmd: "help", file: undefined, bars, json, indent, full, commission, slippage, pyramiding };
+      return { cmd: "help", file: undefined, bars, json, indent, full, mode, commission, slippage, pyramiding };
     }
     if (a === "--json") {
       json = true;
@@ -188,6 +197,12 @@ export function parseArgs(argv: string[]): {
     }
     if (a === "--full") {
       full = true;
+      continue;
+    }
+    if (a === "--mode" || a.startsWith("--mode=")) {
+      const got = takeValue(args, i, "--mode");
+      mode = requireMode(got.raw);
+      i = got.next;
       continue;
     }
     if (a === "--bars" || a.startsWith("--bars=")) {
@@ -230,7 +245,7 @@ export function parseArgs(argv: string[]): {
     if (file != null) throw new UsageError(`error: unexpected argument: ${a}`);
     file = a;
   }
-  return { cmd, file, bars, json, indent, full, commission, slippage, pyramiding };
+  return { cmd, file, bars, json, indent, full, mode, commission, slippage, pyramiding };
 }
 
 function fmtNum(v: number | null | undefined): string {
@@ -346,21 +361,27 @@ function runJson(out: RuntimeOut): void {
     series: typeof out.series;
     count: number;
     script_name: string | null;
+    mode: RuntimeOut["mode"];
     events?: RuntimeEvent[];
     drawings?: DrawingLike[];
     fills?: RuntimeFill[];
     alerts?: AlertLike[];
+    compile_fallback_reason?: string;
+    auto_backend?: RuntimeOut["auto_backend"];
     error?: string;
   } = {
     plots: out.plots,
     series: out.series,
     count: out.count,
     script_name: out.script_name,
+    mode: out.mode,
   };
   if (out.events != null) payload.events = out.events;
   if (out.drawings != null) payload.drawings = out.drawings;
   if (out.fills != null) payload.fills = out.fills;
   if (out.alerts != null) payload.alerts = out.alerts;
+  if (out.compile_fallback_reason != null) payload.compile_fallback_reason = out.compile_fallback_reason;
+  if (out.auto_backend != null) payload.auto_backend = out.auto_backend;
   if (out.error != null) payload.error = out.error;
   writeJson(payload);
   if (out.error != null) process.exit(1);
@@ -506,11 +527,12 @@ function run(
   bars: number,
   asJson: boolean,
   broker: BrokerSettings,
+  mode: RunMode,
 ): void {
   const t0 = performance.now();
   let out: RuntimeOut;
   try {
-    out = new Runtime("AAPL", { broker }).run(source, syntheticBars(bars));
+    out = new Runtime("AAPL", { broker, mode }).run(source, syntheticBars(bars));
   } catch (err) {
     fail(ui, err instanceof Error ? err.message : String(err), 1);
   }
@@ -538,7 +560,7 @@ function infoPayload(ui: Rich): {
     version: VERSION,
     runtime: "bun",
     bun: typeof Bun !== "undefined" ? Bun.version : null,
-    mode: "interpret",
+    mode: "interpret+compile",
     rich: ui.enabled,
     docs: "https://hoox.sh/pyne",
   };
@@ -558,7 +580,7 @@ function info(ui: Rich, asJson: boolean): void {
       ["package", "@hoox-sh/pynets"],
       ["version", VERSION],
       ["runtime", `bun ${payload.bun ?? "?"}`],
-      ["engine", "interpret"],
+      ["engine", "interpret + compile (JS emit)"],
       ["rich", "yes (TTY)"],
       ["docs", payload.docs],
     ],
@@ -577,7 +599,7 @@ function main(): void {
     failUsage(ui, msg);
   }
 
-  const { cmd, file, bars, json, indent, full } = parsed;
+  const { cmd, file, bars, json, indent, full, mode } = parsed;
   const broker = brokerFromFlags(parsed);
   if (cmd === "help" || cmd === "-h" || cmd === "--help") {
     ui.help();
@@ -610,7 +632,7 @@ function main(): void {
     return;
   }
   if (cmd === "run") {
-    run(ui, readSource(ui, file), file, bars, json, broker);
+    run(ui, readSource(ui, file), file, bars, json, broker, mode);
     return;
   }
   failUsage(ui, `error: unknown command: ${cmd}`);

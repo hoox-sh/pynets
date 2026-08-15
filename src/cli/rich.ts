@@ -122,7 +122,7 @@ export class Rich {
       this.write(this.paint("accent", "COMMANDS"));
     } else {
       this.write(
-        "usage: pynets <check|format|run|dump|info> [file] [--bars N] [--commission N] [--slippage N] [--pyramiding N] [--json] [--plain] [--rich] [--full]",
+        "usage: pynets <check|format|run|dump|info> [file] [--bars N] [--mode interpret|compile|auto] [--commission N] [--slippage N] [--pyramiding N] [--json] [--plain] [--rich] [--full]",
       );
       this.write("");
       this.write("commands:");
@@ -130,7 +130,7 @@ export class Rich {
     const cmds: Array<[string, string]> = [
       ["check", "Parse-only validation (CI-friendly exit codes)"],
       ["format", "Parse → unparse (pretty-print on TTY)"],
-      ["run", "Interpret on synthetic OHLCV"],
+      ["run", "Run on synthetic OHLCV (interpret or compile JS emit)"],
       ["dump", "Dump the ASDL-shaped AST"],
       ["info", "Version and runtime extras"],
     ];
@@ -146,6 +146,7 @@ export class Rich {
     else this.write("options:");
     const opts: Array<[string, string]> = [
       ["--bars N", "Synthetic bar count for run (default 20, max 100000)"],
+      ["--mode MODE", "run engine: interpret | compile | auto (JS emit; default interpret)"],
       ["--commission N", "Broker commission fraction for run (e.g. 0.001)"],
       ["--slippage N", "Broker slippage in price units for run"],
       ["--pyramiding N", "Broker max same-direction adds for run"],

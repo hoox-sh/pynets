@@ -28,7 +28,8 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 - **Do not hand-edit** `src/generated/*`. Regen with `bun run generate`.
 - **Do not fork the grammar.** Edit `.g4` only in PYNE (`src/pynescript/ast/grammar/antlr4/resource/`), then regen here.
 - **AST field names stay ASDL** (`kind`, `lineno`, `col_offset`, …).
-- **Interpret only.** No Numba/compile port, no Worker packaging, no ASDL codegen (README non-goals).
+- **No Numba / Worker / ASDL codegen.** Compile is JS emit (`src/runtime/compile/`) — Python object-mode analog, not nopython.
+- Do not edit `src/runtime/compile/*` and `src/runtime/interpret.ts` in the same agent turn. Parent wires `Runtime.run({ mode })`.
 - **`bun` only locally** — never npm/yarn/pnpm lockfiles. The npm registry is used only to publish `@hoox-sh/pynets` (see `.github/workflows/publish.yml`).
 - **`na` is `null`.** Non-finite in/out is `na`. Per-call-site TA state (Python incremental kernels).
 - **`request.security` foreign / HTF without data → `na`.** Do not invent chart series as foreign data.
@@ -42,6 +43,7 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 | `src/parser/` | LexerBase / ParserBase (indent, line-join) |
 | `src/generated/` | committed ANTLR TS (do not edit) |
 | `src/runtime/` | interpret host + ta / strategy / collections |
+| `src/runtime/compile/` | JS emit compile (`transpile` / `compileScript`) |
 | `src/cli.ts` | TTY CLI (`check` / `format` / `run` / `dump` / `info`) |
 | `test/` | bun tests; first-party fixtures live in PYNE |
 | `.github/` | CI + npm publish on `v*` tags |

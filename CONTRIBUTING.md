@@ -39,7 +39,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing interpret builtins or the grammar.
 - Do not hand-edit `src/generated/*` — regen with `bun run generate`.
 - Do not fork the `.g4` grammar here. Edit it in PYNE, then regen.
 - AST field names stay ASDL (`kind`, `lineno`, `col_offset`, …).
-- Interpret only. No Numba/compile port, no Worker packaging, no ASDL codegen.
+- No Numba / Worker packaging / ASDL codegen. Compile is JS emit under `src/runtime/compile/`.
 - `na` is `null`. Non-finite in/out is `na`.
 - New source files: copyright header + `SPDX-License-Identifier: AGPL-3.0-or-later`.
 
