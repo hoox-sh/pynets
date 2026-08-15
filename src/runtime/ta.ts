@@ -141,6 +141,10 @@ interface ObvState {
   bars: number;
 }
 
+interface AccdistState {
+  ad: number;
+}
+
 interface PivotState {
   left: number;
   right: number;
@@ -185,6 +189,76 @@ interface CorrState {
   a: Cell[];
   b: Cell[];
 }
+
+interface SwmaState {
+  period: number;
+  window: Cell[];
+  weights: number[];
+  wsum: number;
+}
+
+interface WindowState {
+  period: number;
+  window: Cell[];
+}
+
+interface TsiState {
+  longPeriod: number;
+  shortPeriod: number;
+  prev: Cell;
+  nBars: number;
+  value: Cell;
+}
+
+interface CumState {
+  total: number;
+}
+
+interface BarsSinceState {
+  everTrue: boolean;
+  barsSince: number;
+}
+
+interface ValueWhenState {
+  occurrence: number;
+  hits: Cell[];
+}
+
+interface PercentileState {
+  period: number;
+  percentage: number;
+  window: Cell[];
+}
+
+interface PvtState {
+  pvt: number;
+  prev: Cell;
+}
+
+interface WadState {
+  wad: number;
+  prev: Cell;
+  started: boolean;
+}
+
+interface VolIndexState {
+  value: number;
+  prevClose: Cell;
+  prevVol: Cell;
+  started: boolean;
+}
+
+interface WvadState {
+  value: number;
+}
+
+export type PivotPoints = {
+  pp: Cell;
+  r1: Cell;
+  s1: Cell;
+  r2: Cell;
+  s2: Cell;
+};
 
 function finiteCell(value: Cell): Cell {
   return value !== null && Number.isFinite(value) ? value : null;
@@ -256,6 +330,25 @@ export class TaEngine {
   private readonly correlationSites = new Map<string, CorrState>();
   private readonly highestBarsSites = new Map<string, HighestLowestState>();
   private readonly lowestBarsSites = new Map<string, HighestLowestState>();
+  private readonly swmaSites = new Map<string, SwmaState>();
+  private readonly cogSites = new Map<string, WindowState>();
+  private readonly tsiSites = new Map<string, TsiState>();
+  private readonly devSites = new Map<string, SmaState>();
+  private readonly varianceSites = new Map<string, StdevState>();
+  private readonly medianSites = new Map<string, WindowState>();
+  private readonly modeSites = new Map<string, WindowState>();
+  private readonly percentrankSites = new Map<string, WindowState>();
+  private readonly percentileNearestSites = new Map<string, PercentileState>();
+  private readonly percentileLinearSites = new Map<string, PercentileState>();
+  private readonly cumSites = new Map<string, CumState>();
+  private readonly barssinceSites = new Map<string, BarsSinceState>();
+  private readonly valuewhenSites = new Map<string, ValueWhenState>();
+  private readonly accdistSites = new Map<string, AccdistState>();
+  private readonly pvtSites = new Map<string, PvtState>();
+  private readonly wadSites = new Map<string, WadState>();
+  private readonly nviSites = new Map<string, VolIndexState>();
+  private readonly pviSites = new Map<string, VolIndexState>();
+  private readonly wvadSites = new Map<string, WvadState>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -1460,5 +1553,541 @@ export class TaEngine {
     const sy = Math.sqrt(deny);
     if (sx === 0 || sy === 0) return null;
     return num / (sx * sy);
+  }
+
+  /**
+   * Cumulative A/D: CLV * volume. H/L/C na keeps previous ad; vol na → 0;
+   * zero range → CLV 0 (`_accdist_inc_update`).
+   */
+  accdist(site: string, high: Cell, low: Cell, close: Cell, volume: Cell): Cell {
+    let st = this.accdistSites.get(site);
+    if (st === undefined) {
+      st = { ad: 0 };
+      this.accdistSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (h === null || l === null || c === null) return st.ad;
+    const vv = finiteCell(volume) ?? 0;
+    const rng = h - l;
+    const clv = rng === 0 ? 0 : ((c - l) - (h - c)) / rng;
+    st.ad += clv * vv;
+    return st.ad;
+  }
+
+  /**
+   * Price-Volume Trend. Adds vol*(c-prev)/prev when prev is finite and != 0.
+   * First bar is 0; na close or vol skips the add.
+   */
+  pvt(site: string, close: Cell, volume: Cell): Cell {
+    let st = this.pvtSites.get(site);
+    if (st === undefined) {
+      st = { pvt: 0, prev: null };
+      this.pvtSites.set(site, st);
+    }
+    const c = finiteCell(close);
+    const prev = st.prev;
+    if (prev !== null && prev !== 0 && c !== null) {
+      const vv = finiteCell(volume) ?? 0;
+      st.pvt += (vv * (c - prev)) / prev;
+    }
+    if (c !== null) st.prev = c;
+    return st.pvt;
+  }
+
+  /**
+   * Williams AD. First bar 0; close>prev → +(close-low); close<prev →
+   * -(high-close). H/L/C na keeps previous (`_wad`).
+   */
+  wad(site: string, high: Cell, low: Cell, close: Cell): Cell {
+    let st = this.wadSites.get(site);
+    if (st === undefined) {
+      st = { wad: 0, prev: null, started: false };
+      this.wadSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (h === null || l === null || c === null) return st.wad;
+    if (!st.started) {
+      st.started = true;
+      st.prev = c;
+      return st.wad;
+    }
+    const prev = st.prev;
+    if (prev !== null) {
+      if (c > prev) st.wad += c - l;
+      else if (c < prev) st.wad -= h - c;
+    }
+    st.prev = c;
+    return st.wad;
+  }
+
+  /**
+   * Negative Volume Index. Starts at 1000; updates when volume < prev volume.
+   */
+  nvi(site: string, close: Cell, volume: Cell): Cell {
+    return this.volIndexStep(this.nviSites, site, close, volume, (vol, prevVol) => vol < prevVol);
+  }
+
+  /**
+   * Positive Volume Index. Starts at 1000; updates when volume > prev volume.
+   */
+  pvi(site: string, close: Cell, volume: Cell): Cell {
+    return this.volIndexStep(this.pviSites, site, close, volume, (vol, prevVol) => vol > prevVol);
+  }
+
+  private volIndexStep(
+    sites: Map<string, VolIndexState>,
+    site: string,
+    close: Cell,
+    volume: Cell,
+    trigger: (vol: number, prevVol: number) => boolean,
+  ): Cell {
+    let st = sites.get(site);
+    if (st === undefined) {
+      st = { value: 1000, prevClose: null, prevVol: null, started: false };
+      sites.set(site, st);
+    }
+    const c = finiteCell(close);
+    const vol = finiteCell(volume) ?? 0;
+    if (!st.started) {
+      st.started = true;
+      if (c !== null) st.prevClose = c;
+      st.prevVol = vol;
+      return st.value;
+    }
+    if (c !== null && st.prevClose !== null && trigger(vol, st.prevVol ?? 0)) {
+      const change = st.prevClose !== 0 ? (c - st.prevClose) / st.prevClose : 0;
+      const next = st.value * (1 + change);
+      if (Number.isFinite(next)) st.value = next;
+    }
+    if (c !== null) st.prevClose = c;
+    st.prevVol = vol;
+    return st.value;
+  }
+
+  /**
+   * Intraday Intensity: ((2c-h-l)/(h-l))*volume. Zero range → 0; H/L/C na → na;
+   * vol na → 0 (`_builtin_ta_iii` * volume).
+   */
+  iii(site: string, high: Cell, low: Cell, close: Cell, volume: Cell): Cell {
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (h === null || l === null || c === null) return null;
+    const rng = h - l;
+    if (rng === 0) return 0;
+    const vv = finiteCell(volume) ?? 0;
+    return ((2 * c - h - l) / rng) * vv;
+  }
+
+  /**
+   * Williams Variable AD: cumulative ((c-o)/(h-l))*volume. O/H/L/C na keeps
+   * previous; vol na → 0; zero range adds 0.
+   */
+  wvad(site: string, open: Cell, high: Cell, low: Cell, close: Cell, volume: Cell): Cell {
+    let st = this.wvadSites.get(site);
+    if (st === undefined) {
+      st = { value: 0 };
+      this.wvadSites.set(site, st);
+    }
+    const o = finiteCell(open);
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (o === null || h === null || l === null || c === null) return st.value;
+    const rng = h - l;
+    const vv = finiteCell(volume) ?? 0;
+    if (rng !== 0) st.value += ((c - o) / rng) * vv;
+    return st.value;
+  }
+
+  /**
+   * Classic floor pivots. na high/low/close → all na.
+   * Optional `type` is accepted; classic levels are always returned.
+   */
+  pivotPoints(site: string, high: Cell, low: Cell, close: Cell, type?: string): PivotPoints {
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (h === null || l === null || c === null) {
+      return { pp: null, r1: null, s1: null, r2: null, s2: null };
+    }
+    const pp = (h + l + c) / 3;
+    const rng = h - l;
+    return {
+      pp,
+      r1: 2 * pp - l,
+      s1: 2 * pp - h,
+      r2: pp + rng,
+      s2: pp - rng,
+    };
+  }
+
+  /**
+   * Symmetric WMA. Omitted/NaN period → fixed 4-sample weights 1/2/2/1.
+   * Else `_builtin_ta_swma` 2-arg weights. Any na in window → na.
+   */
+  swma(site: string, source: Cell, period?: number): Cell {
+    const useFixed = period === undefined || Number.isNaN(period);
+    const n = useFixed ? 4 : pinePeriod(period);
+    if (n === null) return null;
+    let st = this.swmaSites.get(site);
+    if (st === undefined || st.period !== n) {
+      const weights: number[] = [];
+      let wsum = 0;
+      for (let i = 0; i < n; i++) {
+        const w = i < (n >> 1) ? i + 1 : i > ((n - 1) >> 1) ? n - i : (n >> 1) + 1;
+        weights.push(w);
+        wsum += w;
+      }
+      st = { period: n, window: [], weights, wsum };
+      this.swmaSites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n || st.wsum === 0) return null;
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      const v = st.window[i];
+      if (v == null) return null;
+      acc += v * st.weights[i]!;
+    }
+    return acc / st.wsum;
+  }
+
+  /** Center of Gravity: `-sum((i+1)*x_rev) / sum(x)` over `period`. den=0 → na. */
+  cog(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.cogSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      this.cogSites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n) return null;
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i++) {
+      const v = st.window[n - 1 - i];
+      if (v === null) continue;
+      num += (i + 1) * v;
+      den += v;
+    }
+    if (den === 0) return null;
+    return -num / den;
+  }
+
+  /** TSI: 100 * EMA(EMA(mom, long), short) / EMA(EMA(|mom|, long), short). */
+  tsi(site: string, source: Cell, longPeriod: number, shortPeriod: number): Cell {
+    const longN = pinePeriod(longPeriod);
+    const shortN = pinePeriod(shortPeriod);
+    if (longN === null || shortN === null) return null;
+    let st = this.tsiSites.get(site);
+    if (st === undefined || st.longPeriod !== longN || st.shortPeriod !== shortN) {
+      st = { longPeriod: longN, shortPeriod: shortN, prev: null, nBars: 0, value: null };
+      this.tsiSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    st.nBars += 1;
+    const prev = st.prev;
+    st.prev = x;
+    if (prev === null || x === null) {
+      if (st.nBars < longN + shortN) {
+        st.value = null;
+        return null;
+      }
+      return st.value;
+    }
+    const mom = x - prev;
+    const tag = `${site}:${longN}:${shortN}`;
+    const e1 = this.ema(`${tag}:mom`, mom, longN);
+    const e2 = this.ema(`${tag}:mom2`, e1, shortN);
+    const a1 = this.ema(`${tag}:abs`, Math.abs(mom), longN);
+    const a2 = this.ema(`${tag}:abs2`, a1, shortN);
+    if (st.nBars < longN + shortN) {
+      st.value = null;
+      return null;
+    }
+    if (a2 === null || a2 === 0) {
+      st.value = a2 === 0 ? 0 : null;
+      return st.value;
+    }
+    if (e2 === null) {
+      st.value = null;
+      return null;
+    }
+    st.value = 100 * (e2 / a2);
+    return st.value;
+  }
+
+  /** `(up - lo) / mid` from `kc`. na if mid is 0/null. */
+  kcw(
+    site: string,
+    high: Cell,
+    low: Cell,
+    close: Cell,
+    length: number,
+    mult: number,
+  ): Cell {
+    const r = this.kc(site, high, low, close, length, mult);
+    if (r.mid === null || r.up === null || r.lo === null || r.mid === 0) return null;
+    return (r.up - r.lo) / r.mid;
+  }
+
+  /** Mean absolute deviation. Full window; any na → na. */
+  dev(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.devSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [], sum: 0, count: 0 };
+      this.devSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    if (st.window.length === n) {
+      const old = st.window.shift()!;
+      if (old !== null) {
+        st.sum -= old;
+        st.count -= 1;
+      }
+    }
+    st.window.push(x);
+    if (x !== null) {
+      st.sum += x;
+      st.count += 1;
+    }
+    if (st.window.length < n || st.count !== n) return null;
+    const mean = st.sum / n;
+    let acc = 0;
+    for (const v of st.window) {
+      if (v === null) return null;
+      acc += Math.abs(v - mean);
+    }
+    return acc / n;
+  }
+
+  /** Sample variance (ddof=1). Any na in window → na; period<=1 → na. */
+  variance(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null || n <= 1) return null;
+    let st = this.varianceSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [], sum: 0, sumsq: 0, count: 0 };
+      this.varianceSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    if (st.window.length === n) {
+      const old = st.window.shift()!;
+      if (old !== null) {
+        st.sum -= old;
+        st.sumsq -= old * old;
+        st.count -= 1;
+      }
+    }
+    st.window.push(x);
+    if (x !== null) {
+      st.sum += x;
+      st.sumsq += x * x;
+      st.count += 1;
+    }
+    if (st.window.length < n || st.count !== n) return null;
+    let v = (st.sumsq - (st.sum * st.sum) / n) / (n - 1);
+    if (v < 0) v = 0;
+    return v;
+  }
+
+  /** Median of finite samples. Needs a full `period` window. */
+  median(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.medianSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      this.medianSites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n) return null;
+    const valid: number[] = [];
+    for (const v of st.window) {
+      if (v !== null) valid.push(v);
+    }
+    if (valid.length === 0) return null;
+    valid.sort((a, b) => a - b);
+    const mid = valid.length >> 1;
+    if (valid.length % 2 === 1) return valid[mid]!;
+    return (valid[mid - 1]! + valid[mid]!) / 2;
+  }
+
+  /** Most frequent finite value. Ties keep the first in-window value. */
+  mode(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.modeSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      this.modeSites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n) return null;
+    const counts = new Map<number, number>();
+    let best: number | null = null;
+    let bestC = 0;
+    for (const v of st.window) {
+      if (v === null) continue;
+      const c = (counts.get(v) ?? 0) + 1;
+      counts.set(v, c);
+      if (c > bestC) {
+        bestC = c;
+        best = v;
+      }
+    }
+    return best;
+  }
+
+  /** `100 * count(x < current) / count`. <2 finite samples → 50; current na → na. */
+  percentrank(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.percentrankSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      this.percentrankSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    if (st.window.length === n) st.window.shift();
+    st.window.push(x);
+    if (st.window.length < n) return null;
+    const valid: number[] = [];
+    for (const v of st.window) {
+      if (v !== null) valid.push(v);
+    }
+    if (valid.length < 2) return 50;
+    if (x === null) return null;
+    let below = 0;
+    for (const v of valid) {
+      if (v < x) below += 1;
+    }
+    return (below / valid.length) * 100;
+  }
+
+  /** Nearest-rank percentile. Rank = ceil(p/100 * n), 1-indexed. */
+  percentileNearest(site: string, source: Cell, period: number, percentage: number): Cell {
+    return this.percentileStep(this.percentileNearestSites, site, source, period, percentage, false);
+  }
+
+  /** Linear-interpolation percentile at rank (p/100)*(n-1). */
+  percentileLinear(site: string, source: Cell, period: number, percentage: number): Cell {
+    return this.percentileStep(this.percentileLinearSites, site, source, period, percentage, true);
+  }
+
+  private percentileStep(
+    sites: Map<string, PercentileState>,
+    site: string,
+    source: Cell,
+    period: number,
+    percentage: number,
+    linear: boolean,
+  ): Cell {
+    const n = pinePeriod(period);
+    if (n === null || !Number.isFinite(percentage)) return null;
+    let st = sites.get(site);
+    if (st === undefined || st.period !== n || st.percentage !== percentage) {
+      st = { period: n, percentage, window: [] };
+      sites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n) return null;
+    const sorted: number[] = [];
+    for (const v of st.window) {
+      if (v !== null) sorted.push(v);
+    }
+    if (sorted.length === 0) return null;
+    sorted.sort((a, b) => a - b);
+    const m = sorted.length;
+    if (linear) {
+      if (m === 1) return sorted[0]!;
+      const rank = (percentage / 100) * (m - 1);
+      const lo = Math.trunc(rank);
+      const hi = Math.min(lo + 1, m - 1);
+      const frac = rank - lo;
+      return sorted[lo]! * (1 - frac) + sorted[hi]! * frac;
+    }
+    let rank = Math.trunc((percentage / 100) * m + 0.999999);
+    if (rank < 1) rank = 1;
+    if (rank > m) rank = m;
+    return sorted[rank - 1]!;
+  }
+
+  /** Running sum. na / non-finite contributes 0 (`_cum_inc_update`). */
+  cum(site: string, source: Cell): Cell {
+    let st = this.cumSites.get(site);
+    if (st === undefined) {
+      st = { total: 0 };
+      this.cumSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    st.total += x ?? 0;
+    return st.total;
+  }
+
+  /** Bars since last truthy cond (non-null, !=0). Never true → na. */
+  barssince(site: string, cond: Cell): Cell {
+    let st = this.barssinceSites.get(site);
+    if (st === undefined) {
+      st = { everTrue: false, barsSince: 0 };
+      this.barssinceSites.set(site, st);
+    }
+    const c = finiteCell(cond);
+    if (c !== null && c !== 0) {
+      st.everTrue = true;
+      st.barsSince = 0;
+      return 0;
+    }
+    st.barsSince += 1;
+    return st.everTrue ? st.barsSince : null;
+  }
+
+  /** Source at the `occurrence`-th most recent true cond (0 = latest). */
+  valuewhen(site: string, cond: Cell, source: Cell, occurrence = 0): Cell {
+    if (!Number.isFinite(occurrence) || occurrence < 0) return null;
+    const occ = Math.trunc(occurrence);
+    let st = this.valuewhenSites.get(site);
+    if (st === undefined || st.occurrence !== occ) {
+      st = { occurrence: occ, hits: [] };
+      this.valuewhenSites.set(site, st);
+    }
+    const c = finiteCell(cond);
+    if (c !== null && c !== 0) {
+      if (st.hits.length === occ + 1) st.hits.shift();
+      st.hits.push(finiteCell(source));
+    }
+    if (st.hits.length <= occ) return null;
+    return st.hits[st.hits.length - 1 - occ]!;
+  }
+
+  /** `highest - lowest` over `period` (nested highest/lowest sites). */
+  range(site: string, source: Cell, period: number): Cell {
+    const hi = this.highest(`${site}:hi`, source, period);
+    const lo = this.lowest(`${site}:lo`, source, period);
+    if (hi === null || lo === null) return null;
+    return hi - lo;
+  }
+
+  /** Alias of `highest`. */
+  max(site: string, source: Cell, period: number): Cell {
+    return this.highest(site, source, period);
+  }
+
+  /** Alias of `lowest`. */
+  min(site: string, source: Cell, period: number): Cell {
+    return this.lowest(site, source, period);
   }
 }

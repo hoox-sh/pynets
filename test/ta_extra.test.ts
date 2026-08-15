@@ -266,6 +266,17 @@ describe("ta.correlation incremental", () => {
   });
 });
 
+describe("ta.accdist incremental", () => {
+  test("flat bar (h==l) adds 0; CLV * volume accumulates", () => {
+    const ta = new TaEngine();
+    expect(ta.accdist("ad", 2, 2, 2, 10)).toBe(0);
+    // h=3 l=1 c=3 → clv = 1; * vol 4 → 4
+    expect(ta.accdist("ad", 3, 1, 3, 4)).toBe(4);
+    // na high keeps last
+    expect(ta.accdist("ad", null, 1, 2, 10)).toBe(4);
+  });
+});
+
 describe("ta call-site isolation", () => {
   test("sma windows are per site", () => {
     const ta = new TaEngine();

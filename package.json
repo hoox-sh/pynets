@@ -5,7 +5,20 @@
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "author": "jango_blockchained",
-  "description": "PyneTS — TypeScript port of pynescript (parse, unparse, interpret). Python Runtime remains the source of truth.",
+  "description": "PyneTS — TypeScript / Bun Pine Script library (parse, unparse, interpret, stream). Python pynescript Runtime remains the source of truth.",
+  "keywords": [
+    "pine-script",
+    "pinescript",
+    "tradingview",
+    "runtime",
+    "interpreter",
+    "backtest",
+    "indicator",
+    "strategy",
+    "ohlcv",
+    "typescript",
+    "bun"
+  ],
   "homepage": "https://github.com/hoox-sh/pynets",
   "bugs": {
     "url": "https://github.com/hoox-sh/pynets/issues"

@@ -91,20 +91,20 @@ describe("str helpers", () => {
     expect(strLower(null)).toBeNull();
   });
 
-  test("strReplace occurrence 0 = all; n > 0 is 1-based nth", () => {
-    expect(strReplace("abab", "a", "c")).toBe("cbcb");
-    expect(strReplace("abab", "a", "c", 0)).toBe("cbcb");
+  test("strReplace occurrence is 0-based first-match (Python / Pine)", () => {
+    expect(strReplace("abab", "a", "c")).toBe("cbab");
+    expect(strReplace("abab", "a", "c", 0)).toBe("cbab");
     expect(strReplace("hello world", "world", "pine")).toBe("hello pine");
-    expect(strReplace("abab", "a", "c", 1)).toBe("cbab");
-    expect(strReplace("abab", "a", "c", 2)).toBe("abcb");
-    expect(strReplace("abab", "a", "c", 3)).toBe("abab");
+    expect(strReplace("abab", "a", "c", 1)).toBe("abcb");
+    expect(strReplace("abab", "a", "c", 2)).toBe("abab");
+    expect(strReplace("abab", "a", "c", -1)).toBe("abab");
     expect(strReplace(null, "a", "c")).toBeNull();
-    expect(strReplace("ab", null, "c")).toBe("ab");
+    expect(strReplace("ab", null, "c")).toBe("cab");
     expect(strReplace("ab", "a", null)).toBe("b");
-    expect(strReplace("aa", "", "x")).toBe("aa");
-    expect(strReplace("aa", "a", "x", Number.NaN)).toBe("xx");
-    expect(strReplace("ababab", "ab", "X", 1)).toBe("Xabab");
-    expect(strReplace("ababab", "ab", "X", 2)).toBe("abXab");
+    expect(strReplace("aa", "", "x")).toBe("xaa");
+    expect(strReplace("aa", "a", "x", Number.NaN)).toBe("xa");
+    expect(strReplace("ababab", "ab", "X", 1)).toBe("abXab");
+    expect(strReplace("ababab", "ab", "X", 2)).toBe("ababX");
     expect(strReplaceAll("ababab", "ab", "X")).toBe("XXX");
     expect(strReplaceAll("ab", null, "c")).toBe("ab");
   });

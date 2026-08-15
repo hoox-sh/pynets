@@ -50,4 +50,40 @@ plot(close)`,
     expect(out.error).toBeUndefined();
     expect(out.fills?.length).toBeGreaterThan(0);
   });
+
+  test("omitted strategy.entry qty defaults to 1; na qty does not fill", () => {
+    const ok = new Runtime("TEST").run(
+      `strategy("s")
+if bar_index == 0
+    strategy.entry("L", strategy.long)
+plot(strategy.position_size)`,
+      [{ close: 10 }, { close: 11 }],
+    );
+    expect(ok.fills?.length).toBe(1);
+    expect(ok.plots[1]).toBe(1);
+
+    const naQty = new Runtime("TEST").run(
+      `strategy("s")
+if bar_index == 0
+    strategy.entry("L", strategy.long, qty=na)
+plot(strategy.position_size)`,
+      [{ close: 10 }, { close: 11 }],
+    );
+    expect(naQty.fills ?? []).toHaveLength(0);
+    expect(naQty.plots[1]).toBe(0);
+  });
+
+  test("indicator max_lines_count is honoured", () => {
+    const out = new Runtime("TEST").run(
+      `indicator("t", max_lines_count=2)
+line.new(bar_index, close, bar_index, close)
+line.new(bar_index, close, bar_index, close)
+line.new(bar_index, close, bar_index, close)
+plot(1)`,
+      [{ close: 1 }, { close: 2 }],
+    );
+    expect(out.error).toBeUndefined();
+    const lines = (out.drawings ?? []).filter((d) => d.kind === "line" && !d.deleted);
+    expect(lines.length).toBeLessThanOrEqual(2);
+  });
 });

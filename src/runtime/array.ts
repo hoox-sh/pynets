@@ -140,11 +140,12 @@ export class PineArray {
     });
   }
 
+  /** `array.indexof` — miss is `-1` (Python `ArrayBuiltinsMixin`). */
   indexof(value: Cell): Cell {
     for (let i = 0; i < this.cells.length; i++) {
       if (Object.is(this.cells[i], value)) return i;
     }
-    return null;
+    return -1;
   }
 
   avg(): Cell {

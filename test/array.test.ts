@@ -110,7 +110,7 @@ describe("PineArray constructor / helpers", () => {
     expect(a.first()).toBe(3);
     expect(a.last()).toBe(2);
     expect(a.indexof(1)).toBe(1);
-    expect(a.indexof(9)).toBeNull();
+    expect(a.indexof(9)).toBe(-1);
     a.sort("asc");
     expect(a.toValues()).toEqual([1, 2, 3]);
     const b = a.copy();

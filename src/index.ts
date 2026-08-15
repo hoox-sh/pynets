@@ -9,7 +9,7 @@
 export { dump, parse, tokenize, unparse, PinescriptSyntaxError } from "./ast/helper.ts";
 export type { ParseMode } from "./ast/helper.ts";
 export type { AST, Script, Expression } from "./ast/nodes.ts";
-export { Runtime, interpret, interpretTree } from "./runtime/interpret.ts";
+export { Runtime, RuntimeStream, interpret, interpretTree } from "./runtime/interpret.ts";
 export type {
   DrawingEvent,
   InputOverrides,
@@ -18,6 +18,7 @@ export type {
   RuntimeOptions,
   RuntimeResult,
   StrategyEvent,
+  StreamEvent,
 } from "./runtime/interpret.ts";
 export { NA, PineSeries } from "./runtime/series.ts";
 export { TaEngine } from "./runtime/ta.ts";
@@ -26,3 +27,8 @@ export { PineArray } from "./runtime/array.ts";
 export { PineMap } from "./runtime/map.ts";
 export { PineMatrix } from "./runtime/matrix.ts";
 export { DrawingBook } from "./runtime/drawings.ts";
+export { MemoryProvider } from "./runtime/provider.ts";
+export type { BarProvider, ProviderBar } from "./runtime/provider.ts";
+export { LogBook } from "./runtime/log.ts";
+export type { LogLevel, LogRecord } from "./runtime/log.ts";
+export { TickerId, tickerNew, tickerHeikinashi, tickerStandard } from "./runtime/ticker.ts";

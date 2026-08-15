@@ -42,10 +42,9 @@ export function strLower(s: unknown): string | null {
 /**
  * `str.replace(s, target, replacement, occurrence?)`.
  *
- * Pine/Python: occurrence is 0-based and default 0 replaces the *first* match;
- * `str.replace_all` replaces every match. This helper keeps the interpret
- * contract: `0` / omitted = replace all (interpret passes `occ ?? 0`);
- * `n > 0` replaces the n-th match (1-based).
+ * Pine/Python: occurrence is 0-based; default 0 replaces the first match only.
+ * `str.replace_all` replaces every match. Negative occurrence is a no-op.
+ * Empty target inserts `replacement` at index `occurrence`.
  */
 export function strReplace(
   s: unknown,
@@ -61,10 +60,13 @@ export function strReplace(
     typeof occurrence === "number" && Number.isFinite(occurrence)
       ? Math.trunc(occurrence)
       : 0;
-  if (tgt === "") return src;
-  if (occ <= 0) return replaceAll(src, tgt, rep);
+  if (occ < 0) return src;
+  if (tgt === "") {
+    if (occ > src.length) return src;
+    return src.slice(0, occ) + rep + src.slice(occ);
+  }
   let start = 0;
-  for (let n = 1; n <= occ; n++) {
+  for (let n = 0; n <= occ; n++) {
     const idx = src.indexOf(tgt, start);
     if (idx < 0) return src;
     if (n === occ) return src.slice(0, idx) + rep + src.slice(idx + tgt.length);

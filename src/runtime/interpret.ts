@@ -33,6 +33,15 @@ import type {
 import { PineArray } from "./array.ts";
 import { colorNew, parseColor, type Color } from "./color.ts";
 import { DrawingBook, type DrawingEvent } from "./drawings.ts";
+import { LogBook, formatLogParts, type LogRecord } from "./log.ts";
+import { MemoryProvider, type BarProvider } from "./provider.ts";
+import {
+  TickerId,
+  tickerHeikinashi,
+  tickerNew,
+  tickerRenko,
+  tickerStandard,
+} from "./ticker.ts";
 import { isInputBuiltin, resolveInputDefault, inputAsCell, type InputValue } from "./input.ts";
 import {
   mathAbs,
@@ -129,6 +138,9 @@ export interface RuntimeResult {
   events?: StrategyEvent[];
   fills?: RuntimeFill[];
   drawings?: DrawingEvent[];
+  logs?: LogRecord[];
+  /** Titled plot series as `{ data: [{ value, time? }] }` for host/stream consumers. */
+  plot_data?: Record<string, { data: Array<{ value: number | null; time?: number }> }>;
   error?: string;
   error_kind?: string;
 }
@@ -136,7 +148,16 @@ export interface RuntimeResult {
 /** Eval-only: Cell, tagged tuple/array, color, or strategy.long/short strings. */
 type TupleVal = { __tuple: true; elts: Value[] };
 type ArrayVal = { __array: true; elts: Value[] };
-type Value = Cell | TupleVal | ArrayVal | Color | string | PineArray | PineMap | PineMatrix;
+type Value =
+  | Cell
+  | TupleVal
+  | ArrayVal
+  | Color
+  | string
+  | PineArray
+  | PineMap
+  | PineMatrix
+  | TickerId;
 
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
@@ -203,6 +224,8 @@ interface Env {
   frames: UdfSiteState[];
   barCount: number;
   lastBarTime: number;
+  logs: LogBook;
+  barTimes: number[];
 }
 
 export class Runtime {
@@ -262,6 +285,73 @@ export class Runtime {
       };
     }
   }
+
+  /** Push-driven re-eval: each `push` runs the script on all bars so far. */
+  stream(source: string): RuntimeStream {
+    return new RuntimeStream(this, source);
+  }
+
+  async runProvider(
+    source: string,
+    provider: BarProvider,
+    extra?: RuntimeOptions & { limit?: number },
+  ): Promise<RuntimeResult> {
+    const bars = await provider.fetch({
+      symbol: this.symbol,
+      timeframe: extra?.timeframe ?? this.timeframe,
+      limit: extra?.limit,
+    });
+    return this.run(source, bars, extra);
+  }
+}
+
+export type StreamEvent = "bar" | "error" | "end";
+
+export class RuntimeStream {
+  private readonly bars: OHLCVBar[] = [];
+  private readonly barHandlers: Array<(out: RuntimeResult) => void> = [];
+  private readonly errorHandlers: Array<(err: Error) => void> = [];
+  private readonly endHandlers: Array<(out: RuntimeResult) => void> = [];
+  private closed = false;
+
+  constructor(
+    private readonly runtime: Runtime,
+    private readonly source: string,
+  ) {}
+
+  on(event: "bar", handler: (out: RuntimeResult) => void): this;
+  on(event: "error", handler: (err: Error) => void): this;
+  on(event: "end", handler: (out: RuntimeResult) => void): this;
+  on(
+    event: StreamEvent,
+    handler: ((out: RuntimeResult) => void) | ((err: Error) => void),
+  ): this {
+    if (event === "bar") this.barHandlers.push(handler as (out: RuntimeResult) => void);
+    else if (event === "error") this.errorHandlers.push(handler as (err: Error) => void);
+    else this.endHandlers.push(handler as (out: RuntimeResult) => void);
+    return this;
+  }
+
+  push(bar: OHLCVBar): RuntimeResult | undefined {
+    if (this.closed) return undefined;
+    this.bars.push(bar);
+    try {
+      const out = this.runtime.run(this.source, this.bars);
+      for (const h of this.barHandlers) h(out);
+      return out;
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      for (const h of this.errorHandlers) h(e);
+      return undefined;
+    }
+  }
+
+  close(): RuntimeResult {
+    this.closed = true;
+    const out = this.runtime.run(this.source, this.bars);
+    for (const h of this.endHandlers) h(out);
+    return out;
+  }
 }
 
 export function interpret(source: string, ohlcv: OHLCVBar[]): { plots: Array<number | null> } {
@@ -304,6 +394,8 @@ export function interpretTree(
     frames: [],
     barCount: ohlcv.length,
     lastBarTime: ohlcv.length === 0 ? 0 : (ohlcv[ohlcv.length - 1]!.time ?? (ohlcv.length - 1) * 60_000),
+    logs: new LogBook(),
+    barTimes: ohlcv.map((b, i) => b.time ?? i * 60_000),
   };
 
   const n = ohlcv.length;
@@ -326,6 +418,8 @@ export function interpretTree(
             if (decl.kind === "strategy") {
               script_type = "strategy";
               applyStrategyDecl(stmt, env);
+            } else {
+              applyDrawingDecl(stmt, env);
             }
             continue;
           }
@@ -355,8 +449,26 @@ export function interpretTree(
     events: env.book.events,
     fills: packFills(env.book),
     drawings: packDrawings(env.drawings),
+    logs: env.logs.records.length ? env.logs.records : undefined,
+    plot_data: packPlotData(plots, env.barTimes),
     ...(runError ?? {}),
   };
+}
+
+function packPlotData(
+  plots: Record<string, Array<number | null>>,
+  times: number[],
+): Record<string, { data: Array<{ value: number | null; time?: number }> }> {
+  const out: Record<string, { data: Array<{ value: number | null; time?: number }> }> = {};
+  for (const [title, series] of Object.entries(plots)) {
+    out[title] = {
+      data: series.map((value, i) => {
+        const time = times[i];
+        return time == null ? { value } : { value, time };
+      }),
+    };
+  }
+  return out;
 }
 
 function pushNamedSeries(env: Env, id: string, value: Cell): void {
@@ -691,6 +803,22 @@ function applyStrategyDecl(stmt: { kind: string; value?: expr | null }, env: Env
   if (Object.keys(settings).length) env.book.configure(settings);
   const capital = unwrap(evalExpr(callArg(stmt.value.args, -1, ["initial_capital"]), env));
   if (capital != null && Number.isFinite(capital)) env.book.initialCapital = capital;
+  applyDrawingDecl(stmt, env);
+}
+
+function applyDrawingDecl(stmt: { kind: string; value?: expr | null }, env: Env): void {
+  if (stmt.kind !== "Expr" || stmt.value?.kind !== "Call") return;
+  const lines = unwrap(evalExpr(callArg(stmt.value.args, -1, ["max_lines_count"]), env));
+  const labels = unwrap(evalExpr(callArg(stmt.value.args, -1, ["max_labels_count"]), env));
+  const boxes = unwrap(evalExpr(callArg(stmt.value.args, -1, ["max_boxes_count"]), env));
+  const polylines = unwrap(evalExpr(callArg(stmt.value.args, -1, ["max_polylines_count"]), env));
+  if (lines == null && labels == null && boxes == null && polylines == null) return;
+  env.drawings.configure({
+    max_lines_count: lines ?? undefined,
+    max_labels_count: labels ?? undefined,
+    max_boxes_count: boxes ?? undefined,
+    max_polylines_count: polylines ?? undefined,
+  });
 }
 
 function captureDecl(stmt: { kind: string; value?: expr | null }): { name: string | null; kind: string } | null {
@@ -1035,8 +1163,74 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "isrealtime") return 0;
       if (node.attr === "islastconfirmedhistory") return last ? 1 : 0;
     }
+    if (node.value.id === "session") {
+      if (node.attr === "regular") return "regular";
+      if (node.attr === "extended") return "extended";
+      if (node.attr === "ismarket") return 1;
+      if (node.attr === "ispremarket" || node.attr === "ispostmarket") return 0;
+      if (node.attr === "isfirstbar" || node.attr === "isfirstbar_regular") {
+        return env.barIndex === 0 ? 1 : 0;
+      }
+      if (node.attr === "islastbar" || node.attr === "islastbar_regular") {
+        return env.barIndex === env.barCount - 1 ? 1 : 0;
+      }
+    }
+    if (node.value.id === "chart") {
+      if (node.attr === "is_heikinashi" || node.attr === "is_renko" || node.attr === "is_kagi") {
+        return 0;
+      }
+      if (node.attr === "fg_color") return "#ffffff";
+      if (node.attr === "bg_color") return "#131722";
+    }
+    if (node.value.id === "ta") {
+      const taAttr = evalTaAttr(node.attr, env);
+      if (taAttr !== undefined) return taAttr;
+    }
   }
   return NA;
+}
+
+function evalTaAttr(attr: string, env: Env): Value | undefined {
+  const ta = env.ta;
+  const site = `attr:ta.${attr}`;
+  if (attr === "accdist" || attr === "ad") {
+    return ta.accdist(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+    );
+  }
+  if (attr === "obv" && typeof ta.obv === "function") {
+    return (ta.obv as TaEngine["obv"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (attr === "tr" && typeof ta.tr === "function") {
+    return (ta.tr as TaEngine["tr"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+    );
+  }
+  if (attr === "vwap" && typeof ta.vwap === "function") {
+    const h = num(env.ctx.high);
+    const l = num(env.ctx.low);
+    const c = num(env.ctx.close);
+    const src = h != null && l != null && c != null ? (h + l + c) / 3 : c;
+    return (ta.vwap as TaEngine["vwap"]).call(env.ta, site, src, num(env.ctx.volume));
+  }
+  if (attr === "pvt" && typeof ta.pvt === "function") {
+    return (ta.pvt as TaEngine["pvt"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (attr === "nvi" && typeof ta.nvi === "function") {
+    return (ta.nvi as TaEngine["nvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (attr === "pvi" && typeof ta.pvi === "function") {
+    return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  return undefined;
 }
 
 function timeframeMultiplier(period: string | null): number {
@@ -1065,6 +1259,7 @@ function evalId(node: expr | undefined): string {
 
 function stringifyVal(value: Value): string {
   if (typeof value === "string") return value;
+  if (value instanceof TickerId) return value.toString();
   const cell = unwrap(value);
   return cell == null ? "na" : String(cell);
 }
@@ -1182,6 +1377,45 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "string" || fname === "str") {
     return stringifyVal(evalExpr(callArg(node.args, 0, ["x", "source"]), env));
   }
+  if (fname === "log.info" || fname === "log.warning" || fname === "log.error") {
+    const parts = asArgs(node.args).map((a) => {
+      const v = evalExpr(a.value, env);
+      if (v instanceof TickerId) return v.toString();
+      return typeof v === "string" ? v : unwrap(v);
+    });
+    const msg = formatLogParts(parts);
+    if (fname === "log.info") env.logs.info(env.barIndex, msg);
+    else if (fname === "log.warning") env.logs.warning(env.barIndex, msg);
+    else env.logs.error(env.barIndex, msg);
+    return NA;
+  }
+  if (fname === "runtime.error") {
+    const parts = asArgs(node.args).map((a) => {
+      const v = evalExpr(a.value, env);
+      return typeof v === "string" ? v : unwrap(v);
+    });
+    throw new Error(formatLogParts(parts) || "runtime.error");
+  }
+  if (fname === "ticker.new") {
+    const sym = evalAsString(callArg(node.args, 0, ["symbol"]), env) ?? env.symbol;
+    const session = evalAsString(callArg(node.args, 1, ["session"]), env) ?? undefined;
+    return tickerNew(sym, session);
+  }
+  if (fname === "ticker.heikinashi") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerHeikinashi(sym);
+  }
+  if (fname === "ticker.standard") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerStandard(sym);
+  }
+  if (fname === "ticker.renko") {
+    const raw = evalExpr(callArg(node.args, 0, ["symbol"]), env);
+    const sym = raw instanceof TickerId ? raw.symbol : (typeof raw === "string" ? raw : env.symbol);
+    return tickerRenko(sym);
+  }
   const mapVal = evalMapCall(fname, node, env);
   if (mapVal !== undefined) return mapVal;
   const matrixVal = evalMatrixCall(fname, node, env);
@@ -1196,14 +1430,16 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "strategy.entry") {
     const id = evalId(callArg(node.args, 0, ["id"]));
     const dir = evalDirection(callArg(node.args, 1, ["direction"]), env);
-    const qtyRaw = unwrap(evalExpr(callArg(node.args, 2, ["qty"]), env));
-    const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? 1 : qtyRaw;
+    const qtyArg = callArg(node.args, 2, ["qty"]);
+    const qtyRaw = qtyArg == null ? 1 : unwrap(evalExpr(qtyArg, env));
+    const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? Number.NaN : qtyRaw;
     const limit = unwrap(evalExpr(callArg(node.args, -1, ["limit"]), env));
     const stop = unwrap(evalExpr(callArg(node.args, -1, ["stop"]), env));
+    const mark = num(env.ctx.close);
     env.book.placeEntry(env.barIndex, id, dir, qty, {
       limit,
       stop,
-      price: num(env.ctx.close) ?? 0,
+      price: mark == null || !Number.isFinite(mark) ? undefined : mark,
     });
     return NA;
   }
@@ -1670,6 +1906,17 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     const tp = h != null && l != null && c != null ? (h + l + c) / 3 : c;
     return (ta.cci as TaEngine["cci"]).call(env.ta, site, tp, lenArg(node, env, 1));
   }
+  if (fname === "ta.wpr" || fname === "wpr") {
+    if (typeof ta.willr !== "function") return NA;
+    return (ta.willr as TaEngine["willr"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      lenArg(node, env, 0),
+    );
+  }
   if (fname === "ta.willr" || fname === "willr") {
     if (typeof ta.willr !== "function") return NA;
     return (ta.willr as TaEngine["willr"]).call(
@@ -1809,6 +2056,19 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       lenOrDefault(node, env, 3, ["slowLength", "slow", "slowlen"], 30),
     );
   }
+  if (fname === "ta.accdist" || fname === "accdist" || fname === "ta.ad" || fname === "ad") {
+    const hArg = callArg(node.args, 0, ["high"]);
+    const lArg = callArg(node.args, 1, ["low"]);
+    const cArg = callArg(node.args, 2, ["close"]);
+    const vArg = callArg(node.args, 3, ["volume"]);
+    return env.ta.accdist(
+      site,
+      hArg == null ? num(env.ctx.high) : unwrap(evalExpr(hArg, env)),
+      lArg == null ? num(env.ctx.low) : unwrap(evalExpr(lArg, env)),
+      cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env)),
+      vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env)),
+    );
+  }
   if (fname === "ta.obv" || fname === "obv") {
     if (typeof ta.obv !== "function") return NA;
     const cArg = callArg(node.args, 0, ["source", "close"]);
@@ -1921,6 +2181,194 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
       lenArg(node, env, 2),
     );
+  }
+  if (fname === "ta.swma" || fname === "swma") {
+    if (typeof ta.swma !== "function") return NA;
+    const len = callArg(node.args, 1, ["length"]);
+    return (ta.swma as TaEngine["swma"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      len == null ? undefined : lenArg(node, env, 1),
+    );
+  }
+  if (fname === "ta.cog" || fname === "cog") {
+    if (typeof ta.cog !== "function") return NA;
+    return (ta.cog as TaEngine["cog"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.tsi" || fname === "tsi") {
+    if (typeof ta.tsi !== "function") return NA;
+    const positional = asArgs(node.args).filter((a) => a.name == null);
+    if (positional.length === 2) {
+      return (ta.tsi as TaEngine["tsi"]).call(
+        env.ta,
+        site,
+        num(env.ctx.close),
+        lenOrDefault(node, env, 1, ["long", "long_length"], 25),
+        lenOrDefault(node, env, 0, ["short", "short_length"], 13),
+      );
+    }
+    return (ta.tsi as TaEngine["tsi"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenOrDefault(node, env, 2, ["long", "long_length"], 25),
+      lenOrDefault(node, env, 1, ["short", "short_length"], 13),
+    );
+  }
+  if (fname === "ta.kcw" || fname === "kcw") {
+    if (typeof ta.kcw !== "function") return NA;
+    return (ta.kcw as TaEngine["kcw"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      lenArg(node, env, 0),
+      lenOrDefault(node, env, 1, ["mult", "multiplier"], 2),
+    );
+  }
+  if (fname === "ta.dev" || fname === "dev") {
+    if (typeof ta.dev !== "function") return NA;
+    return (ta.dev as TaEngine["dev"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.variance" || fname === "variance") {
+    if (typeof ta.variance !== "function") return NA;
+    return (ta.variance as TaEngine["variance"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.median" || fname === "median") {
+    if (typeof ta.median !== "function") return NA;
+    return (ta.median as TaEngine["median"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.mode" || fname === "mode") {
+    if (typeof ta.mode !== "function") return NA;
+    return (ta.mode as TaEngine["mode"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.percentrank" || fname === "percentrank") {
+    if (typeof ta.percentrank !== "function") return NA;
+    return (ta.percentrank as TaEngine["percentrank"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+    );
+  }
+  if (fname === "ta.percentile_nearest_rank") {
+    if (typeof ta.percentileNearest !== "function") return NA;
+    return (ta.percentileNearest as TaEngine["percentileNearest"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+      lenOrDefault(node, env, 2, ["percentage", "percent"], 50),
+    );
+  }
+  if (fname === "ta.percentile_linear_interpolation") {
+    if (typeof ta.percentileLinear !== "function") return NA;
+    return (ta.percentileLinear as TaEngine["percentileLinear"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+      lenOrDefault(node, env, 2, ["percentage", "percent"], 50),
+    );
+  }
+  if (fname === "ta.cum" || fname === "cum") {
+    if (typeof ta.cum !== "function") return NA;
+    return (ta.cum as TaEngine["cum"]).call(env.ta, site, srcArg(node, env));
+  }
+  if (fname === "ta.barssince" || fname === "barssince") {
+    if (typeof ta.barssince !== "function") return NA;
+    return (ta.barssince as TaEngine["barssince"]).call(
+      env.ta,
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env)),
+    );
+  }
+  if (fname === "ta.valuewhen" || fname === "valuewhen") {
+    if (typeof ta.valuewhen !== "function") return NA;
+    return (ta.valuewhen as TaEngine["valuewhen"]).call(
+      env.ta,
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["source"]), env)),
+      lenOrDefault(node, env, 2, ["occurrence"], 0),
+    );
+  }
+  if (fname === "ta.range") {
+    if (typeof ta.range !== "function") return NA;
+    return (ta.range as TaEngine["range"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if ((fname === "ta.max" || fname === "ta.min") && typeof ta.max === "function") {
+    const fn = fname === "ta.max" ? ta.max : ta.min;
+    return (fn as TaEngine["max"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.accdist" || fname === "accdist") {
+    if (typeof ta.accdist !== "function") return NA;
+    return (ta.accdist as TaEngine["accdist"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+    );
+  }
+  if (fname === "ta.pvt" || fname === "pvt") {
+    if (typeof ta.pvt !== "function") return NA;
+    return (ta.pvt as TaEngine["pvt"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (fname === "ta.wad" || fname === "wad") {
+    if (typeof ta.wad !== "function") return NA;
+    return (ta.wad as TaEngine["wad"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+    );
+  }
+  if (fname === "ta.nvi" || fname === "nvi") {
+    if (typeof ta.nvi !== "function") return NA;
+    return (ta.nvi as TaEngine["nvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (fname === "ta.pvi" || fname === "pvi") {
+    if (typeof ta.pvi !== "function") return NA;
+    return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (fname === "ta.iii" || fname === "iii") {
+    if (typeof ta.iii !== "function") return NA;
+    return (ta.iii as TaEngine["iii"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+    );
+  }
+  if (fname === "ta.wvad" || fname === "wvad") {
+    if (typeof ta.wvad !== "function") return NA;
+    return (ta.wvad as TaEngine["wvad"]).call(
+      env.ta,
+      site,
+      num(env.ctx.open),
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+    );
+  }
+  if (fname === "ta.pivot_point_levels") {
+    if (typeof ta.pivotPoints !== "function") return NA;
+    const r = (ta.pivotPoints as TaEngine["pivotPoints"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+    );
+    return tupleOf([r.pp, r.r1, r.s1, r.r2, r.s2]);
   }
   return undefined;
 }
@@ -2411,7 +2859,7 @@ function evalStrCall(fname: string | null, node: Call, env: Env): Value | undefi
       typeof s === "string" ? s : null,
       typeof target === "string" ? target : null,
       typeof repl === "string" ? repl : null,
-      occ ?? 0,
+      occ,
     );
   }
   if (fname === "str.replace_all") {
