@@ -15,14 +15,6 @@ const TYPE_SRC = `type Point
     float y
 `;
 
-function typeParses(): boolean {
-  try {
-    return dump(parse(TYPE_SRC)).includes("TypeDef");
-  } catch {
-    return false;
-  }
-}
-
 describe("parse enum / type", () => {
   test("enum Side dumps EnumDef and unparse re-parses", () => {
     const tree = parse(ENUM_SRC);
@@ -35,7 +27,7 @@ describe("parse enum / type", () => {
     expect(dump(parse(src))).toBe(dumped);
   });
 
-  test.skipIf(!typeParses())("type Point dumps TypeDef and unparse re-parses", () => {
+  test("type Point dumps TypeDef and unparse re-parses", () => {
     const tree = parse(TYPE_SRC);
     const dumped = dump(tree);
     expect(dumped).toContain("TypeDef");

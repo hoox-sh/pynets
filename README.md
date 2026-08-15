@@ -53,21 +53,23 @@ bun run src/cli.ts run strat.pine --commission 0.001 --slippage 1 --pyramiding 0
 bun run src/cli.ts dump script.pine
 bun run src/cli.ts dump script.pine --rich --full
 bun run src/cli.ts info
-# or: bun run pynets -- check script.pine
+# or: bun run pynets -- check script.pine --plain
 ```
+
+Put `--rich` / `--plain` **after** the command so `bun run` does not swallow them. `--plain` wins over leftover `FORCE_COLOR`. Exit codes: `0` ok, `1` syntax/runtime, `2` usage.
 
 `run` prints one sparkline + last-value row per plot title (keltner mid/up/lo), a small events table (`bar`, `type`, `id`) when the runtime returns strategy events, and a drawings/alerts table (`kind`, `bar`, `text`) when `result.drawings` or `result.alerts` is present. `--plain` stays machine JSON (includes `drawings` / `fills` / `alerts` when present). `dump --rich` keeps at least 80 lines; `--full` prints the whole AST.
 
 | Flag | Effect |
 | --- | --- |
-| `--bars N` | Synthetic bar count for `run` (default 20) |
+| `--bars N` | Synthetic bar count for `run` (default 20, max 100000) |
 | `--commission N` | Runtime broker commission fraction (e.g. `0.001`) |
 | `--slippage N` | Runtime broker slippage in price units |
 | `--pyramiding N` | Runtime broker max same-direction adds |
 | `--json` | Machine-readable `run` / `info` |
 | `--full` | Print the full AST dump (no 80-line cap on `--rich`) |
-| `--plain` | Disable styling (`NO_COLOR` too) |
-| `--rich` | Force panels / sparklines (`FORCE_COLOR` too) |
+| `--plain` | Disable styling (wins over `FORCE_COLOR`; `NO_COLOR` too) |
+| `--rich` | Force panels / sparklines (put after the command) |
 
 ## Development
 

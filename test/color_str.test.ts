@@ -6,11 +6,23 @@ import { describe, expect, test } from "bun:test";
 import { colorNew, colorRgb, parseColor } from "../src/runtime/color.ts";
 import {
   strContains,
+  strEndsWith,
+  strFormat,
+  strJoin,
   strLength,
   strLower,
+  strMatch,
+  strPos,
+  strRepeat,
   strReplace,
+  strReplaceAll,
+  strSplit,
+  strStartsWith,
+  strSubstring,
+  strToNumber,
   strTostring,
   strTosring,
+  strTrim,
   strUpper,
 } from "../src/runtime/str.ts";
 
@@ -24,12 +36,17 @@ describe("parseColor", () => {
     expect(parseColor("#0000FF80")).toEqual({ r: 0, g: 0, b: 255, a: 128 });
   });
 
-  test("invalid / na → null", () => {
+  test("invalid / na → null, never throws", () => {
     expect(parseColor(null)).toBeNull();
+    expect(parseColor(undefined)).toBeNull();
     expect(parseColor("")).toBeNull();
     expect(parseColor("FF0000")).toBeNull();
     expect(parseColor("#FF00")).toBeNull();
     expect(parseColor("#GG0000")).toBeNull();
+    expect(parseColor("#FF0000GG")).toBeNull();
+    expect(parseColor("not-a-color")).toBeNull();
+    expect(parseColor(123 as unknown as string)).toBeNull();
+    expect(parseColor({} as unknown as string)).toBeNull();
   });
 });
 
@@ -74,7 +91,7 @@ describe("str helpers", () => {
     expect(strLower(null)).toBeNull();
   });
 
-  test("strReplace occurrence 0 = all", () => {
+  test("strReplace occurrence 0 = all; n > 0 is 1-based nth", () => {
     expect(strReplace("abab", "a", "c")).toBe("cbcb");
     expect(strReplace("abab", "a", "c", 0)).toBe("cbcb");
     expect(strReplace("hello world", "world", "pine")).toBe("hello pine");
@@ -83,5 +100,85 @@ describe("str helpers", () => {
     expect(strReplace("abab", "a", "c", 3)).toBe("abab");
     expect(strReplace(null, "a", "c")).toBeNull();
     expect(strReplace("ab", null, "c")).toBe("ab");
+    expect(strReplace("ab", "a", null)).toBe("b");
+    expect(strReplace("aa", "", "x")).toBe("aa");
+    expect(strReplace("aa", "a", "x", Number.NaN)).toBe("xx");
+    expect(strReplace("ababab", "ab", "X", 1)).toBe("Xabab");
+    expect(strReplace("ababab", "ab", "X", 2)).toBe("abXab");
+    expect(strReplaceAll("ababab", "ab", "X")).toBe("XXX");
+    expect(strReplaceAll("ab", null, "c")).toBe("ab");
+  });
+
+  test("startsWith / endsWith", () => {
+    expect(strStartsWith("hello", "he")).toBe(true);
+    expect(strStartsWith("hello", "lo")).toBe(false);
+    expect(strStartsWith(null, "he")).toBeNull();
+    expect(strStartsWith("hello", null)).toBeNull();
+    expect(strEndsWith("hello world", "world")).toBe(true);
+    expect(strEndsWith("hello world", "hello")).toBe(false);
+    expect(strEndsWith(null, "lo")).toBeNull();
+    expect(strEndsWith("hello", null)).toBeNull();
+  });
+
+  test("substring end is exclusive", () => {
+    expect(strSubstring("hello", 1)).toBe("ello");
+    expect(strSubstring("hello", 1, 3)).toBe("el");
+    expect(strSubstring("hello", 0, 5)).toBe("hello");
+    expect(strSubstring(null, 0)).toBeNull();
+    expect(strSubstring("hello", null)).toBeNull();
+    expect(strSubstring("hello", 1, null)).toBeNull();
+  });
+
+  test("repeat / replaceAll / trim", () => {
+    expect(strRepeat("a", 5)).toBe("aaaaa");
+    expect(strRepeat("ab", 3)).toBe("ababab");
+    expect(strRepeat("a", 0)).toBe("");
+    expect(strRepeat("a", -1)).toBe("");
+    expect(strRepeat(null, 2)).toBeNull();
+    expect(strRepeat("a", null)).toBeNull();
+    expect(strRepeat("a", 1_000_001)).toBeNull();
+    expect(strReplaceAll("abab", "a", "c")).toBe("cbcb");
+    expect(strReplaceAll(null, "a", "c")).toBeNull();
+    expect(strTrim("  hello  ")).toBe("hello");
+    expect(strTrim(null)).toBeNull();
+  });
+
+  test("split / tonumber / pos", () => {
+    expect(strSplit("a,b,c", ",")).toEqual(["a", "b", "c"]);
+    expect(strSplit("a b c")).toEqual(["a", "b", "c"]);
+    expect(strSplit("ab", "")).toEqual(["a", "b"]);
+    expect(strSplit(null, ",")).toEqual([""]);
+    expect(strSplit(null)).toEqual([]);
+    expect(strToNumber("123.45")).toBe(123.45);
+    expect(strToNumber("  12  ")).toBe(12);
+    expect(strToNumber("xyz")).toBeNull();
+    expect(strToNumber("")).toBeNull();
+    expect(strToNumber(null)).toBeNull();
+    expect(strPos("abc", "b")).toBe(1);
+    expect(strPos("abc", "z")).toBe(-1);
+    expect(strPos(null, "a")).toBeNull();
+    expect(strPos("a", null)).toBeNull();
+  });
+
+  test("match / format / join", () => {
+    expect(strMatch("It's time to sell some NASDAQ:AAPL!", "[\\w]+:[\\w]+")).toBe(
+      "NASDAQ:AAPL",
+    );
+    expect(strMatch("abc", "ZZZ")).toBeNull();
+    expect(strMatch(null, "a")).toBeNull();
+    expect(strMatch("a", null)).toBeNull();
+    expect(strMatch("a", "(")).toBeNull();
+    expect(strFormat("{0}", 42)).toBe("42");
+    expect(strFormat("plain")).toBe("plain");
+    expect(strFormat(null)).toBe("NaN");
+    expect(strFormat("Price: {0}, Volume: {1}", 1.5, 100)).toBe(
+      "Price: 1.5, Volume: 100",
+    );
+    expect(strFormat("{0,number,#.##}", 1.2345)).toBe("1.23");
+    expect(strFormat("{0}", null)).toBe("NaN");
+    expect(strJoin(["a", "b"], ",")).toBe("a,b");
+    expect(strJoin(["a", null, "b"], ",")).toBe("a,,b");
+    expect(strJoin(["a", "b"], null)).toBe("ab");
+    expect(strJoin(null, ",")).toBeNull();
   });
 });

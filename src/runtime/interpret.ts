@@ -61,14 +61,26 @@ import {
   mathToRadians,
 } from "./math.ts";
 import { utcPartsFromMs } from "./time.ts";
-import { isRequestBuiltin, resolveSecurity } from "./request.ts";
+import { isRequestBuiltin, resolveRequest, resolveSecurity } from "./request.ts";
 import { NA, PineSeries, type Cell } from "./series.ts";
 import {
   strContains,
+  strEndsWith,
+  strFormat,
+  strJoin,
   strLength,
   strLower,
+  strMatch,
+  strPos,
+  strRepeat,
   strReplace,
+  strReplaceAll,
+  strSplit,
+  strStartsWith,
+  strSubstring,
+  strToNumber,
   strTostring,
+  strTrim,
   strUpper,
 } from "./str.ts";
 import { StrategyBook, type BrokerSettings, type StrategyEvent } from "./strategy.ts";
@@ -79,8 +91,6 @@ import { TaEngine } from "./ta.ts";
 export type { DrawingEvent };
 
 export type { StrategyEvent };
-
-const OHLCV_KEYS = ["open", "high", "low", "close", "volume", "time"] as const;
 
 export interface OHLCVBar {
   open?: number;
@@ -131,6 +141,8 @@ type Value = Cell | TupleVal | ArrayVal | Color | string | PineArray | PineMap |
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
 const WHILE_CAP = 10_000;
+/** Python for-to / for-in safety cap (visit_ForTo / visit_ForIn). */
+const FOR_CAP = 1_000_000;
 
 interface WhileNode {
   kind: "While";
@@ -163,6 +175,12 @@ interface UdfDef {
   body: stmt[];
 }
 
+interface UdfSiteState {
+  ctx: Record<string, Value>;
+  series: Map<string, PineSeries>;
+  varInited: Set<string>;
+}
+
 interface Env {
   ctx: Record<string, Value>;
   series: Map<string, PineSeries>;
@@ -170,6 +188,7 @@ interface Env {
   barIndex: number;
   ta: TaEngine;
   callSites: WeakMap<object, string>;
+  plotKeys: WeakMap<object, string>;
   nextSite: number;
   plots: Record<string, Array<number | null>>;
   plot_meta: Array<{ title: string }>;
@@ -180,6 +199,8 @@ interface Env {
   inputs: InputOverrides;
   inputStore: Map<string, InputValue>;
   udfs: Map<string, UdfDef>;
+  udfSites: Map<string, UdfSiteState>;
+  frames: UdfSiteState[];
   barCount: number;
   lastBarTime: number;
 }
@@ -215,17 +236,31 @@ export class Runtime {
         script_name: null,
         script_type: "indicator",
         mode: "interpret",
-        error: err instanceof Error ? err.message : String(err),
+        error: formatRunError(err),
         error_kind: "parse",
       };
     }
     const extraOpts = extra && !isPlainInputs(extra) ? extra : undefined;
-    return interpretTree(tree, ohlcv, {
-      symbol: this.symbol,
-      inputs: mergeInputs(this.inputs, extra),
-      broker: extraOpts?.broker ?? this.broker,
-      timeframe: extraOpts?.timeframe ?? this.timeframe,
-    });
+    try {
+      return interpretTree(tree, ohlcv, {
+        symbol: this.symbol,
+        inputs: mergeInputs(this.inputs, extra),
+        broker: extraOpts?.broker ?? this.broker,
+        timeframe: extraOpts?.timeframe ?? this.timeframe,
+      });
+    } catch (err) {
+      return {
+        series: {},
+        plots: [],
+        plot_meta: [],
+        count: 0,
+        script_name: null,
+        script_type: "indicator",
+        mode: "interpret",
+        error: formatRunError(err),
+        error_kind: "runtime",
+      };
+    }
   }
 }
 
@@ -254,6 +289,7 @@ export function interpretTree(
     barIndex: 0,
     ta: new TaEngine(),
     callSites: new WeakMap(),
+    plotKeys: new WeakMap(),
     nextSite: 0,
     plots,
     plot_meta,
@@ -264,25 +300,46 @@ export function interpretTree(
     inputs: host?.inputs ?? {},
     inputStore: new Map(),
     udfs: new Map(),
+    udfSites: new Map(),
+    frames: [],
     barCount: ohlcv.length,
     lastBarTime: ohlcv.length === 0 ? 0 : (ohlcv[ohlcv.length - 1]!.time ?? (ohlcv.length - 1) * 60_000),
   };
 
   const n = ohlcv.length;
-  for (let i = 0; i < n; i++) {
-    beginBar(env, ohlcv[i]!, i);
+  let runError: { error: string; error_kind: string } | undefined;
+  try {
+    for (let i = 0; i < n; i++) {
+      beginBar(env, ohlcv[i]!, i);
+      env.book.processPending(i, {
+        open: num(env.ctx.open) ?? undefined,
+        high: num(env.ctx.high) ?? undefined,
+        low: num(env.ctx.low) ?? undefined,
+        close: num(env.ctx.close) ?? undefined,
+      });
 
-    for (const stmt of body) {
-      const decl = captureDecl(stmt);
-      if (decl) {
-        if (script_name == null) script_name = decl.name;
-        if (decl.kind === "strategy") {
-          script_type = "strategy";
-          applyStrategyDecl(stmt, env);
+      try {
+        for (const stmt of body) {
+          const decl = captureDecl(stmt);
+          if (decl) {
+            if (script_name == null) script_name = decl.name;
+            if (decl.kind === "strategy") {
+              script_type = "strategy";
+              applyStrategyDecl(stmt, env);
+            }
+            continue;
+          }
+          execStmt(stmt, env);
         }
-        continue;
+      } catch (err) {
+        if (err === LOOP_BREAK || err === LOOP_CONTINUE) continue;
+        runError = { error: formatRunError(err), error_kind: "runtime" };
+        break;
       }
-      execStmt(stmt, env);
+    }
+  } catch (err) {
+    if (err !== LOOP_BREAK && err !== LOOP_CONTINUE) {
+      runError = { error: formatRunError(err), error_kind: "runtime" };
     }
   }
 
@@ -298,7 +355,18 @@ export function interpretTree(
     events: env.book.events,
     fills: packFills(env.book),
     drawings: packDrawings(env.drawings),
+    ...(runError ?? {}),
   };
+}
+
+function pushNamedSeries(env: Env, id: string, value: Cell): void {
+  env.ctx[id] = value;
+  let s = env.series.get(id);
+  if (!s) {
+    s = new PineSeries();
+    env.series.set(id, s);
+  }
+  s.push(value);
 }
 
 function beginBar(env: Env, bar: OHLCVBar, i: number): void {
@@ -309,24 +377,12 @@ function beginBar(env: Env, bar: OHLCVBar, i: number): void {
   const c = bar.close ?? 0;
   const vol = bar.volume ?? 1;
   const t = bar.time ?? i * 60_000;
-  const values: Record<(typeof OHLCV_KEYS)[number], number> = {
-    open: o,
-    high: h,
-    low: l,
-    close: c,
-    volume: vol,
-    time: t,
-  };
-  for (const key of OHLCV_KEYS) {
-    const v = values[key];
-    env.ctx[key] = v;
-    let s = env.series.get(key);
-    if (!s) {
-      s = new PineSeries();
-      env.series.set(key, s);
-    }
-    s.push(v);
-  }
+  pushNamedSeries(env, "open", o);
+  pushNamedSeries(env, "high", h);
+  pushNamedSeries(env, "low", l);
+  pushNamedSeries(env, "close", c);
+  pushNamedSeries(env, "volume", vol);
+  pushNamedSeries(env, "time", t);
   env.ctx.bar_index = i;
   env.ctx.last_bar_index = env.barCount - 1;
   env.ctx.last_bar_time = env.lastBarTime;
@@ -389,11 +445,38 @@ function firstStringArg(args: Arg[] | Arg | null | undefined): string | null {
   return null;
 }
 
+/** ASDL `Arg.name`, plus assign-like / keyword aliases if the builder omitted `name`. */
+function argKeyword(a: Arg): string | null {
+  if (a.name != null && a.name !== "") return a.name;
+  const extra = a as Arg & { arg?: unknown; keyword?: unknown };
+  if (typeof extra.arg === "string" && extra.arg !== "") return extra.arg;
+  if (typeof extra.keyword === "string" && extra.keyword !== "") return extra.keyword;
+  const rec = recoverAssignLike(a);
+  return rec?.name ?? null;
+}
+
+function recoverAssignLike(a: Arg): { name: string; value: expr } | null {
+  if (a.name != null && a.name !== "") return null;
+  const v = a.value as unknown as {
+    kind?: string;
+    target?: { kind?: string; id?: string };
+    value?: expr | null;
+  };
+  if ((v.kind === "Assign" || v.kind === "ReAssign") && v.target?.kind === "Name" && v.value != null) {
+    return { name: v.target.id!, value: v.value };
+  }
+  return null;
+}
+
+function argValue(a: Arg): expr {
+  return recoverAssignLike(a)?.value ?? a.value;
+}
+
 function namedStringArg(args: Arg[] | Arg | null | undefined, name: string): string | null {
   for (const a of asArgs(args)) {
-    if (a.name === name && a.value.kind === "Constant" && typeof a.value.value === "string") {
-      return a.value.value;
-    }
+    if (argKeyword(a) !== name) continue;
+    const v = argValue(a);
+    if (v.kind === "Constant" && typeof v.value === "string") return v.value;
   }
   return null;
 }
@@ -415,15 +498,65 @@ function callArg(
 ): expr | undefined {
   const list = asArgs(args);
   for (const a of list) {
-    if (a.name != null && names.includes(a.name)) return a.value;
+    const kw = argKeyword(a);
+    if (kw != null && names.includes(kw)) return argValue(a);
   }
   let i = 0;
   for (const a of list) {
-    if (a.name != null) continue;
+    if (argKeyword(a) != null) continue;
     if (i === index) return a.value;
     i++;
   }
   return undefined;
+}
+
+function defaultPlotTitle(fname: string): string {
+  if (fname === "hline") return "hline";
+  if (fname === "plotshape") return "shape";
+  if (fname === "plotchar") return "char";
+  if (fname === "plotarrow") return "arrow";
+  if (fname === "bgcolor") return "bgcolor";
+  if (fname === "barcolor") return "barcolor";
+  return "plot";
+}
+
+function resolvePlotTitle(args: Arg[], fname: string): string {
+  const named = namedStringArg(args, "title");
+  if (named != null) {
+    const t = named.trim();
+    if (t) return t;
+  }
+  const positional: Arg[] = [];
+  for (const a of args) {
+    if (argKeyword(a) != null) continue;
+    positional.push(a);
+  }
+  if (positional.length > 1) {
+    const second = argValue(positional[1]!);
+    if (second.kind === "Constant" && typeof second.value === "string") {
+      const t = second.value.trim();
+      if (t) return t;
+    }
+  }
+  const after = firstStringArg(args.slice(1));
+  if (after != null) {
+    const t = after.trim();
+    if (t) return t;
+  }
+  return defaultPlotTitle(fname);
+}
+
+function uniquifyPlotKey(env: Env, node: object, title: string): string {
+  const existing = env.plotKeys.get(node);
+  if (existing != null) return existing;
+  const base = title.trim() || "plot";
+  let key = base;
+  let n = 2;
+  while (Object.prototype.hasOwnProperty.call(env.plots, key)) {
+    key = `${base}_${n++}`;
+  }
+  env.plotKeys.set(node, key);
+  return key;
 }
 
 function isVarMode(stmt: Assign): boolean {
@@ -439,21 +572,50 @@ function tupleOf(elts: Value[]): TupleVal {
 }
 
 function isCell(value: Value): value is Cell {
-  return value === null || typeof value === "number";
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+function activeFrame(env: Env): UdfSiteState | null {
+  return env.frames.length > 0 ? env.frames[env.frames.length - 1]! : null;
+}
+
+function varSet(env: Env): Set<string> {
+  return activeFrame(env)?.varInited ?? env.varInited;
+}
+
+function ctxGet(env: Env, id: string): Value | undefined {
+  for (let i = env.frames.length - 1; i >= 0; i--) {
+    const ctx = env.frames[i]!.ctx;
+    if (Object.prototype.hasOwnProperty.call(ctx, id)) return ctx[id];
+  }
+  if (Object.prototype.hasOwnProperty.call(env.ctx, id)) return env.ctx[id];
+  return undefined;
+}
+
+function seriesGet(env: Env, id: string): PineSeries | undefined {
+  for (let i = env.frames.length - 1; i >= 0; i--) {
+    const s = env.frames[i]!.series.get(id);
+    if (s) return s;
+  }
+  return env.series.get(id);
 }
 
 function bindName(env: Env, id: string, value: Value): void {
-  env.ctx[id] = value;
-  if (!isCell(value)) return;
-  let s = env.series.get(id);
+  const stored: Value = typeof value === "number" && !Number.isFinite(value) ? NA : value;
+  const frame = activeFrame(env);
+  const ctx = frame ? frame.ctx : env.ctx;
+  const seriesMap = frame ? frame.series : env.series;
+  ctx[id] = stored;
+  if (!isCell(stored)) return;
+  let s = seriesMap.get(id);
   if (!s) {
     s = new PineSeries();
-    env.series.set(id, s);
+    seriesMap.set(id, s);
   }
-  if (s.length === env.barIndex + 1) s.setCurrent(value);
+  if (s.length === env.barIndex + 1) s.setCurrent(stored);
   else {
     while (s.length < env.barIndex) s.push(NA);
-    s.push(value);
+    s.push(stored);
   }
 }
 
@@ -466,49 +628,55 @@ function unpackTuple(target: Tuple, value: Value, env: Env): void {
   }
 }
 
-function evalAssign(stmt: Assign, env: Env): void {
-  if (stmt.value == null) return;
+function evalAssign(stmt: Assign, env: Env): Value {
+  if (stmt.value == null) return NA;
+  const inited = varSet(env);
   if (stmt.target.kind === "Tuple") {
     if (isVarMode(stmt)) {
       const already =
-        stmt.target.elts.some((e) => e.kind === "Name" && env.varInited.has(e.id)) ||
+        stmt.target.elts.some((e) => e.kind === "Name" && inited.has(e.id)) ||
         (env.barIndex !== 0 &&
-          stmt.target.elts.some((e) => e.kind === "Name" && env.ctx[e.id] !== undefined));
+          stmt.target.elts.some((e) => e.kind === "Name" && ctxGet(env, e.id) !== undefined));
       if (already) {
         for (const e of stmt.target.elts) {
-          if (e.kind === "Name") env.varInited.add(e.id);
+          if (e.kind === "Name") inited.add(e.id);
         }
-        return;
+        return NA;
       }
     }
-    unpackTuple(stmt.target, evalExpr(stmt.value, env), env);
+    const packed = evalExpr(stmt.value, env);
+    unpackTuple(stmt.target, packed, env);
     if (isVarMode(stmt)) {
       for (const e of stmt.target.elts) {
-        if (e.kind === "Name") env.varInited.add(e.id);
+        if (e.kind === "Name") inited.add(e.id);
       }
     }
-    return;
+    return packed;
   }
-  if (stmt.target.kind !== "Name") return;
+  if (stmt.target.kind !== "Name") return NA;
   const id = stmt.target.id;
   // var: init on first execution (bar_index==0, or first time the name is missing).
-  if (isVarMode(stmt) && (env.varInited.has(id) || (env.barIndex !== 0 && env.ctx[id] !== undefined))) {
-    env.varInited.add(id);
-    return;
+  if (isVarMode(stmt) && (inited.has(id) || (env.barIndex !== 0 && ctxGet(env, id) !== undefined))) {
+    inited.add(id);
+    const cur = ctxGet(env, id);
+    return cur === undefined ? NA : cur;
   }
   const value = evalExpr(stmt.value, env);
-  bindName(env, id, isCell(value) ? value : value);
-  if (isVarMode(stmt)) env.varInited.add(id);
+  bindName(env, id, value);
+  if (isVarMode(stmt)) inited.add(id);
+  return value;
 }
 
-function evalReAssign(stmt: ReAssign, env: Env): void {
+function evalReAssign(stmt: ReAssign, env: Env): Value {
   if (stmt.target.kind === "Tuple") {
-    unpackTuple(stmt.target, evalExpr(stmt.value, env), env);
-    return;
+    const packed = evalExpr(stmt.value, env);
+    unpackTuple(stmt.target, packed, env);
+    return packed;
   }
-  if (stmt.target.kind !== "Name") return;
+  if (stmt.target.kind !== "Name") return NA;
   const value = evalExpr(stmt.value, env);
   bindName(env, stmt.target.id, value);
+  return value;
 }
 
 function applyStrategyDecl(stmt: { kind: string; value?: expr | null }, env: Env): void {
@@ -541,12 +709,10 @@ function execStmt(
     return NA;
   }
   if (stmt.kind === "Assign") {
-    evalAssign(stmt as Assign, env);
-    return NA;
+    return evalAssign(stmt as Assign, env);
   }
   if (stmt.kind === "ReAssign") {
-    evalReAssign(stmt as ReAssign, env);
-    return NA;
+    return evalReAssign(stmt as ReAssign, env);
   }
   if (stmt.kind === "Break") throw LOOP_BREAK;
   if (stmt.kind === "Continue") throw LOOP_CONTINUE;
@@ -568,14 +734,17 @@ function execStmt(
       fname === "barcolor"
     ) {
       const plotArgs = asArgs(value.args);
-      const title = namedStringArg(plotArgs, "title") ?? firstStringArg(plotArgs.slice(1)) ?? "plot";
-      const cell = unwrap(evalExpr(plotArgs[0]?.value, env));
-      if (!env.plots[title]) {
-        env.plots[title] = [];
-        env.plot_meta.push({ title });
+      const title = resolvePlotTitle(plotArgs, fname);
+      const key = uniquifyPlotKey(env, value, title);
+      const seriesExpr = callArg(value.args, 0, ["series", "source"]) ?? plotArgs[0]?.value;
+      const cell = unwrap(evalExpr(seriesExpr, env));
+      if (!env.plots[key]) {
+        env.plots[key] = [];
+        env.plot_meta.push({ title: key });
       }
-      while (env.plots[title]!.length < env.barIndex) env.plots[title]!.push(null);
-      env.plots[title]!.push(cell);
+      const dest = env.plots[key]!;
+      while (dest.length < env.barIndex) dest.push(null);
+      dest.push(cell);
       return cell;
     }
   }
@@ -590,12 +759,12 @@ function evalExpr(node: expr | undefined, env: Env): Value {
   if (node == null) return NA;
   switch (node.kind) {
     case "Name": {
-      const v = env.ctx[node.id];
+      const v = ctxGet(env, node.id);
       return v === undefined ? NA : v;
     }
     case "Constant": {
       const v = node.value;
-      if (typeof v === "number") return v;
+      if (typeof v === "number") return Number.isFinite(v) ? v : NA;
       if (typeof v === "string") return v;
       if (v === true) return 1;
       if (v === false) return 0;
@@ -637,8 +806,9 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       const raw = unwrap(evalExpr(node.slice ?? undefined, env));
       if (raw == null || !Number.isFinite(raw)) return NA;
       const offset = Math.trunc(raw);
+      if (offset < 0) return NA;
       if (node.value.kind === "Name") {
-        const s = env.series.get(node.value.id);
+        const s = seriesGet(env, node.value.id);
         if (s) return s.get(offset);
       }
       return NA;
@@ -646,9 +816,9 @@ function evalExpr(node: expr | undefined, env: Env): Value {
     case "Call":
       return evalCall(node, env);
     case "Compare": {
-      let left = unwrap(evalExpr(node.left, env));
+      let left = evalExpr(node.left, env);
       for (let i = 0; i < node.ops.length; i++) {
-        const right = unwrap(evalExpr(node.comparators[i], env));
+        const right = evalExpr(node.comparators[i], env);
         const ok = cmp(left, node.ops[i]!.kind, right);
         if (ok == null) return NA;
         if (!ok) return 0;
@@ -693,17 +863,21 @@ function evalForTo(node: ForTo, env: Env): Value {
   if (startV == null || endV == null || !Number.isFinite(startV) || !Number.isFinite(endV)) {
     return NA;
   }
-  let step = 1;
+  let step: number;
   if (node.step != null) {
     const stepV = unwrap(evalExpr(node.step, env));
     if (stepV == null || !Number.isFinite(stepV) || stepV === 0) return NA;
     step = Math.trunc(stepV);
     if (step === 0) return NA;
+  } else {
+    // Pine / Python: omitted `by` is +1 when from <= to, else -1.
+    step = startV <= endV ? 1 : -1;
   }
   const start = Math.trunc(startV);
   const end = Math.trunc(endV);
   const target = node.target.kind === "Name" ? node.target.id : null;
   let last: Value = NA;
+  let n = 0;
   const run = (i: number): "break" | "ok" => {
     if (target) bindName(env, target, i);
     try {
@@ -717,10 +891,12 @@ function evalForTo(node: ForTo, env: Env): Value {
   };
   if (step > 0) {
     for (let i = start; i <= end; i += step) {
+      if (++n > FOR_CAP) break;
       if (run(i) === "break") break;
     }
   } else {
     for (let i = start; i >= end; i += step) {
+      if (++n > FOR_CAP) break;
       if (run(i) === "break") break;
     }
   }
@@ -746,12 +922,12 @@ function evalWhile(node: While, env: Env): Value {
 function evalSwitch(node: Switch, env: Env): Value {
   const cases = Array.isArray(node.cases) ? node.cases : [];
   const subjectPresent = node.subject != null;
-  const subject = subjectPresent ? unwrap(evalExpr(node.subject!, env)) : null;
+  const subject = subjectPresent ? evalExpr(node.subject!, env) : null;
   for (const c of cases) {
     if (c.pattern == null) return execBlock(c.body, env);
     if (subjectPresent) {
-      const pat = unwrap(evalExpr(c.pattern, env));
-      if (pat === subject) return execBlock(c.body, env);
+      const pat = evalExpr(c.pattern, env);
+      if (valuesEq(pat, subject)) return execBlock(c.body, env);
     } else if (isTruthy(unwrap(evalExpr(c.pattern, env)))) {
       return execBlock(c.body, env);
     }
@@ -798,7 +974,9 @@ function evalForIn(node: ForIn, env: Env): Value {
   else if (iter instanceof PineArray) items = iter.toValues();
   const target = node.target.kind === "Name" ? node.target.id : null;
   let last: Value = NA;
-  for (const item of items) {
+  const limit = Math.min(items.length, FOR_CAP);
+  for (let i = 0; i < limit; i++) {
+    const item = items[i]!;
     if (target) bindName(env, target, item);
     try {
       for (const s of node.body) last = execStmt(s, env);
@@ -891,26 +1069,42 @@ function stringifyVal(value: Value): string {
   return cell == null ? "na" : String(cell);
 }
 
-function cmp(left: Cell, op: string, right: Cell): boolean | null {
-  const lNa = left == null;
-  const rNa = right == null;
+function isNaVal(value: Value): boolean {
+  if (value == null) return true;
+  if (typeof value === "number") return !Number.isFinite(value);
+  return false;
+}
+
+function valuesEq(left: Value, right: Value): boolean {
+  if (isNaVal(left) && isNaVal(right)) return true;
+  if (isNaVal(left) || isNaVal(right)) return false;
+  if (typeof left === "string" || typeof right === "string") return left === right;
+  if (typeof left === "number" && typeof right === "number") return left === right;
+  return left === right;
+}
+
+function cmp(left: Value, op: string, right: Value): boolean | null {
+  const lNa = isNaVal(left);
+  const rNa = isNaVal(right);
   switch (op) {
     case "Eq":
-      if (lNa && rNa) return true;
-      if (lNa || rNa) return false;
-      return left === right;
+      return valuesEq(left, right);
     case "NotEq":
-      if (lNa && rNa) return false;
-      if (lNa || rNa) return true;
-      return left !== right;
+      // Python compile `numba_pine_ne`: any comparison involving na is False.
+      if (lNa || rNa) return false;
+      return !valuesEq(left, right);
     case "Lt":
-      return lNa || rNa ? false : left! < right!;
     case "LtE":
-      return lNa || rNa ? false : left! <= right!;
     case "Gt":
-      return lNa || rNa ? false : left! > right!;
-    case "GtE":
-      return lNa || rNa ? false : left! >= right!;
+    case "GtE": {
+      const l = unwrap(left);
+      const r = unwrap(right);
+      if (l == null || r == null) return false;
+      if (op === "Lt") return l < r;
+      if (op === "LtE") return l <= r;
+      if (op === "Gt") return l > r;
+      return l >= r;
+    }
     default:
       return null;
   }
@@ -950,7 +1144,7 @@ function evalCall(node: Call, env: Env): Value {
   if (mathVal !== undefined) return mathVal;
   if (isInputBuiltin(fname)) return evalInput(node, env, fname!);
   if (isRequestBuiltin(fname) || fname === "request.security") {
-    return evalRequestSecurity(node, env);
+    return evalRequestCall(fname!, node, env);
   }
   const arrVal = evalArrayCall(fname, node, env);
   if (arrVal !== undefined) return arrVal;
@@ -961,10 +1155,7 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "na") {
     const arg = callArg(node.args, 0, ["x", "source"]);
     if (arg == null) return NA;
-    const v = evalExpr(arg, env);
-    if (v == null) return 1;
-    if (typeof v === "number" && !Number.isFinite(v)) return 1;
-    return 0;
+    return isNaVal(evalExpr(arg, env)) ? 1 : 0;
   }
   if (fname === "iff") {
     const t = unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env));
@@ -1006,15 +1197,14 @@ function evalCall(node: Call, env: Env): Value {
     const id = evalId(callArg(node.args, 0, ["id"]));
     const dir = evalDirection(callArg(node.args, 1, ["direction"]), env);
     const qtyRaw = unwrap(evalExpr(callArg(node.args, 2, ["qty"]), env));
-    const book = env.book as StrategyBook & {
-      fillEntry?: (bar: number, id: string, dir: string, qty: number, price: number) => void;
-    };
-    if (typeof book.fillEntry === "function") {
-      const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? 1 : qtyRaw;
-      book.fillEntry(env.barIndex, id, dir, qty, num(env.ctx.close) ?? 0);
-    } else {
-      env.book.entry(env.barIndex, id, dir, qtyRaw);
-    }
+    const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? 1 : qtyRaw;
+    const limit = unwrap(evalExpr(callArg(node.args, -1, ["limit"]), env));
+    const stop = unwrap(evalExpr(callArg(node.args, -1, ["stop"]), env));
+    env.book.placeEntry(env.barIndex, id, dir, qty, {
+      limit,
+      stop,
+      price: num(env.ctx.close) ?? 0,
+    });
     return NA;
   }
   if (fname === "strategy.close") {
@@ -1045,7 +1235,7 @@ function evalCall(node: Call, env: Env): Value {
 }
 
 function evalKc(node: Call, env: Env, site: string): Value {
-  const positional = asArgs(node.args).filter((a) => a.name == null);
+  const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
   let high = num(env.ctx.high);
   let low = num(env.ctx.low);
   let close = srcArg(node, env);
@@ -1078,7 +1268,7 @@ function evalSupertrend(node: Call, env: Env, site: string): Value {
 }
 
 function evalTr(node: Call, env: Env, site: string): Cell {
-  const positional = asArgs(node.args).filter((a) => a.name == null);
+  const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
   if (positional.length >= 3) {
     return taTr(
       env,
@@ -1165,8 +1355,22 @@ function numArg(node: Call, env: Env, index: number, names: string[], fallback: 
 }
 
 function unwrap(value: Value): Cell {
-  if (typeof value === "number" || value === null) return value;
+  if (value == null) return NA;
+  if (typeof value === "number") return Number.isFinite(value) ? value : NA;
+  // Objects (PineArray / Matrix / Color / tuples) are not cells — not na.
   return NA;
+}
+
+function formatRunError(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = (err.message || err.name || "runtime error").split("\n")[0]!.trim();
+    return msg || "runtime error";
+  }
+  if (typeof err === "string") {
+    const msg = err.split("\n")[0]!.trim();
+    return msg || "runtime error";
+  }
+  return "runtime error";
 }
 
 function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOverrides {
@@ -1210,7 +1414,7 @@ function inputTitle(node: Call): string | null {
   const list = asArgs(node.args);
   let i = 0;
   for (const a of list) {
-    if (a.name != null) continue;
+    if (argKeyword(a) != null) continue;
     if (i === 1 && a.value.kind === "Constant" && typeof a.value.value === "string") {
       return a.value.value;
     }
@@ -1235,8 +1439,9 @@ function evalInput(node: Call, env: Env, fname: string): Value {
   const positional: unknown[] = [];
   const named: Record<string, unknown> = {};
   for (const a of asArgs(node.args)) {
-    const raw = rawArgValue(a.value, env);
-    if (a.name != null) named[a.name] = raw;
+    const raw = rawArgValue(argValue(a), env);
+    const kw = argKeyword(a);
+    if (kw != null) named[kw] = raw;
     else positional.push(raw);
   }
 
@@ -1266,6 +1471,26 @@ function evalRequestSecurity(node: Call, env: Env): Cell {
     { symbol, timeframe, expression: exprNode },
     sameSymbolValue,
   );
+}
+
+function evalRequestCall(fname: string, node: Call, env: Env): Cell {
+  if (fname === "request.security" || fname === "request.security_lower_tf") {
+    return evalRequestSecurity(node, env);
+  }
+  const host = { symbol: env.symbol, timeframe: env.timeframe };
+  if (fname === "request.currency_rate") {
+    const from = evalAsString(callArg(node.args, 0, ["from", "from_currency"]), env);
+    const to = evalAsString(callArg(node.args, 1, ["to", "to_currency"]), env);
+    const v = resolveRequest(fname, host, { from, to });
+    return typeof v === "number" || v === null ? v : NA;
+  }
+  if (fname === "request.seed") {
+    const seed = unwrap(evalExpr(callArg(node.args, 0, ["seed"]), env));
+    const v = resolveRequest(fname, host, { seed });
+    return typeof v === "number" || v === null ? v : NA;
+  }
+  const v = resolveRequest(fname, host, {});
+  return typeof v === "number" || v === null ? v : NA;
 }
 
 function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefined {
@@ -1458,7 +1683,7 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.stoch" || fname === "stoch") {
     if (typeof ta.stoch !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => a.name == null);
+    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
     const highArg = callArg(node.args, 1, ["high"]);
     if (highArg == null && positional.length <= 1) {
       return (ta.stoch as TaEngine["stoch"]).call(
@@ -1610,6 +1835,91 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       srcArg(node, env),
       lenOrDefault(node, env, 1, ["leftbars", "left"], 5),
       lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
+    );
+  }
+  if (fname === "ta.hma" || fname === "hma") {
+    if (typeof ta.hma !== "function") return NA;
+    return (ta.hma as TaEngine["hma"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.mfi" || fname === "mfi") {
+    if (typeof ta.mfi !== "function") return NA;
+    const positional = asArgs(node.args).filter((a) => a.name == null);
+    if (positional.length <= 1) {
+      return (ta.mfi as TaEngine["mfi"]).call(
+        env.ta,
+        site,
+        num(env.ctx.high),
+        num(env.ctx.low),
+        num(env.ctx.close),
+        num(env.ctx.volume),
+        lenArg(node, env, 0),
+      );
+    }
+    if (positional.length === 2) {
+      return (ta.mfi as TaEngine["mfi"]).call(
+        env.ta,
+        site,
+        srcArg(node, env),
+        srcArg(node, env),
+        srcArg(node, env),
+        num(env.ctx.volume),
+        lenArg(node, env, 1),
+      );
+    }
+    return (ta.mfi as TaEngine["mfi"]).call(
+      env.ta,
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
+      unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
+      unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
+      lenArg(node, env, 4),
+    );
+  }
+  if (fname === "ta.sar" || fname === "sar") {
+    if (typeof ta.sar !== "function") return NA;
+    return (ta.sar as TaEngine["sar"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      lenOrDefault(node, env, 0, ["start"], 0.02),
+      lenOrDefault(node, env, 1, ["increment"], 0.02),
+      lenOrDefault(node, env, 2, ["maximum", "max"], 0.2),
+    );
+  }
+  if (fname === "ta.dmi" || fname === "dmi") {
+    if (typeof ta.dmi !== "function") return NA;
+    const r = (ta.dmi as TaEngine["dmi"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      lenOrDefault(node, env, 0, ["diLength", "length"], 14),
+      lenOrDefault(node, env, 1, ["adxSmoothing", "adxlen"], 14),
+    );
+    return tupleOf([r.plus, r.minus, r.adx]);
+  }
+  if (fname === "ta.adx" || fname === "adx") {
+    if (typeof ta.adx !== "function") return NA;
+    return (ta.adx as TaEngine["adx"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      lenOrDefault(node, env, 0, ["length"], 14),
+    );
+  }
+  if (fname === "ta.correlation" || fname === "correlation") {
+    if (typeof ta.correlation !== "function") return NA;
+    return (ta.correlation as TaEngine["correlation"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
+      lenArg(node, env, 2),
     );
   }
   return undefined;
@@ -1917,6 +2227,74 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     for (const v of m.col(i)) arr.push(v);
     return arr;
   }
+  if (name === "matrix.mult") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const otherVal = evalExpr(callArg(node.args, 1, ["other", "matrix_2"]), env);
+    if (!m) return NA;
+    const otherM = asMatrix(otherVal);
+    return otherM ? m.mult(otherM) : m.mult(unwrap(otherVal) ?? 0);
+  }
+  if (name === "matrix.inv") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.inv() : NA;
+  }
+  if (name === "matrix.pow") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const p = unwrap(evalExpr(callArg(node.args, 1, ["power", "n"]), env));
+    return m && p != null ? m.pow(p) : NA;
+  }
+  if (name === "matrix.kron") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asMatrix(evalExpr(callArg(node.args, 1, ["other"]), env));
+    return m && other ? m.kron(other) : NA;
+  }
+  if (name === "matrix.diff") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asMatrix(evalExpr(callArg(node.args, 1, ["other"]), env));
+    return m && other ? m.diff(other) : NA;
+  }
+  if (name === "matrix.rank") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.rank() : NA;
+  }
+  if (name === "matrix.swap_rows") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["row1", "i"]), env));
+    const j = unwrap(evalExpr(callArg(node.args, 2, ["row2", "j"]), env));
+    if (m && i != null && j != null) m.swapRows(i, j);
+    return NA;
+  }
+  if (name === "matrix.swap_columns") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["column1", "i"]), env));
+    const j = unwrap(evalExpr(callArg(node.args, 2, ["column2", "j"]), env));
+    if (m && i != null && j != null) m.swapColumns(i, j);
+    return NA;
+  }
+  if (name === "matrix.is_zero") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isZero() ? 1 : 0;
+  }
+  if (name === "matrix.is_identity") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isIdentity() ? 1 : 0;
+  }
+  if (name === "matrix.is_diagonal") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isDiagonal() ? 1 : 0;
+  }
+  if (name === "matrix.is_symmetric") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isSymmetric() ? 1 : 0;
+  }
+  if (name === "matrix.is_antisymmetric") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isAntisymmetric() ? 1 : 0;
+  }
+  if (name === "matrix.is_triangular") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isTriangular() ? 1 : 0;
+  }
   return undefined;
 }
 
@@ -1934,6 +2312,44 @@ function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | un
   if (fname === "alert") {
     const msg = evalAlertMessage(callArg(node.args, 0, ["message"]), env);
     env.drawings.alert(env.barIndex, msg);
+    return NA;
+  }
+  if (fname === "table.new") return env.drawings.tableNew(env.barIndex);
+  if (fname === "polyline.new") return env.drawings.polylineNew(env.barIndex);
+  if (fname === "linefill.new") {
+    const a = unwrap(evalExpr(callArg(node.args, 0, ["id1"]), env));
+    const b = unwrap(evalExpr(callArg(node.args, 1, ["id2"]), env));
+    return env.drawings.linefillNew(
+      env.barIndex,
+      a == null ? undefined : a,
+      b == null ? undefined : b,
+    );
+  }
+  if (fname === "line.set_xy") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) {
+      env.drawings.lineSetXy(
+        id,
+        unwrap(evalExpr(callArg(node.args, 1, ["x1"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 2, ["y1"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 3, ["x2"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 4, ["y2"]), env)) ?? 0,
+      );
+    }
+    return NA;
+  }
+  if (fname === "label.set_text") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) env.drawings.labelSetText(id, evalAsString(callArg(node.args, 1, ["text"]), env) ?? "");
+    return NA;
+  }
+  if (fname === "line.delete" || fname === "label.delete" || fname === "box.delete") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) {
+      if (fname === "line.delete") env.drawings.lineDelete(id);
+      else if (fname === "label.delete") env.drawings.labelDelete(id);
+      else env.drawings.boxDelete(id);
+    }
     return NA;
   }
   return undefined;
@@ -1998,6 +2414,83 @@ function evalStrCall(fname: string | null, node: Call, env: Env): Value | undefi
       occ ?? 0,
     );
   }
+  if (fname === "str.replace_all") {
+    const s = evalExpr(callArg(node.args, 0, ["source"]), env);
+    const target = evalExpr(callArg(node.args, 1, ["target"]), env);
+    const repl = evalExpr(callArg(node.args, 2, ["replacement"]), env);
+    return strReplaceAll(
+      typeof s === "string" ? s : null,
+      typeof target === "string" ? target : null,
+      typeof repl === "string" ? repl : null,
+    );
+  }
+  if (fname === "str.startswith") {
+    const ok = strStartsWith(evalAsString(callArg(node.args, 0, ["source"]), env), evalAsString(callArg(node.args, 1, ["str"]), env));
+    return ok == null ? NA : ok ? 1 : 0;
+  }
+  if (fname === "str.endswith") {
+    const ok = strEndsWith(evalAsString(callArg(node.args, 0, ["source"]), env), evalAsString(callArg(node.args, 1, ["str"]), env));
+    return ok == null ? NA : ok ? 1 : 0;
+  }
+  if (fname === "str.substring") {
+    const endArg = callArg(node.args, 2, ["end_pos", "end"]);
+    return strSubstring(
+      evalAsString(callArg(node.args, 0, ["source"]), env),
+      unwrap(evalExpr(callArg(node.args, 1, ["begin_pos", "begin"]), env)),
+      endArg == null ? undefined : unwrap(evalExpr(endArg, env)),
+    );
+  }
+  if (fname === "str.repeat") {
+    return strRepeat(
+      evalAsString(callArg(node.args, 0, ["source"]), env),
+      unwrap(evalExpr(callArg(node.args, 1, ["n", "times"]), env)),
+    );
+  }
+  if (fname === "str.trim") {
+    return strTrim(evalAsString(callArg(node.args, 0, ["source"]), env));
+  }
+  if (fname === "str.split") {
+    const parts = strSplit(
+      evalAsString(callArg(node.args, 0, ["source"]), env),
+      evalAsString(callArg(node.args, 1, ["separator", "sep"]), env),
+    );
+    return parts == null ? NA : tupleOf(parts);
+  }
+  if (fname === "str.tonumber" || fname === "tonumber") {
+    return strToNumber(evalAsString(callArg(node.args, 0, ["source", "string"]), env));
+  }
+  if (fname === "tostring") {
+    const v = evalExpr(callArg(node.args, 0, ["value", "source"]), env);
+    return typeof v === "string" ? v : strTostring(unwrap(v));
+  }
+  if (fname === "str.pos") {
+    return strPos(
+      evalAsString(callArg(node.args, 0, ["source"]), env),
+      evalAsString(callArg(node.args, 1, ["str", "substr"]), env),
+    );
+  }
+  if (fname === "str.match") {
+    return strMatch(
+      evalAsString(callArg(node.args, 0, ["source"]), env),
+      evalAsString(callArg(node.args, 1, ["regex", "pattern"]), env),
+    );
+  }
+  if (fname === "str.format") {
+    const fmt = evalAsString(callArg(node.args, 0, ["formatString", "format"]), env);
+    const args = asArgs(node.args).slice(1).map((a) => {
+      const v = evalExpr(a.value, env);
+      return typeof v === "string" ? v : unwrap(v);
+    });
+    return strFormat(fmt, ...args);
+  }
+  if (fname === "str.join") {
+    const first = evalExpr(callArg(node.args, 0, ["array", "parts"]), env);
+    const sep = evalAsString(callArg(node.args, 1, ["separator", "sep"]), env);
+    const parts = isTuple(first)
+      ? first.elts.map((e) => (typeof e === "string" ? e : e == null ? null : String(unwrap(e))))
+      : null;
+    return parts ? strJoin(parts, sep) : NA;
+  }
   return undefined;
 }
 
@@ -2016,43 +2509,55 @@ function registerUdf(node: FunctionDef, env: Env): void {
   env.udfs.set(node.name, { params: asParams(node.args), body: asStmts(node.body) });
 }
 
+function pushUdfFrame(env: Env, site: string): void {
+  let state = env.udfSites.get(site);
+  if (!state) {
+    state = { ctx: {}, series: new Map(), varInited: new Set() };
+    env.udfSites.set(site, state);
+  }
+  for (const id of state.varInited) {
+    const s = state.series.get(id);
+    if (s == null) continue;
+    while (s.length < env.barIndex) s.push(s.current);
+    if (s.length === env.barIndex) s.push(s.current);
+    state.ctx[id] = s.current;
+  }
+  env.frames.push(state);
+}
+
 function evalUdf(def: UdfDef, node: Call, env: Env): Value {
   const args = asArgs(node.args);
   const bound = new Set<string>();
-  const saved: Array<{ name: string; prev: Value | undefined }> = [];
-
-  const bind = (id: string, value: Value): void => {
-    if (!saved.some((s) => s.name === id)) saved.push({ name: id, prev: env.ctx[id] });
-    env.ctx[id] = value;
-    bound.add(id);
-  };
-
-  let pos = 0;
-  for (const a of args) {
-    if (a.name != null) continue;
-    const p = def.params[pos++];
-    if (p) bind(p.name, evalExpr(a.value, env));
-  }
-  for (const a of args) {
-    if (a.name == null) continue;
-    if (def.params.some((p) => p.name === a.name)) bind(a.name, evalExpr(a.value, env));
-  }
-  for (const p of def.params) {
-    if (!bound.has(p.name) && p.default != null) bind(p.name, evalExpr(p.default, env));
-  }
-
-  let last: Value = NA;
+  pushUdfFrame(env, siteKey(node, env));
   try {
+    let pos = 0;
+    for (const a of args) {
+      if (argKeyword(a) != null) continue;
+      const p = def.params[pos++];
+      if (p) {
+        bindName(env, p.name, evalExpr(a.value, env));
+        bound.add(p.name);
+      }
+    }
+    for (const a of args) {
+      const kw = argKeyword(a);
+      if (kw == null) continue;
+      if (def.params.some((p) => p.name === kw)) {
+        bindName(env, kw, evalExpr(argValue(a), env));
+        bound.add(kw);
+      }
+    }
+    for (const p of def.params) {
+      if (!bound.has(p.name) && p.default != null) bindName(env, p.name, evalExpr(p.default, env));
+    }
+
+    let last: Value = NA;
     for (const s of def.body) {
       const v = execStmt(s, env);
-      if (s.kind === "Expr") last = v;
+      if (s.kind === "Expr" || s.kind === "Assign" || s.kind === "ReAssign") last = v;
     }
+    return last;
   } finally {
-    for (let i = saved.length - 1; i >= 0; i--) {
-      const { name, prev } = saved[i]!;
-      if (prev === undefined) delete env.ctx[name];
-      else env.ctx[name] = prev;
-    }
+    env.frames.pop();
   }
-  return last;
 }

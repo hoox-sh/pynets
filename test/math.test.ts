@@ -12,7 +12,9 @@ import {
   mathCeil,
   mathCos,
   mathExp,
+  mathFixnan,
   mathFloor,
+  mathIff,
   mathIsFinite,
   mathLog,
   mathLog10,
@@ -114,6 +116,13 @@ describe("math.pow", () => {
     expect(mathPow(2, null)).toBeNull();
     expect(mathPow(null, null)).toBeNull();
   });
+
+  test("non-finite in/out is na (no Math.pow surprises)", () => {
+    expect(mathPow(Number.NaN, 2)).toBeNull();
+    expect(mathPow(2, Number.POSITIVE_INFINITY)).toBeNull();
+    expect(mathPow(-1, 0.5)).toBeNull();
+    expect(mathPow(0, -1)).toBeNull();
+  });
 });
 
 describe("math.max", () => {
@@ -202,6 +211,37 @@ describe("math.trig / sum / isfinite", () => {
     expect(mathSum(1, null)).toBeNull();
     expect(mathIsFinite(1)).toBe(1);
     expect(mathIsFinite(null)).toBeNull();
+  });
+});
+
+describe("math.iff / math.fixnan", () => {
+  test("iff: na cond → na; 0 is false; nonzero is true", () => {
+    expect(mathIff(null, 10, 0)).toBeNull();
+    expect(mathIff(Number.NaN, 10, 0)).toBeNull();
+    expect(mathIff(1, 10, 0)).toBe(10);
+    expect(mathIff(0, 10, 0)).toBe(0);
+    expect(mathIff(1, null, 0)).toBeNull();
+  });
+
+  test("fixnan: na / non-finite → 0; finite passes through", () => {
+    expect(mathFixnan(null)).toBe(0);
+    expect(mathFixnan(Number.NaN)).toBe(0);
+    expect(mathFixnan(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(mathFixnan(7)).toBe(7);
+    expect(mathFixnan(-1.5)).toBe(-1.5);
+  });
+});
+
+describe("math non-finite in → na", () => {
+  test("trig / log / exp / sign", () => {
+    expect(mathSign(Number.NaN)).toBeNull();
+    expect(mathExp(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(mathLog(Number.NaN)).toBeNull();
+    expect(mathLog(8, 2)).toBeCloseTo(3);
+    expect(mathLog(8, 1)).toBeNull();
+    expect(mathLog(8, null)).toBeNull();
+    expect(mathSin(null)).toBeNull();
+    expect(mathTan(Number.NaN)).toBeNull();
   });
 });
 

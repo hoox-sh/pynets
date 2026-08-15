@@ -31,6 +31,14 @@ plot(map.get(m, "c"))`,
     expect(out.plots).toEqual([1, 2, 3]);
   });
 
+  test("Runtime.run parse error is not thrown and has no stack", () => {
+    const out = new Runtime("TEST").run("indicator(\n", BARS);
+    expect(out.error).toBeDefined();
+    expect(out.error_kind).toBe("parse");
+    expect(out.error).not.toContain("    at ");
+    expect(out.series).toEqual({});
+  });
+
   test("strategy() commission applies via Runtime broker", () => {
     const out = new Runtime("TEST", { broker: { commission: 0.001 } }).run(
       `strategy("s")

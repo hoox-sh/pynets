@@ -70,6 +70,13 @@ describe("ta period<=0", () => {
     expect(ta.rsi("rsi:0", 1, 0)).toBeNull();
     expect(ta.rsi("rsi:0", 1, -3)).toBeNull();
   });
+
+  test("non-finite period is na; 3.7 floors to 3", () => {
+    const ta = new TaEngine();
+    expect(ta.sma("sma:nan", 1, Number.NaN)).toBeNull();
+    const out = [1, 2, 3, 4].map((x) => ta.sma("sma:f", x, 3.7));
+    expect(out).toEqual([null, null, 2, 3]);
+  });
 });
 
 describe("ta.kc incremental", () => {
@@ -292,6 +299,24 @@ describe("ta.bb incremental", () => {
   });
 });
 
+describe("ta.bbw / ta.cross", () => {
+  test("bbw is (up-lo)/mid", () => {
+    const ta = new TaEngine();
+    const out = [1, 2, 3, 4, 5].map((x) => ta.bbw("bbw:0", x, 3, 2));
+    expect(out[0]).toBeNull();
+    expect(out[2]).toBeCloseTo(2);
+    expect(out[4]).toBeCloseTo(1);
+  });
+
+  test("cross is 1 on either direction", () => {
+    const ta = new TaEngine();
+    const a = [1, 2, 3, 2, 1];
+    const b = [2, 2, 2, 2, 2];
+    const out = a.map((x, i) => ta.cross("cr:0", x, b[i]!));
+    expect(out).toEqual([0, 0, 1, 0, 1]);
+  });
+});
+
 describe("ta.sum incremental", () => {
   test("period 3 on [1,2,3,4,5] → [null,null,6,9,12]", () => {
     const ta = new TaEngine();
@@ -344,6 +369,12 @@ describe("ta.roc incremental", () => {
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     expect(out[2]).toBeCloseTo(100);
+  });
+
+  test("length<=0 is na", () => {
+    const ta = new TaEngine();
+    expect(ta.roc("roc:0", 10, 0)).toBeNull();
+    expect(ta.roc("roc:0", 10, -1)).toBeNull();
   });
 });
 
@@ -573,6 +604,103 @@ describe("ta.rising incremental", () => {
     const ta = new TaEngine();
     expect(ta.rising("r:0", 1, 0)).toBe(0);
     expect(ta.rising("r:0", 1, -2)).toBe(0);
+  });
+});
+
+describe("ta.rma incremental", () => {
+  test("period 3: mean seed then Wilder α=1/n", () => {
+    const ta = new TaEngine();
+    const out = [1, 2, 3, 4, 5].map((x) => ta.rma("rma:0", x, 3));
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBe(2);
+    expect(out[3]).toBeCloseTo((1 / 3) * 4 + (2 / 3) * 2);
+    expect(out[4]).toBeCloseTo((1 / 3) * 5 + (2 / 3) * (out[3] as number));
+  });
+
+  test("na after seed keeps previous; na does not poison", () => {
+    const ta = new TaEngine();
+    const src: Cell[] = [1, 2, 3, null, 5];
+    const out = src.map((x) => ta.rma("rma:0", x, 3));
+    expect(out[2]).toBe(2);
+    expect(out[3]).toBe(2);
+    expect(out[4]).toBeCloseTo((1 / 3) * 5 + (2 / 3) * 2);
+  });
+
+  test("leading na delays the seed", () => {
+    const ta = new TaEngine();
+    const src: Cell[] = [null, 1, 2, 3];
+    const out = src.map((x) => ta.rma("rma:0", x, 3));
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBeNull();
+    expect(out[3]).toBe(2);
+  });
+});
+
+describe("ta.ema na / period", () => {
+  test("na after seed keeps previous", () => {
+    const ta = new TaEngine();
+    const src: Cell[] = [1, 2, 3, null, 5];
+    const out = src.map((x) => ta.ema("ema:0", x, 3));
+    expect(out[2]).toBe(2);
+    expect(out[3]).toBe(2);
+    const alpha = 2 / 4;
+    expect(out[4]).toBeCloseTo(alpha * 5 + (1 - alpha) * 2);
+  });
+
+  test("non-finite source is na (no state poison)", () => {
+    const ta = new TaEngine();
+    expect(ta.ema("ema:0", Number.NaN, 2)).toBeNull();
+    expect(ta.ema("ema:0", Number.POSITIVE_INFINITY, 2)).toBeNull();
+    expect(ta.ema("ema:0", 1, 2)).toBeNull();
+    expect(ta.ema("ema:0", 3, 2)).toBe(2);
+  });
+
+  test("float period near-int rounds; 3.7 floors to 3", () => {
+    const ta = new TaEngine();
+    const near = [1, 2, 3].map((x) => ta.ema("e:near", x, 3 + 1e-12));
+    expect(near[2]).toBe(2);
+    const floored = [1, 2, 3, 4].map((x) => ta.ema("e:floor", x, 3.7));
+    expect(floored[2]).toBe(2);
+    expect(floored[3]).not.toBeNull();
+  });
+});
+
+describe("ta.rsi na does not poison Wilder state", () => {
+  test("na mid-stream returns na then resumes from last finite", () => {
+    const ta = new TaEngine();
+    const src: Cell[] = [1, 2, 3, null, 4];
+    const out = src.map((x) => ta.rsi("rsi:0", x, 2));
+    expect(out[2]).toBe(100);
+    expect(out[3]).toBeNull();
+    expect(typeof out[4]).toBe("number");
+    expect(Number.isFinite(out[4]!)).toBe(true);
+  });
+});
+
+describe("ta.highestbars / lowestbars", () => {
+  test("ties keep the oldest bar (Python)", () => {
+    const ta = new TaEngine();
+    const hi = [1, 5, 5].map((x) => ta.highestbars("hb:0", x, 3));
+    expect(hi[2]).toBe(-1);
+    const lo = [5, 1, 1].map((x) => ta.lowestbars("lb:0", x, 3));
+    expect(lo[2]).toBe(-1);
+  });
+
+  test("current extreme is offset 0", () => {
+    const ta = new TaEngine();
+    const out = [1, 2, 9].map((x) => ta.highestbars("hb:1", x, 3));
+    expect(out[2]).toBe(0);
+  });
+
+  test("does not share a window with ta.highest on the same site", () => {
+    const ta = new TaEngine();
+    const src = [1, 3, 2];
+    const hi = src.map((x) => ta.highest("same", x, 3));
+    const bars = src.map((x) => ta.highestbars("same", x, 3));
+    expect(hi[2]).toBe(3);
+    expect(bars[2]).toBe(-1);
   });
 });
 

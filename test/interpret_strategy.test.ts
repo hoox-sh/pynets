@@ -72,5 +72,21 @@ describe("interpret strategy", () => {
     expect(fills.length).toBeGreaterThan(0);
     expect(fills.some((ev) => ev.id === "L" || String(ev.comment ?? "").includes("L"))).toBe(true);
   });
+
+  test.skipIf(!parseOk(`strategy("t")\nstrategy.entry("L", strategy.long)\nstrategy.close_all()`))(
+    "close_all emits a close_all event and flattens",
+    () => {
+      const src = `strategy("t")
+if bar_index == 1
+    strategy.entry("L", strategy.long)
+if bar_index == 3
+    strategy.close_all()`;
+      if (!parseOk(src)) return;
+      const out = new Runtime("TEST").run(src, bars(5));
+      expect(out.error).toBeUndefined();
+      const events = out.events ?? [];
+      expect(events.some((e) => String(e.type ?? "").includes("close_all"))).toBe(true);
+    },
+  );
 });
 

@@ -87,7 +87,7 @@ function emitExpr(node: expr): string {
     case "Attribute":
       return `${emitExpr(node.value)}.${node.attr}`;
     case "Subscript":
-      return `${emitExpr(node.value)}[${node.slice ? emitExpr(node.slice) : ""}]`;
+      return `${emitExpr(node.value)}[${emitSlice(node.slice)}]`;
     case "BinOp":
       return `${emitExpr(node.left)} ${OP[node.op.kind] ?? "?"} ${emitExpr(node.right)}`;
     case "UnaryOp":
@@ -130,6 +130,12 @@ function emitIf(node: If): string {
 
 function emitTuple(node: Tuple): string {
   return `[${node.elts.map(emitExpr).join(", ")}]`;
+}
+
+function emitSlice(slice: expr | null | undefined): string {
+  if (slice == null) return "";
+  if (slice.kind === "Tuple") return slice.elts.map(emitExpr).join(", ");
+  return emitExpr(slice);
 }
 
 function emitConditional(node: Conditional): string {
@@ -320,7 +326,7 @@ export function unparse(node: AST): string {
   }
   if (node.kind === "Subscript") {
     const s = node as Subscript;
-    return `${emitExpr(s.value)}[${s.slice ? emitExpr(s.slice) : ""}]`;
+    return `${emitExpr(s.value)}[${emitSlice(s.slice)}]`;
   }
   if (node.kind === "BinOp") {
     const b = node as BinOp;

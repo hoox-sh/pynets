@@ -2,15 +2,23 @@
  * Copyright (C) 2024-2026 jango_blockchained
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * Tiny Pine `map.*` value. Keys are string or number; `null` is `na`.
+ * Tiny Pine `map.*` value. Keys are string or finite number; `null` is `na`.
+ * Backed by `Map` (never a plain object) so user keys cannot pollute prototypes.
  */
 export type Cell = number | null;
 export type MapKey = string | number;
 
 function keyOf(key: unknown): string | null {
   if (typeof key === "string") return `s:${key}`;
-  if (typeof key === "number" && Number.isFinite(key)) return `n:${key}`;
+  if (typeof key === "number" && Number.isFinite(key)) {
+    const n = Object.is(key, -0) ? 0 : key;
+    return `n:${n}`;
+  }
   return null;
+}
+
+function decodeKey(k: string): MapKey {
+  return k.startsWith("s:") ? k.slice(2) : Number(k.slice(2));
 }
 
 export class PineMap {
@@ -55,6 +63,16 @@ export class PineMap {
   }
 
   keys(): MapKey[] {
-    return this.order.map((k) => (k.startsWith("s:") ? k.slice(2) : Number(k.slice(2))));
+    return this.order.map(decodeKey);
+  }
+
+  values(): Cell[] {
+    return this.order.map((k) => this.data.get(k)!);
+  }
+
+  copy(): PineMap {
+    const out = new PineMap();
+    for (const k of this.order) out.put(decodeKey(k), this.data.get(k)!);
+    return out;
   }
 }

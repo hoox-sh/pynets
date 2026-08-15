@@ -35,6 +35,25 @@ describe("na compare (Python / Pine)", () => {
     expect(look.plots[0]).toBe(1);
     expect(look.plots[1]).toBe(0);
   });
+
+  test("na != na / na != 1 / relational na are false (numba_pine_ne)", () => {
+    const neNa = interpret(`indicator("t")\nplot(na != na ? 1 : 0)`, BARS);
+    expect(neNa.plots).toEqual([0, 0, 0, 0, 0]);
+    const neOne = interpret(`indicator("t")\nplot(na != 1 ? 1 : 0)`, BARS);
+    expect(neOne.plots).toEqual([0, 0, 0, 0, 0]);
+    const lt = interpret(`indicator("t")\nplot(na < 1 ? 1 : 0)`, BARS);
+    expect(lt.plots).toEqual([0, 0, 0, 0, 0]);
+    const gt = interpret(`indicator("t")\nplot(close[1] > 0 ? 1 : 0)`, BARS);
+    expect(gt.plots[0]).toBe(0);
+    expect(gt.plots[1]).toBe(1);
+  });
+
+  test("string compare does not collapse to na==na", () => {
+    const same = interpret(`indicator("t")\nplot("a" == "a" ? 1 : 0)`, BARS);
+    expect(same.plots[0]).toBe(1);
+    const diff = interpret(`indicator("t")\nplot("a" == "b" ? 1 : 0)`, BARS);
+    expect(diff.plots[0]).toBe(0);
+  });
 });
 
 describe("math + utility wiring", () => {

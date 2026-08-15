@@ -42,11 +42,14 @@ export function mathSqrt(x: Cell): Cell {
   return finiteOut(Math.sqrt(n));
 }
 
-/** Natural log; `na` if `x <= 0`. */
-export function mathLog(x: Cell): Cell {
+/** Natural log, or log base `base` when given; `na` if `x <= 0` (or base <= 0). */
+export function mathLog(x: Cell, base?: Cell): Cell {
   const n = finite(x);
   if (n === null || n <= 0) return null;
-  return finiteOut(Math.log(n));
+  if (base === undefined) return finiteOut(Math.log(n));
+  const b = finite(base);
+  if (b === null || b <= 0 || b === 1) return null;
+  return finiteOut(Math.log(n) / Math.log(b));
 }
 
 /** `na` if `x <= 0`. */
@@ -65,6 +68,7 @@ export function mathPow(base: Cell, exp: Cell): Cell {
   const b = finite(base);
   const e = finite(exp);
   if (b === null || e === null) return null;
+  // JS `Math.pow` yields NaN for e.g. (-1)**0.5; map that (and Inf) to na.
   return finiteOut(Math.pow(b, e));
 }
 
@@ -191,4 +195,19 @@ export function mathRoundToMintick(x: Cell, mintick: Cell = 0.01): Cell {
   const tick = finite(mintick);
   if (n === null || tick === null || tick <= 0) return n === null ? null : finiteOut(Number(n.toFixed(8)));
   return finiteOut(Math.round(n / tick) * tick);
+}
+
+/** Pine v4 `iff(cond, then, else)`. `na` condition → `na`. */
+export function mathIff(cond: Cell, thenV: Cell, elseV: Cell): Cell {
+  if (cond === null || !Number.isFinite(cond)) return null;
+  return cond ? thenV : elseV;
+}
+
+/**
+ * Python `_builtin_fixnan`: None / NaN → 0 (not prior-bar carry).
+ * Other non-finite (`Inf`) is treated as na → 0.
+ */
+export function mathFixnan(x: Cell): Cell {
+  if (x === null || !Number.isFinite(x)) return 0;
+  return x;
 }

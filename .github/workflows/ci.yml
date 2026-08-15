@@ -17,6 +17,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +30,10 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+        timeout-minutes: 5
 
       - name: Test
         run: bun test
+        timeout-minutes: 10
         env:
           NO_COLOR: "1"

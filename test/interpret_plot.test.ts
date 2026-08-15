@@ -27,4 +27,18 @@ describe("interpret plot(close)", () => {
     expect(out.plots).toEqual([100.5, 101.5]);
     expect(out.count).toBe(2);
   });
+
+  test("positional title after series and colliding titles uniquify", () => {
+    const out = new Runtime("TEST").run(
+      `indicator("t")
+plot(close, "a")
+plot(close + 1, title="a")
+plot(close + 2)`,
+      [{ close: 1 }, { close: 2 }],
+    );
+    expect(out.error).toBeUndefined();
+    expect(out.series.a).toEqual([1, 2]);
+    expect(out.series.a_2).toEqual([2, 3]);
+    expect(out.series.plot).toEqual([3, 4]);
+  });
 });

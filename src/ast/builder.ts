@@ -13,8 +13,11 @@ import {
   type Additive_opContext,
   type Argument_definitionContext,
   type Argument_listContext,
+  type Attributed_type_nameContext,
   type Break_statementContext,
   type Compound_name_initializationContext,
+  type Compound_reassignmentContext,
+  type Compound_tuple_initializationContext,
   type Conjunction_expressionContext,
   type Continue_statementContext,
   type Declaration_modeContext,
@@ -73,8 +76,11 @@ import {
   type Switch_default_caseContext,
   type Switch_pattern_caseContext,
   type Switch_structureContext,
+  type Trailing_structure_statementsContext,
   type Tuple_declarationContext,
+  type Tuple_expressionContext,
   type Type_declarationContext,
+  type Type_specificationContext,
   type Simple_statementsContext,
   type Start_expressionContext,
   type Start_scriptContext,
@@ -89,6 +95,7 @@ import {
 } from "../generated/PinescriptParser.ts";
 import {
   Add,
+  And,
   Div,
   Eq,
   Gt,
@@ -101,6 +108,7 @@ import {
   Mod,
   Mult,
   NotOp,
+  Or,
   Store,
   Sub,
   UAdd,
@@ -111,46 +119,46 @@ import {
   assign,
   attribute,
   binOp,
+  boolOp,
+  breakStmt,
+  call,
+  caseNode,
   compare,
   conditional,
+  continueStmt,
+  constant,
+  enumDef,
+  expression,
+  exprStmt,
   forIn,
   forTo,
   functionDef,
   ifExpr,
-  call,
-  constant,
-  enumDef,
-  tupleExpr,
-  typeDef,
-  expression,
-  exprStmt,
   name,
   param,
   reAssign,
   script,
   subscript,
+  switchExpr,
+  tupleExpr,
+  typeDef,
   unaryOp,
+  whileExpr,
   type Arg,
+  type AST,
   type Assign,
+  type Case,
   type compare_op,
   type decl_mode,
   type expr,
+  type Name,
   type operator,
   type Param,
   type stmt,
   type unary_op,
 } from "./nodes.ts";
 
-function loc(
-  node: {
-    kind?: string;
-    lineno?: number;
-    col_offset?: number;
-    end_lineno?: number | null;
-    end_col_offset?: number | null;
-  },
-  ctx: ParserRuleContext,
-): void {
+function loc(node: AST, ctx: ParserRuleContext): void {
   const start = ctx.start;
   const stop = ctx.stop ?? ctx.start;
   if (start) {
@@ -172,6 +180,38 @@ function parseNumberLiteral(text: string): number {
   return Number(cleaned);
 }
 
+function unescapeStringBody(inner: string): string {
+  let out = "";
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    if (ch !== "\\" || i + 1 >= inner.length) {
+      out += ch;
+      continue;
+    }
+    const next = inner[++i]!;
+    switch (next) {
+      case "n":
+        out += "\n";
+        break;
+      case "r":
+        out += "\r";
+        break;
+      case "t":
+        out += "\t";
+        break;
+      case "\\":
+      case "'":
+      case '"':
+        out += next;
+        break;
+      default:
+        out += next;
+        break;
+    }
+  }
+  return out;
+}
+
 function parseStringLiteral(text: string): string {
   if (
     (text.startsWith('"""') && text.endsWith('"""')) ||
@@ -179,11 +219,13 @@ function parseStringLiteral(text: string): string {
   ) {
     return text.slice(3, -3);
   }
-  try {
-    return JSON.parse(text.replaceAll("'", '"')) as string;
-  } catch {
-    return text.slice(1, -1);
+  if (text.length >= 2) {
+    const q = text[0]!;
+    if ((q === '"' || q === "'") && text.endsWith(q)) {
+      return unescapeStringBody(text.slice(1, -1));
+    }
   }
+  return text;
 }
 
 function unwrap(value: unknown): unknown {
@@ -192,13 +234,11 @@ function unwrap(value: unknown): unknown {
   return value;
 }
 
-/** antlr4-js `getToken` may return a hollow object; require a real symbol. */
+/** antlr4-js `getToken` may return null or a hollow object; require a real symbol. */
 function hasTerminal(tok: unknown): boolean {
-  try {
-    return Boolean(tok && typeof tok === "object" && "symbol" in tok && (tok as { symbol?: unknown }).symbol);
-  } catch {
-    return false;
-  }
+  if (tok == null || typeof tok !== "object") return false;
+  if (!("symbol" in tok)) return false;
+  return (tok as { symbol?: unknown }).symbol != null;
 }
 
 function isRuleCtx(value: unknown): value is ParserRuleContext {
@@ -219,15 +259,15 @@ function setStoreCtx(node: expr): expr {
 
 export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   /**
-   * antlr4-js `visitChildren` maps *all* children (including terminals) into
-   * a nested array. Pass-through rules must return the single rule child.
+   * antlr4-js default `visitChildren` includes terminals and wraps every
+   * child. Skip terminals, unwrap 1-element arrays per child, but do not
+   * flatten `visit()` globally (argument lists must stay arrays).
    */
   override visitChildren(node: RuleNode): unknown {
     const children = (node as ParserRuleContext).children ?? [];
     const results: unknown[] = [];
     for (const child of children) {
-      if (child == null) continue;
-      if ("symbol" in child && !("ruleIndex" in child)) continue;
+      if (!isRuleCtx(child)) continue;
       const accept = (child as { accept?: (v: unknown) => unknown }).accept;
       if (typeof accept !== "function") continue;
       const r = unwrap(accept.call(child, this));
@@ -374,8 +414,7 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   visitPrimary_expression_call = (ctx: Primary_expression_callContext): unknown => {
     const func = this.visit(ctx.primary_expression()) as expr;
     const argsCtx = ctx.argument_list();
-    const visited = argsCtx ? this.visit(argsCtx) : [];
-    const args = (Array.isArray(visited) ? visited : visited ? [visited] : []) as Arg[];
+    const args = isRuleCtx(argsCtx) ? asArgList(this.visit(argsCtx)) : [];
     const node = call(func, args);
     loc(node, ctx);
     return node;
@@ -407,7 +446,18 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitArgument_definition = (ctx: Argument_definitionContext): unknown => {
     const store = ctx.name_store();
-    const nameId = store ? (this.visit(store) as ReturnType<typeof name>).id : null;
+    let nameId: string | null = null;
+    // Grammar: `(name_store EQUAL)? expression`. antlr4-js `name_store()`
+    // can return a hollow object — require a real rule ctx + EQUAL.
+    if (isRuleCtx(store) && hasTerminal(ctx.EQUAL())) {
+      const visited = this.visit(store);
+      if (typeof visited === "string") nameId = visited;
+      else if (isName(visited)) nameId = visited.id;
+      else {
+        const text = store.getText();
+        nameId = text.length > 0 ? text : null;
+      }
+    }
     const node = arg(this.visit(ctx.expression()) as expr, nameId);
     loc(node, ctx);
     return node;
@@ -415,7 +465,10 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitSubscript_slice = (ctx: Subscript_sliceContext): unknown => {
     const items = ctx.expression_list().map((e) => this.visit(e) as expr);
-    return items.length === 1 ? items[0] : items[0];
+    if (items.length <= 1) return items[0];
+    const node = tupleExpr(items, Load);
+    loc(node, ctx);
+    return node;
   };
 
   visitLiteral_expression = (ctx: Literal_expressionContext): unknown => {
@@ -423,7 +476,7 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const value = this.visit(child);
     const node = constant(value);
     loc(node, ctx);
-    if (ctx.literal_color()) node.kind_lit = "#";
+    if (isRuleCtx(ctx.literal_color())) node.kind_lit = "#";
     return node;
   };
 
@@ -465,6 +518,41 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(ctx.expression());
   };
 
+  visitTuple_expression = (ctx: Tuple_expressionContext): unknown => {
+    const elts = (ctx.expression_list() ?? []).map((e) => this.visit(e) as expr);
+    const node = tupleExpr(elts, Load);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitType_specification = (ctx: Type_specificationContext): unknown => {
+    let typeSpec = this.visit(ctx.attributed_type_name()) as expr;
+    if (isRuleCtx(ctx.array_type_suffix())) {
+      const node = subscript(typeSpec, null, Load);
+      loc(node, ctx);
+      node.lineno = typeSpec.lineno;
+      node.col_offset = typeSpec.col_offset;
+      typeSpec = node;
+    }
+    return typeSpec;
+  };
+
+  visitAttributed_type_name = (ctx: Attributed_type_nameContext): unknown => {
+    const names = (ctx.name_load_list() ?? []).map((n) => this.visit(n) as Name);
+    if (names.length === 0) return undefined;
+    let ident: expr = names[0]!;
+    for (let i = 1; i < names.length; i++) {
+      const part = names[i]!;
+      const node = attribute(ident, part.id, Load);
+      node.lineno = ident.lineno;
+      node.col_offset = ident.col_offset;
+      node.end_lineno = part.end_lineno ?? null;
+      node.end_col_offset = part.end_col_offset ?? null;
+      ident = node;
+    }
+    return ident;
+  };
+
   visitSimple_name_initialization = (ctx: Simple_name_initializationContext): unknown => {
     const node = this.visit(ctx.variable_declaration()) as Assign;
     node.value = this.visit(ctx.expression()) as expr;
@@ -475,14 +563,47 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitCompound_name_initialization = (ctx: Compound_name_initializationContext): unknown => {
     const node = this.visit(ctx.variable_declaration()) as Assign;
-    node.value = this.visit(ctx.structure_expression()) as expr;
+    const valueCtx = ctx.structure_expression();
+    if (isRuleCtx(valueCtx)) node.value = this.visit(valueCtx) as expr;
     if (hasTerminal(ctx.EXPORT())) node.export = 1;
+    loc(node, ctx);
+    return node;
+  };
+
+  visitCompound_tuple_initialization = (ctx: Compound_tuple_initializationContext): unknown => {
+    const target = this.visit(ctx.tuple_declaration()) as expr;
+    const value = this.visit(ctx.structure_expression()) as expr;
+    const node = assign(target, value);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitCompound_reassignment = (ctx: Compound_reassignmentContext): unknown => {
+    const target = setStoreCtx(this.visit(ctx.primary_expression()) as expr);
+    const value = this.visit(ctx.structure_expression()) as expr;
+    const node = reAssign(target, value);
     loc(node, ctx);
     return node;
   };
 
   visitStructure_expression = (ctx: Structure_expressionContext): unknown => {
     return this.visit(ctx.structure());
+  };
+
+  visitTrailing_structure_statements = (ctx: Trailing_structure_statementsContext): unknown => {
+    const stmts: stmt[] = [];
+    for (const s of ctx.simple_statement_list() ?? []) {
+      const visited = unwrap(this.visit(s));
+      if (Array.isArray(visited)) stmts.push(...(visited as stmt[]));
+      else if (visited) stmts.push(visited as stmt);
+    }
+    const structure = this.visit(ctx.structure()) as expr;
+    const wrapped = exprStmt(structure);
+    const structCtx = ctx.structure();
+    if (isRuleCtx(structCtx)) loc(wrapped, structCtx);
+    else loc(wrapped, ctx);
+    stmts.push(wrapped);
+    return stmts;
   };
 
   visitSimple_tuple_initialization = (ctx: Simple_tuple_initializationContext): unknown => {
@@ -843,38 +964,25 @@ function asParamList(value: unknown): Param[] {
   return [u as Param];
 }
 
-const And = { kind: "And" as const };
-const Or = { kind: "Or" as const };
-
-type CaseNode = { kind: "Case"; body: stmt[]; pattern: expr | null };
-
-function boolOp(op: typeof And | typeof Or, values: expr[]) {
-  return { kind: "BoolOp" as const, op, values };
-}
-
-function whileExpr(test: expr, body: stmt[]) {
-  return { kind: "While" as const, test, body };
-}
-
-function switchExpr(cases: CaseNode[], subject: expr | null = null) {
-  return { kind: "Switch" as const, cases, subject };
-}
-
-function caseNode(body: stmt[], pattern: expr | null = null): CaseNode {
-  return { kind: "Case", body, pattern };
-}
-
-function breakStmt() {
-  return { kind: "Break" as const };
-}
-
-function continueStmt() {
-  return { kind: "Continue" as const };
-}
-
-function asCaseList(value: unknown): CaseNode[] {
+function asArgList(value: unknown): Arg[] {
   const u = unwrap(value);
   if (u == null) return [];
-  if (Array.isArray(u)) return u.filter(Boolean) as CaseNode[];
-  return [u as CaseNode];
+  if (Array.isArray(u)) return u.filter(Boolean) as Arg[];
+  return [u as Arg];
+}
+
+function asCaseList(value: unknown): Case[] {
+  const u = unwrap(value);
+  if (u == null) return [];
+  if (Array.isArray(u)) return u.filter(Boolean) as Case[];
+  return [u as Case];
+}
+
+function isName(value: unknown): value is Name {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    (value as { kind?: unknown }).kind === "Name" &&
+    typeof (value as { id?: unknown }).id === "string"
+  );
 }

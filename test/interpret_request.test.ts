@@ -57,4 +57,15 @@ describe("interpret request.security", () => {
       expect(out.plots).toEqual([1, 2, 3, 4, 5]);
     },
   );
+
+  test.skipIf(!parseOk(`indicator("t")\nplot(request.security("MSFT", "", close))`))(
+    "foreign request.security is na",
+    () => {
+      const src = `indicator("t")
+plot(request.security("MSFT", "", close))`;
+      const out = new Runtime("TEST").run(src, BARS);
+      expect(out.error).toBeUndefined();
+      expect(out.plots).toEqual([null, null, null, null, null]);
+    },
+  );
 });

@@ -13,4 +13,15 @@ describe("PineSeries lookback polarity", () => {
     expect(s.get(3)).toBe(NA);
     expect(s.get(-1)).toBe(NA);
   });
+
+  test("non-finite / huge offsets are na and never throw", () => {
+    const s = new PineSeries();
+    s.push(1);
+    expect(s.get(Number.NaN)).toBe(NA);
+    expect(s.get(Number.POSITIVE_INFINITY)).toBe(NA);
+    expect(s.get(Number.NEGATIVE_INFINITY)).toBe(NA);
+    expect(s.get(1.9)).toBe(NA);
+    expect(s.get(0.9)).toBe(1);
+    expect(() => s.get(-1e20)).not.toThrow();
+  });
 });

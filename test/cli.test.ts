@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { clampBars, MAX_BARS, parseArgs, resolveUserFile, UsageError } from "../src/cli.ts";
 
 const PYNETS = join(import.meta.dir, "..");
 
@@ -21,17 +22,29 @@ function writePine(source: string): string {
   return file;
 }
 
-function cli(...args: string[]): { code: number; stdout: string; stderr: string } {
-  const proc = Bun.spawnSync(["bun", "src/cli.ts", "--plain", ...args], {
+function runCli(
+  args: string[],
+  env?: Record<string, string | undefined>,
+): { code: number; stdout: string; stderr: string } {
+  const proc = Bun.spawnSync(["bun", "src/cli.ts", ...args], {
     cwd: PYNETS,
     stdout: "pipe",
     stderr: "pipe",
+    env: { ...process.env, ...env },
   });
   return {
     code: proc.exitCode ?? 1,
     stdout: new TextDecoder().decode(proc.stdout),
     stderr: new TextDecoder().decode(proc.stderr),
   };
+}
+
+function cli(...args: string[]): { code: number; stdout: string; stderr: string } {
+  return runCli(["--plain", ...args]);
+}
+
+function hasStack(text: string): boolean {
+  return /\n\s+at\s+\S+/.test(text);
 }
 
 describe("pynets CLI", () => {
@@ -48,6 +61,7 @@ describe("pynets CLI", () => {
     const r = cli("check", file);
     expect(r.code).toBe(1);
     expect(r.stderr.length).toBeGreaterThan(0);
+    expect(hasStack(r.stderr)).toBe(false);
   });
 
   test("format emits indicator/plot", () => {
@@ -93,15 +107,139 @@ describe("pynets CLI", () => {
 
   test("forced rich check is not the bare ok line", () => {
     const file = writePine(GOOD);
-    const proc = Bun.spawnSync(["bun", "src/cli.ts", "check", file, "--rich"], {
-      cwd: PYNETS,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: { ...process.env, FORCE_COLOR: "1", NO_COLOR: "" },
+    const r = runCli(["check", file, "--rich"], { FORCE_COLOR: "1", NO_COLOR: "" });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("check");
+    expect(r.stdout).not.toBe("ok\n");
+  });
+});
+
+describe("pynets CLI hardening", () => {
+  test("--plain wins over leftover FORCE_COLOR", () => {
+    const r = runCli(["info", "--plain"], { FORCE_COLOR: "1", NO_COLOR: "" });
+    expect(r.code).toBe(0);
+    expect(r.stdout).not.toContain("\x1b");
+    const payload = JSON.parse(r.stdout) as { name: string; rich: boolean };
+    expect(payload.name).toBe("pynets");
+    expect(payload.rich).toBe(false);
+  });
+
+  test("--rich after the command is not eaten", () => {
+    const file = writePine(GOOD);
+    const r = runCli(["dump", file, "--rich"], { FORCE_COLOR: "", NO_COLOR: "" });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("dump");
+    expect(r.stdout).not.toMatch(/^Script\(/);
+  });
+
+  test("missing file is exit 2, stderr, no stack", () => {
+    const r = cli("check", join(PYNETS, "no-such-pynets-cli-file.pine"));
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("file not found");
+    expect(hasStack(r.stderr)).toBe(false);
+    expect(r.stdout).toBe("");
+  });
+
+  test("missing file argument is usage exit 2", () => {
+    const r = cli("check");
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("missing file");
+  });
+
+  test("unknown command is usage exit 2", () => {
+    const r = cli("nope");
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("unknown command");
+  });
+
+  test("unknown flag is usage exit 2", () => {
+    const file = writePine(GOOD);
+    const r = cli("check", file, "--nope");
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("unknown argument");
+  });
+
+  test("--bars NaN is usage exit 2", () => {
+    const file = writePine(GOOD);
+    const r = cli("run", file, "--bars", "NaN");
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("--bars");
+  });
+
+  test("--bars 1.5 is usage exit 2", () => {
+    const file = writePine(GOOD);
+    const r = cli("run", file, "--bars", "1.5");
+    expect(r.code).toBe(2);
+  });
+
+  test("broker flags reject non-finite values", () => {
+    const file = writePine(GOOD);
+    const r = cli("run", file, "--commission", "Infinity");
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("--commission");
+  });
+
+  test("JSON --plain output is valid JSON without ANSI", () => {
+    const file = writePine(GOOD);
+    const r = runCli(["run", file, "--bars", "3", "--json", "--plain"], {
+      FORCE_COLOR: "1",
+      NO_COLOR: "",
     });
-    const stdout = new TextDecoder().decode(proc.stdout);
-    expect(proc.exitCode).toBe(0);
-    expect(stdout).toContain("check");
-    expect(stdout).not.toBe("ok\n");
+    expect(r.code).toBe(0);
+    expect(r.stdout).not.toContain("\x1b");
+    const payload = JSON.parse(r.stdout) as { plots: unknown[]; count: number };
+    expect(payload.plots).toHaveLength(3);
+    expect(payload.count).toBe(3);
+  });
+
+  test("info does not leak env secrets", () => {
+    const r = runCli(["info", "--plain"], {
+      AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG",
+      HOOX_TOKEN: "secret-token",
+      API_KEY: "abc123",
+    });
+    expect(r.code).toBe(0);
+    const payload = JSON.parse(r.stdout) as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(
+      ["bun", "docs", "mode", "name", "package", "rich", "runtime", "version"].sort(),
+    );
+    const blob = JSON.stringify(payload);
+    expect(blob).not.toContain("wJalrXUtnFEMI");
+    expect(blob).not.toContain("secret-token");
+    expect(blob).not.toMatch(/AWS|SECRET|TOKEN|API_KEY/i);
+  });
+
+  test("run syntax error is exit 1 JSON with error", () => {
+    const file = writePine("plot(");
+    const r = cli("run", file, "--bars", "2");
+    expect(r.code).toBe(1);
+    const payload = JSON.parse(r.stdout) as { error?: string };
+    expect(payload.error).toBeDefined();
+  });
+});
+
+describe("cli parse helpers", () => {
+  test("clampBars rejects NaN and caps at MAX_BARS", () => {
+    expect(clampBars(20)).toBe(20);
+    expect(clampBars(MAX_BARS + 1)).toBe(MAX_BARS);
+    expect(clampBars(1_000_000)).toBe(MAX_BARS);
+    expect(() => clampBars(Number.NaN)).toThrow(UsageError);
+    expect(() => clampBars(Number.POSITIVE_INFINITY)).toThrow(UsageError);
+  });
+
+  test("parseArgs clamps --bars and parses broker numbers", () => {
+    const got = parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "200000", "--commission", "0.001"]);
+    expect(got.bars).toBe(MAX_BARS);
+    expect(got.commission).toBe(0.001);
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "NaN"])).toThrow(UsageError);
+    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--slippage", "Infinity"])).toThrow(
+      UsageError,
+    );
+  });
+
+  test("resolveUserFile keeps absolute paths and joins relative to cwd", () => {
+    expect(resolveUserFile("/tmp/script.pine")).toBe("/tmp/script.pine");
+    expect(resolveUserFile("script.pine")).toBe(join(process.cwd(), "script.pine"));
+    expect(() => resolveUserFile("")).toThrow(UsageError);
   });
 });

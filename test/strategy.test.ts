@@ -122,4 +122,220 @@ describe("StrategyBook broker settings", () => {
     expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
     expect(book.events).toHaveLength(1);
   });
+
+  test("pyramiding=1 allows one add then blocks", () => {
+    const book = new StrategyBook({ pyramiding: 1 });
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillEntry(1, "L2", "long", 1, 110);
+    book.fillEntry(2, "L3", "long", 1, 120);
+    expect(book.position).toEqual({ qty: 2, avgPrice: 105 });
+    expect(book.fills).toHaveLength(2);
+    expect(book.events.filter((e) => e.type === "entry")).toHaveLength(2);
+  });
+
+  test("equity is initial + realized − commission + open PnL", () => {
+    const book = new StrategyBook({ commission: 0.001 });
+    book.fillEntry(0, "L", "long", 2, 100);
+    expect(book.equity(110)).toBeCloseTo(1_000_000 + 20 - 0.2);
+    book.fillClose(1, "L", 110);
+    expect(book.equity(110)).toBeCloseTo(1_000_000 + 20 - 0.42);
+    expect(book.equity(Number.NaN)).toBeCloseTo(1_000_000 + 20 - 0.42);
+  });
+});
+
+describe("StrategyBook NaN / Inf harden", () => {
+  test("NaN/Inf qty or price is a no-op", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", Number.NaN, 100);
+    book.fillEntry(1, "L", "long", 1, Number.NaN);
+    book.fillEntry(2, "L", "long", Number.POSITIVE_INFINITY, 100);
+    book.fillEntry(3, "L", "long", 1, Number.NEGATIVE_INFINITY);
+    expect(book.position).toEqual({ qty: 0, avgPrice: null });
+    expect(book.fills).toHaveLength(0);
+    expect(book.events).toHaveLength(0);
+
+    book.fillEntry(4, "L", "long", 1, 100);
+    const snap = { ...book.position, fills: book.fills.length, events: book.events.length };
+    book.fillClose(5, "L", Number.NaN);
+    book.fillClose(6, "L", Number.POSITIVE_INFINITY);
+    expect(book.position.qty).toBe(snap.qty);
+    expect(book.position.avgPrice).toBe(100);
+    expect(book.fills).toHaveLength(snap.fills);
+    expect(book.realizedPnl).toBe(0);
+  });
+
+  test("zero qty does not flatten an open position", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 2, 100);
+    book.fillEntry(1, "S", "short", 0, 110);
+    expect(book.position).toEqual({ qty: 2, avgPrice: 100 });
+    expect(book.fills).toHaveLength(1);
+  });
+
+  test("configure ignores non-finite broker settings", () => {
+    const book = new StrategyBook({ commission: 0.001, slippage: 1, pyramiding: 0 });
+    book.configure({
+      commission: Number.NaN,
+      slippage: Number.POSITIVE_INFINITY,
+      pyramiding: Number.NaN,
+    });
+    book.fillEntry(0, "L", "long", 1, 100);
+    expect(book.fills[0]!.price).toBe(101);
+    expect(book.commissionPaid).toBeCloseTo(0.101);
+    book.fillEntry(1, "L", "long", 1, 110);
+    expect(book.position.qty).toBe(1);
+  });
+});
+
+describe("StrategyBook reverse / leftover", () => {
+  test("unequal reverse leaves exactly the new signed qty", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 2, 100);
+    book.fillEntry(1, "S", "short", 1, 110);
+    expect(book.position.qty).toBe(-1);
+    expect(book.position.avgPrice).toBe(110);
+    expect(book.position.qty).toBeGreaterThanOrEqual(-1);
+    expect(book.realizedPnl).toBe(20);
+    expect(book.events.map((e) => e.type)).toEqual(["entry", "close", "entry"]);
+  });
+
+  test("pyramiding=0 still allows an opposite flip then blocks same-dir add", () => {
+    const book = new StrategyBook({ pyramiding: 0 });
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillEntry(1, "S", "short", 1, 110);
+    expect(book.position).toEqual({ qty: -1, avgPrice: 110 });
+    book.fillEntry(2, "S2", "short", 1, 120);
+    expect(book.position).toEqual({ qty: -1, avgPrice: 110 });
+    expect(book.events.filter((e) => e.type === "entry")).toHaveLength(2);
+  });
+});
+
+describe("StrategyBook close_all / cancel", () => {
+  test("event-only entry/close do not change position", () => {
+    const book = new StrategyBook();
+    book.entry(0, "L", "long", 1);
+    book.close(1, "L");
+    book.exit(2, "X");
+    expect(book.position.qty).toBe(0);
+    expect(book.fills).toHaveLength(0);
+    expect(book.events.map((e) => e.type)).toEqual(["entry", "close", "exit"]);
+  });
+
+  test("closeAll with mark flattens and still emits close_all", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.closeAll(1, 110);
+    expect(book.position.qty).toBe(0);
+    expect(book.position.avgPrice).toBeNull();
+    expect(book.realizedPnl).toBe(10);
+    expect(book.fills).toHaveLength(2);
+    expect(book.events.map((e) => e.type)).toEqual(["entry", "close_all"]);
+  });
+
+  test("closeAll without mark is event-only", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.closeAll(1);
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+    expect(book.events.at(-1)).toEqual({ type: "close_all", id: "", bar: 1 });
+  });
+
+  test("closeAll with NaN mark does not flatten", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.closeAll(1, Number.NaN);
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+    expect(book.events.at(-1)?.type).toBe("close_all");
+  });
+
+  test("cancel and cancelAll emit events", () => {
+    const book = new StrategyBook();
+    book.cancel(0, "L");
+    book.cancelAll(1);
+    expect(book.events).toEqual([
+      { type: "cancel", id: "L", bar: 0 },
+      { type: "cancel_all", id: "", bar: 1 },
+    ]);
+    expect(book.position.qty).toBe(0);
+  });
+});
+
+describe("StrategyBook pending orders", () => {
+  test("market placeEntry fills immediately", () => {
+    const market = new StrategyBook();
+    market.fillEntry(0, "L", "long", 1, 100);
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { price: 100 });
+    expect(book.pending).toHaveLength(0);
+    expect(book.position).toEqual(market.position);
+    expect(book.fills).toEqual(market.fills);
+    expect(book.events).toEqual(market.events);
+  });
+
+  test("long limit fills when low crosses", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { limit: 100 });
+    expect(book.position.qty).toBe(0);
+    expect(book.fills).toHaveLength(0);
+    expect(book.pending).toEqual([
+      { id: "L", direction: "long", qty: 1, limit: 100, stop: null, bar: 0 },
+    ]);
+    expect(book.events).toEqual([
+      { type: "entry", id: "L", direction: "long", qty: 1, bar: 0 },
+    ]);
+
+    expect(book.processPending(1, { open: 105, high: 106, low: 101, close: 104 })).toEqual([]);
+    expect(book.position.qty).toBe(0);
+    expect(book.pending).toHaveLength(1);
+
+    expect(book.processPending(2, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["L"]);
+    expect(book.pending).toHaveLength(0);
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+    expect(book.fills).toEqual([{ bar: 2, id: "L", side: "buy", qty: 1, price: 100 }]);
+    expect(book.events.map((e) => e.type)).toEqual(["entry", "fill"]);
+  });
+
+  test("cancel removes pending so it does not fill", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { limit: 100 });
+    book.cancel(1, "L");
+    expect(book.pending).toHaveLength(0);
+    expect(book.events.map((e) => e.type)).toEqual(["entry", "cancel"]);
+    expect(book.processPending(2, { open: 105, high: 106, low: 99, close: 101 })).toEqual([]);
+    expect(book.fills).toHaveLength(0);
+    expect(book.position.qty).toBe(0);
+  });
+
+  test("long limit gaps through open", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { limit: 100 });
+    book.processPending(1, { open: 95, high: 98, low: 94, close: 96 });
+    expect(book.fills[0]?.price).toBe(95);
+    expect(book.position.avgPrice).toBe(95);
+  });
+
+  test("cancelAll drops pending", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { limit: 100 });
+    book.cancelAll(1);
+    expect(book.pending).toHaveLength(0);
+    book.processPending(2, { open: 105, high: 106, low: 99, close: 101 });
+    expect(book.fills).toHaveLength(0);
+  });
+
+  test("non-finite bar does not fill pending", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "L", "long", 1, { limit: 100 });
+    expect(
+      book.processPending(1, {
+        open: Number.NaN,
+        high: Number.POSITIVE_INFINITY,
+        low: Number.NaN,
+        close: Number.NEGATIVE_INFINITY,
+      }),
+    ).toEqual([]);
+    expect(book.pending).toHaveLength(1);
+    expect(book.fills).toHaveLength(0);
+    expect(book.position.qty).toBe(0);
+  });
 });

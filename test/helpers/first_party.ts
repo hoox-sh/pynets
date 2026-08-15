@@ -5,7 +5,7 @@
  * First-party Pine fixtures live in PYNE (`tests/fixtures/first_party`).
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 export function firstPartyDir(): string | null {
   const envRoot = process.env.PYNESCRIPT_ROOT;
@@ -22,6 +22,7 @@ export function firstPartyDir(): string | null {
 }
 
 export function readFirstParty(name: string): string | null {
+  if (name !== basename(name) || name === "" || name === "." || name === "..") return null;
   const dir = firstPartyDir();
   if (dir == null) return null;
   const path = join(dir, name);

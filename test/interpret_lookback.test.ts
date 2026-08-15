@@ -38,6 +38,13 @@ describe("interpret lookback", () => {
     expect(out.plots).toEqual([null, 1, 2, 3, 4]);
   });
 
+  test("negative / OOB lookback is na and does not throw", () => {
+    const out = interpret(`indicator("t")\nplot(close[-1])`, BARS_1_TO_5);
+    expect(out.plots).toEqual([null, null, null, null, null]);
+    const oob = interpret(`indicator("t")\nplot(close[99])`, BARS_1_TO_5);
+    expect(oob.plots).toEqual([null, null, null, null, null]);
+  });
+
   test("x = close then plot(x) stays current close", () => {
     const tree = script([
       exprStmt(call(name("indicator"), [arg(constant("t"))])),

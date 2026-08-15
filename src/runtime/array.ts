@@ -8,6 +8,9 @@
 
 export type Cell = number | null;
 
+/** Python `array.set` grows only while index < 1_000_000; same bound here. */
+export const MAX_ARRAY_SIZE = 1_000_000;
+
 function resolveIndex(index: number, length: number): number | null {
   if (!Number.isFinite(index)) return null;
   let i = Math.trunc(index);
@@ -16,13 +19,17 @@ function resolveIndex(index: number, length: number): number | null {
   return i;
 }
 
+function isFiniteCell(v: Cell): v is number {
+  return v !== null && Number.isFinite(v);
+}
+
 export class PineArray {
   private readonly cells: Cell[] = [];
 
   constructor(size?: number, initial?: Cell) {
     if (size === undefined) return;
     if (!Number.isFinite(size) || size < 0) return;
-    const n = Math.trunc(size);
+    const n = Math.min(Math.trunc(size), MAX_ARRAY_SIZE);
     const fill: Cell = initial === undefined ? null : initial;
     for (let i = 0; i < n; i++) this.cells.push(fill);
   }
@@ -45,6 +52,7 @@ export class PineArray {
   }
 
   push(value: Cell): void {
+    if (this.cells.length >= MAX_ARRAY_SIZE) return;
     this.cells.push(value);
   }
 
@@ -55,6 +63,7 @@ export class PineArray {
   }
 
   unshift(value: Cell): void {
+    if (this.cells.length >= MAX_ARRAY_SIZE) return;
     this.cells.unshift(value);
   }
 
@@ -81,6 +90,7 @@ export class PineArray {
   }
 
   insert(index: number, value: Cell): void {
+    if (this.cells.length >= MAX_ARRAY_SIZE) return;
     if (!Number.isFinite(index)) return;
     let i = Math.trunc(index);
     if (i < 0) i = this.cells.length + i;
@@ -99,10 +109,14 @@ export class PineArray {
     for (let i = 0; i < this.cells.length; i++) this.cells[i] = value;
   }
 
+  /** Half-open `[from, to)`. Python clamps `from < 0` to 0; `to < from` → empty. */
   slice(from: number, to?: number): PineArray {
-    const start = Number.isFinite(from) ? Math.trunc(from) : 0;
-    const end = to === undefined || !Number.isFinite(to) ? this.cells.length : Math.trunc(to);
+    const n = this.cells.length;
+    let start = Number.isFinite(from) ? Math.trunc(from) : 0;
+    const end = to === undefined || !Number.isFinite(to) ? n : Math.trunc(to);
+    if (start < 0) start = 0;
     const out = new PineArray();
+    if (end < start) return out;
     for (const v of this.cells.slice(start, end)) out.push(v);
     return out;
   }
@@ -127,52 +141,57 @@ export class PineArray {
   }
 
   indexof(value: Cell): Cell {
-    const i = this.cells.indexOf(value);
-    return i < 0 ? null : i;
+    for (let i = 0; i < this.cells.length; i++) {
+      if (Object.is(this.cells[i], value)) return i;
+    }
+    return null;
   }
 
   avg(): Cell {
-    if (this.cells.length === 0) return null;
-    let sum = 0;
-    for (const v of this.cells) {
-      if (v === null || !Number.isFinite(v)) return null;
-      sum += v;
-    }
-    return sum / this.cells.length;
+    const nums = this.finiteAll();
+    if (nums === null || nums.length === 0) return null;
+    let acc = 0;
+    for (const v of nums) acc += v;
+    return acc / nums.length;
   }
 
   min(): Cell {
-    if (this.cells.length === 0) return null;
-    let best: number | null = null;
-    for (const v of this.cells) {
-      if (v === null || !Number.isFinite(v)) return null;
-      if (best === null || v < best) best = v;
-    }
+    const nums = this.finiteAll();
+    if (nums === null || nums.length === 0) return null;
+    let best = nums[0]!;
+    for (const v of nums) if (v < best) best = v;
     return best;
   }
 
   max(): Cell {
-    if (this.cells.length === 0) return null;
-    let best: number | null = null;
-    for (const v of this.cells) {
-      if (v === null || !Number.isFinite(v)) return null;
-      if (best === null || v > best) best = v;
-    }
+    const nums = this.finiteAll();
+    if (nums === null || nums.length === 0) return null;
+    let best = nums[0]!;
+    for (const v of nums) if (v > best) best = v;
     return best;
   }
 
   sum(): Cell {
-    if (this.cells.length === 0) return null;
+    const nums = this.finiteAll();
+    if (nums === null || nums.length === 0) return null;
     let acc = 0;
-    for (const v of this.cells) {
-      if (v === null || !Number.isFinite(v)) return null;
-      acc += v;
-    }
+    for (const v of nums) acc += v;
     return acc;
   }
 
+  /** `na` elements stringify as empty (Python `array.join`). */
   join(sep = ","): string {
-    return this.cells.map((v) => (v === null ? "na" : String(v))).join(sep);
+    return this.cells.map((v) => (v === null ? "" : String(v))).join(sep);
+  }
+
+  /** Any `na` / non-finite cell poisons aggregates (matrix `finiteAll` contract). */
+  private finiteAll(): number[] | null {
+    const out: number[] = [];
+    for (const v of this.cells) {
+      if (!isFiniteCell(v)) return null;
+      out.push(v);
+    }
+    return out;
   }
 
   toValues(): Cell[] {

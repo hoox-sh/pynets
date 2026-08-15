@@ -2,7 +2,9 @@
  * Copyright (C) 2024-2026 jango_blockchained
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * PyneTS public surface — TypeScript counterpart of `pynescript`.
+ * Stable public surface — TypeScript counterpart of `pynescript`.
+ * parse / unparse / dump / Runtime.run match Python names. Do not re-export
+ * generated ANTLR, parser internals, or CLI helpers from this barrel.
  */
 export { dump, parse, tokenize, unparse, PinescriptSyntaxError } from "./ast/helper.ts";
 export type { ParseMode } from "./ast/helper.ts";

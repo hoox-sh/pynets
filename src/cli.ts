@@ -5,9 +5,10 @@
  *
  * PyneTS CLI with a Rich-inspired TTY UI (PYNE volt).
  * Pipe / CI stays plain: `check` prints `ok`, `run` prints JSON.
+ * Exit: 0 ok, 1 syntax/runtime, 2 usage.
  */
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import { dump, parse, unparse, Runtime } from "./index.ts";
 import type { BrokerSettings, OHLCVBar, RuntimeFill, RuntimeResult } from "./index.ts";
 import {
@@ -19,25 +20,64 @@ import {
   useRich,
 } from "./cli/rich.ts";
 
+export const MAX_BARS = 100_000;
+
+export class UsageError extends Error {
+  readonly exitCode = 2;
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
+
 function fail(ui: Rich, message: string, code = 1): never {
   if (ui.enabled) ui.status("fail", message, true);
-  else {
-    console.error(message);
-  }
+  else console.error(message);
   process.exit(code);
 }
 
+function failUsage(ui: Rich, message: string): never {
+  fail(ui, message, 2);
+}
+
+function ioCode(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err && typeof (err as { code: unknown }).code === "string") {
+    return (err as { code: string }).code;
+  }
+  return "";
+}
+
+/** Resolve only the path the user typed (cwd-relative or absolute). No search path. */
+export function resolveUserFile(file: string): string {
+  if (file == null || file === "" || file.includes("\0")) {
+    throw new UsageError("error: missing file");
+  }
+  if (isAbsolute(file)) return file;
+  return resolve(process.cwd(), file);
+}
+
 function readSource(ui: Rich, file: string): string {
+  let path: string;
   try {
-    return readFileSync(file, "utf8");
+    path = resolveUserFile(file);
   } catch (err) {
-    fail(ui, err instanceof Error ? err.message : String(err));
+    failUsage(ui, err instanceof Error ? err.message : String(err));
+  }
+  try {
+    return readFileSync(path, "utf8");
+  } catch (err) {
+    const code = ioCode(err);
+    if (code === "ENOENT") failUsage(ui, `error: file not found: ${file}`);
+    if (code === "EISDIR") failUsage(ui, `error: not a file: ${file}`);
+    if (code === "EACCES") failUsage(ui, `error: permission denied: ${file}`);
+    failUsage(ui, `error: cannot read ${file}`);
   }
 }
 
 function syntheticBars(n: number): OHLCVBar[] {
   const bars: OHLCVBar[] = [];
-  for (let i = 0; i < n; i++) {
+  const count = clampBars(n);
+  for (let i = 0; i < count; i++) {
     const close = 100 + i;
     bars.push({
       open: close,
@@ -80,19 +120,32 @@ type RuntimeOut = RuntimeResult & {
 
 const DUMP_RICH_MIN_LINES = 80;
 
-function requireUint(raw: string | undefined, flag: string): number {
-  if (raw == null || !/^\d+$/.test(raw)) {
-    throw new Error(`error: ${flag} requires a non-negative integer`);
+export function clampBars(n: number): number {
+  if (!Number.isFinite(n) || Number.isNaN(n) || n < 0) {
+    throw new UsageError("error: --bars requires a non-negative integer");
   }
-  return Number(raw);
+  return Math.min(MAX_BARS, Math.trunc(n));
+}
+
+function requireUint(raw: string | undefined, flag: string): number {
+  if (raw == null || raw === "" || !/^\d+$/.test(raw)) {
+    throw new UsageError(`error: ${flag} requires a non-negative integer`);
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || Number.isNaN(n) || n < 0 || !Number.isSafeInteger(n)) {
+    throw new UsageError(`error: ${flag} requires a non-negative integer`);
+  }
+  return n;
 }
 
 function requireNumber(raw: string | undefined, flag: string): number {
   if (raw == null || raw === "" || !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw)) {
-    throw new Error(`error: ${flag} requires a number`);
+    throw new UsageError(`error: ${flag} requires a finite number`);
   }
   const n = Number(raw);
-  if (!Number.isFinite(n)) throw new Error(`error: ${flag} requires a number`);
+  if (!Number.isFinite(n) || Number.isNaN(n)) {
+    throw new UsageError(`error: ${flag} requires a finite number`);
+  }
   return n;
 }
 
@@ -102,7 +155,7 @@ function takeValue(args: string[], i: number, flag: string): { raw: string | und
   return { raw: a.slice(flag.length + 1), next: i };
 }
 
-function parseArgs(argv: string[]): {
+export function parseArgs(argv: string[]): {
   cmd: string;
   file: string | undefined;
   bars: number;
@@ -126,6 +179,9 @@ function parseArgs(argv: string[]): {
   let pyramiding: number | undefined;
   for (let i = 1; i < args.length; i++) {
     const a = args[i]!;
+    if (a === "--help" || a === "-h") {
+      return { cmd: "help", file: undefined, bars, json, indent, full, commission, slippage, pyramiding };
+    }
     if (a === "--json") {
       json = true;
       continue;
@@ -136,16 +192,19 @@ function parseArgs(argv: string[]): {
     }
     if (a === "--bars" || a.startsWith("--bars=")) {
       const got = takeValue(args, i, "--bars");
-      bars = requireUint(got.raw, "--bars");
+      bars = clampBars(requireUint(got.raw, "--bars"));
       i = got.next;
       continue;
     }
     if (a === "--indent" || a.startsWith("--indent=")) {
       const got = takeValue(args, i, "--indent");
       if (got.raw == null || !/^\d+$/.test(got.raw)) {
-        throw new Error("error: --indent requires an integer");
+        throw new UsageError("error: --indent requires an integer");
       }
       indent = Number(got.raw);
+      if (!Number.isFinite(indent) || !Number.isSafeInteger(indent)) {
+        throw new UsageError("error: --indent requires an integer");
+      }
       i = got.next;
       continue;
     }
@@ -167,8 +226,8 @@ function parseArgs(argv: string[]): {
       i = got.next;
       continue;
     }
-    if (a.startsWith("-") && a !== "-") throw new Error(`error: unknown argument: ${a}`);
-    if (file != null) throw new Error(`error: unexpected argument: ${a}`);
+    if (a.startsWith("-") && a !== "-") throw new UsageError(`error: unknown argument: ${a}`);
+    if (file != null) throw new UsageError(`error: unexpected argument: ${a}`);
     file = a;
   }
   return { cmd, file, bars, json, indent, full, commission, slippage, pyramiding };
@@ -184,7 +243,7 @@ function check(ui: Rich, source: string, label: string): void {
   try {
     parse(source);
   } catch (err) {
-    fail(ui, err instanceof Error ? err.message : String(err));
+    fail(ui, err instanceof Error ? err.message : String(err), 1);
   }
   const ms = performance.now() - t0;
   if (ui.enabled) {
@@ -201,7 +260,7 @@ function format(ui: Rich, source: string): void {
   try {
     text = unparse(parse(source));
   } catch (err) {
-    fail(ui, err instanceof Error ? err.message : String(err));
+    fail(ui, err instanceof Error ? err.message : String(err), 1);
   }
   if (!text.endsWith("\n")) text += "\n";
   if (ui.enabled) {
@@ -261,11 +320,11 @@ function dumpAst(ui: Rich, source: string, indent: number, full: boolean): void 
   try {
     tree = parse(source);
   } catch (err) {
-    fail(ui, err instanceof Error ? err.message : String(err));
+    fail(ui, err instanceof Error ? err.message : String(err), 1);
   }
   const raw = dump(tree, { annotate_fields: true });
   if (!ui.enabled) {
-    console.log(raw);
+    process.stdout.write(`${raw}\n`);
     return;
   }
   const text = indent > 0 ? prettyAstDump(raw, indent) : raw;
@@ -275,6 +334,10 @@ function dumpAst(ui: Rich, source: string, indent: number, full: boolean): void 
   if (!full && lines.length > DUMP_RICH_MIN_LINES) {
     ui.status("info", `(truncated — ${lines.length} lines; use --full)`);
   }
+}
+
+function writeJson(value: unknown): void {
+  process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
 function runJson(out: RuntimeOut): void {
@@ -299,7 +362,7 @@ function runJson(out: RuntimeOut): void {
   if (out.fills != null) payload.fills = out.fills;
   if (out.alerts != null) payload.alerts = out.alerts;
   if (out.error != null) payload.error = out.error;
-  console.log(JSON.stringify(payload));
+  writeJson(payload);
   if (out.error != null) process.exit(1);
 }
 
@@ -395,7 +458,7 @@ function printAlerts(ui: Rich, alerts: AlertLike[] | undefined): void {
 }
 
 function runPretty(ui: Rich, label: string, bars: number, out: RuntimeOut, ms: number): void {
-  if (out.error) fail(ui, out.error);
+  if (out.error) fail(ui, out.error, 1);
   const titles = plotTitles(out);
   const lines = [
     `${ui.paint("muted", "script")}   ${ui.paint("fg", out.script_name ?? basename(label))}`,
@@ -445,7 +508,12 @@ function run(
   broker: BrokerSettings,
 ): void {
   const t0 = performance.now();
-  const out = new Runtime("AAPL", { broker }).run(source, syntheticBars(bars));
+  let out: RuntimeOut;
+  try {
+    out = new Runtime("AAPL", { broker }).run(source, syntheticBars(bars));
+  } catch (err) {
+    fail(ui, err instanceof Error ? err.message : String(err), 1);
+  }
   const ms = performance.now() - t0;
   if (asJson || !ui.enabled) {
     runJson(out);
@@ -454,8 +522,17 @@ function run(
   runPretty(ui, label, bars, out, ms);
 }
 
-function info(ui: Rich, asJson: boolean): void {
-  const payload = {
+function infoPayload(ui: Rich): {
+  name: string;
+  package: string;
+  version: string;
+  runtime: string;
+  bun: string | null;
+  mode: string;
+  rich: boolean;
+  docs: string;
+} {
+  return {
     name: "pynets",
     package: "@hoox/pynets",
     version: VERSION,
@@ -465,8 +542,12 @@ function info(ui: Rich, asJson: boolean): void {
     rich: ui.enabled,
     docs: "https://hoox.sh/pyne",
   };
+}
+
+function info(ui: Rich, asJson: boolean): void {
+  const payload = infoPayload(ui);
   if (asJson || !ui.enabled) {
-    console.log(JSON.stringify(payload, null, ui.enabled ? 2 : 0));
+    writeJson(payload);
     return;
   }
   ui.banner();
@@ -492,7 +573,8 @@ function main(): void {
   try {
     parsed = parseArgs(argv);
   } catch (err) {
-    fail(ui, err instanceof Error ? err.message : String(err));
+    const msg = err instanceof Error ? err.message : String(err);
+    failUsage(ui, msg);
   }
 
   const { cmd, file, bars, json, indent, full } = parsed;
@@ -506,32 +588,40 @@ function main(): void {
     return;
   }
 
-  const needsFile = cmd === "check" || cmd === "format" || cmd === "run" || cmd === "dump";
-  if (needsFile && file == null) {
-    ui.help();
-    process.exit(1);
+  const known = cmd === "check" || cmd === "format" || cmd === "run" || cmd === "dump";
+  if (!known) {
+    failUsage(ui, `error: unknown command: ${cmd}`);
+  }
+
+  if (file == null) {
+    failUsage(ui, `error: missing file\nusage: pynets ${cmd} <file> [options]`);
   }
 
   if (cmd === "check") {
-    check(ui, readSource(ui, file!), file!);
+    check(ui, readSource(ui, file), file);
     return;
   }
   if (cmd === "format") {
-    format(ui, readSource(ui, file!));
+    format(ui, readSource(ui, file));
     return;
   }
   if (cmd === "dump") {
-    dumpAst(ui, readSource(ui, file!), indent, full || raw.includes("--full"));
+    dumpAst(ui, readSource(ui, file), indent, full);
     return;
   }
   if (cmd === "run") {
-    run(ui, readSource(ui, file!), file!, bars, json, broker);
+    run(ui, readSource(ui, file), file, bars, json, broker);
     return;
   }
-  ui.help();
-  process.exit(1);
+  failUsage(ui, `error: unknown command: ${cmd}`);
 }
 
 if (import.meta.main) {
-  main();
+  try {
+    main();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    process.exit(err instanceof UsageError ? 2 : 1);
+  }
 }

@@ -20,4 +20,15 @@ describe("lexer indent / dedent", () => {
     expect(toks.indexOf("INDENT")).toBeLessThan(toks.indexOf("NAME"));
     expect(toks.lastIndexOf("DEDENT")).toBeGreaterThan(toks.indexOf("NAME"));
   });
+
+  test("4-space indent is one INDENT; operator line-join hides NEWLINE", () => {
+    const indented = names("if true\n    x = 1\n");
+    expect(indented.filter((t) => t === "INDENT")).toHaveLength(1);
+    expect(indented.filter((t) => t === "DEDENT")).toHaveLength(1);
+
+    const joined = names("x = 1 +\n    2\n");
+    expect(joined).not.toContain("INDENT");
+    expect(joined).toContain("PLUS");
+    expect(joined.filter((t) => t === "NEWLINE")).toHaveLength(1);
+  });
 });

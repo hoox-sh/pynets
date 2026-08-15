@@ -21,18 +21,18 @@ function pack(r: number, g: number, b: number, a: number): Color {
   return { r: clampByte(r), g: clampByte(g), b: clampByte(b), a: clampByte(a) };
 }
 
-/** Parse `#RRGGBB` / `#RRGGBBAA`. Alpha defaults to 255. */
-export function parseColor(hex: string | null | undefined): Color | null {
-  if (hex == null) return null;
+/** Parse `#RRGGBB` / `#RRGGBBAA`. Alpha defaults to 255. Invalid / na → `null` (no throw). */
+export function parseColor(hex: unknown): Color | null {
+  if (typeof hex !== "string") return null;
   const m = HEX.exec(hex.trim());
   if (!m) return null;
   const h = m[1]!;
-  return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
-    a: h.length === 8 ? parseInt(h.slice(6, 8), 16) : 255,
-  };
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) : 255;
+  if (![r, g, b, a].every((c) => Number.isFinite(c))) return null;
+  return { r, g, b, a };
 }
 
 /** `color.new(r, g, b, t?)` — `t` is transparency 0–100 → alpha. */

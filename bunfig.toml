@@ -1,0 +1,3 @@
+[test]
+# CLI spawn loads ANTLR; keep a headroom above the 5s default.
+timeout = 30000

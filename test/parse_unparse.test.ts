@@ -34,12 +34,44 @@ describe("parse / unparse", () => {
     expect(unparse(tree)).toBe("close + 1");
   });
 
-  test("parse('plot(') throws", () => {
+  test("parse('plot(') throws PinescriptSyntaxError with lineno/col_offset", () => {
     expect(() => parse("plot(")).toThrow(PinescriptSyntaxError);
+    try {
+      parse("plot(");
+      throw new Error("expected parse to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PinescriptSyntaxError);
+      const pe = err as PinescriptSyntaxError;
+      expect(pe.lineno).toBe(1);
+      expect(typeof pe.col_offset).toBe("number");
+      expect(pe.col_offset).toBeGreaterThanOrEqual(0);
+    }
   });
 
   test("unparse emits //@version annotation", () => {
     const src = unparse(parse(PLOT_CLOSE));
     expect(src.startsWith("//@version=5")).toBe(true);
+  });
+
+  test("m[1, 2] unparses as comma slice and re-parses", () => {
+    const tree = parse("x = m[1, 2]");
+    expect(unparse(tree)).toBe("x = m[1, 2]");
+    expect(dump(parse(unparse(tree)))).toBe(dump(tree));
+  });
+
+  test("function / switch / for round-trip by dump", () => {
+    const src = `f(x) => x + 1
+y = switch
+    close > 0 => 1
+    => 0
+for i = 0 to 3
+    plot(i)
+`;
+    const tree = parse(src);
+    const dumped = dump(tree);
+    expect(dumped).toContain("FunctionDef");
+    expect(dumped).toContain("Switch");
+    expect(dumped).toContain("ForTo");
+    expect(dump(parse(unparse(tree)))).toBe(dumped);
   });
 });

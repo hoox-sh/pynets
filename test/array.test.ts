@@ -119,3 +119,70 @@ describe("PineArray constructor / helpers", () => {
     expect(a.toValues()).toEqual([1, 2, 3]);
   });
 });
+
+describe("PineArray na-safe mutators / queries", () => {
+  test("push / unshift accept na; pop / shift / first / last empty → na", () => {
+    const a = new PineArray();
+    expect(a.first()).toBeNull();
+    expect(a.last()).toBeNull();
+    expect(a.pop()).toBeNull();
+    expect(a.shift()).toBeNull();
+    a.push(null);
+    a.unshift(1);
+    expect(a.toValues()).toEqual([1, null]);
+    expect(a.includes(null)).toBe(true);
+    expect(a.includes(1)).toBe(true);
+    expect(a.indexof(null)).toBe(1);
+    expect(a.shift()).toBe(1);
+    expect(a.pop()).toBeNull();
+    expect(a.size()).toBe(0);
+  });
+
+  test("sum / avg / min / max poison on any na or non-finite", () => {
+    const a = new PineArray();
+    expect(a.sum()).toBeNull();
+    expect(a.avg()).toBeNull();
+    expect(a.min()).toBeNull();
+    expect(a.max()).toBeNull();
+    a.push(1);
+    a.push(3);
+    expect(a.sum()).toBe(4);
+    expect(a.avg()).toBe(2);
+    expect(a.min()).toBe(1);
+    expect(a.max()).toBe(3);
+    a.push(null);
+    expect(a.sum()).toBeNull();
+    expect(a.avg()).toBeNull();
+    expect(a.min()).toBeNull();
+    expect(a.max()).toBeNull();
+    const b = new PineArray();
+    b.push(1);
+    b.push(Number.NaN);
+    expect(b.sum()).toBeNull();
+    b.set(1, Infinity);
+    expect(b.avg()).toBeNull();
+  });
+
+  test("insert / remove / slice stay na-safe on bad indexes", () => {
+    const a = new PineArray();
+    a.push(10);
+    a.push(20);
+    a.insert(Number.NaN, 99);
+    a.insert(Infinity, 99);
+    expect(a.toValues()).toEqual([10, 20]);
+    expect(a.remove(2)).toBeNull();
+    expect(a.remove(Number.NaN)).toBeNull();
+    expect(a.remove(-3)).toBeNull();
+    expect(a.toValues()).toEqual([10, 20]);
+    expect(a.slice(-5, 1).toValues()).toEqual([10]);
+    expect(a.slice(2, 1).toValues()).toEqual([]);
+    expect(a.slice(Number.NaN).toValues()).toEqual([10, 20]);
+  });
+
+  test("constructor rejects non-finite / negative size without throwing", () => {
+    expect(new PineArray(Number.NaN).size()).toBe(0);
+    expect(new PineArray(-1).size()).toBe(0);
+    expect(new PineArray(Infinity).size()).toBe(0);
+    expect(new PineArray(2.9, 7).toValues()).toEqual([7, 7]);
+  });
+});

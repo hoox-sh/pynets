@@ -77,6 +77,9 @@ interface VwmaState {
   period: number;
   srcWindow: Cell[];
   volWindow: Cell[];
+  sumPv: number;
+  sumV: number;
+  naCount: number;
 }
 
 interface CrossState {
@@ -116,6 +119,8 @@ interface AlmaState {
 interface CmoState {
   period: number;
   window: Cell[];
+  up: number;
+  down: number;
 }
 
 interface KamaState {
@@ -143,14 +148,56 @@ interface PivotState {
   n: number;
 }
 
+interface MfiState {
+  period: number;
+  tps: Cell[];
+  mfs: Cell[];
+}
+
+interface SarState {
+  start: number;
+  increment: number;
+  maximum: number;
+  started: boolean;
+  sar: Cell;
+  ep: Cell;
+  trend: number;
+  af: number;
+}
+
+interface AdxState {
+  period: number;
+  prevH: Cell;
+  prevL: Cell;
+  prevC: Cell;
+  n: number;
+}
+
+interface DmiState {
+  diLen: number;
+  prevH: Cell;
+  prevL: Cell;
+  prevC: Cell;
+}
+
+interface CorrState {
+  length: number;
+  a: Cell[];
+  b: Cell[];
+}
+
 function finiteCell(value: Cell): Cell {
   return value !== null && Number.isFinite(value) ? value : null;
 }
 
-/** Pine length: finite, trunc toward 0, must be >= 1. */
+/** Near-integer floats round (14.0000000001 → 14); else floor. Python `_float_to_period_int`. */
+const PERIOD_INT_EPS = 1e-9;
+
+/** Pine length: finite, >= 1 after near-int round / floor. */
 function pinePeriod(period: number): number | null {
   if (!Number.isFinite(period) || period <= 0) return null;
-  const n = Math.trunc(period);
+  const nearest = Math.round(period);
+  const n = Math.abs(period - nearest) <= PERIOD_INT_EPS ? nearest : Math.floor(period);
   return n > 0 ? n : null;
 }
 
@@ -202,6 +249,13 @@ export class TaEngine {
   private readonly obvSites = new Map<string, ObvState>();
   private readonly pivotHighSites = new Map<string, PivotState>();
   private readonly pivotLowSites = new Map<string, PivotState>();
+  private readonly mfiSites = new Map<string, MfiState>();
+  private readonly sarSites = new Map<string, SarState>();
+  private readonly adxSites = new Map<string, AdxState>();
+  private readonly dmiSites = new Map<string, DmiState>();
+  private readonly correlationSites = new Map<string, CorrState>();
+  private readonly highestBarsSites = new Map<string, HighestLowestState>();
+  private readonly lowestBarsSites = new Map<string, HighestLowestState>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -314,7 +368,7 @@ export class TaEngine {
 
     const x = finiteCell(source);
     // NA source: emit na and leave Wilder state untouched.
-    if (x === null) return null;
+    if (x === null) return null; // leave Wilder state untouched (no NaN-poison)
 
     const prev = st.prev;
     st.prev = x;
@@ -600,12 +654,12 @@ export class TaEngine {
     return st.sum;
   }
 
-  /** `100 * (source - source[length]) / source[length]`. na if lookback missing or denom 0. */
+  /** `100 * (source - source[length]) / source[length]`. na if lookback missing, denom 0, or length<=0. */
   roc(site: string, source: Cell, length: number): Cell {
-    if (!Number.isFinite(length) || length < 0) return null;
+    if (!Number.isFinite(length) || length <= 0) return null;
     const n = Math.trunc(length);
     const x = finiteCell(source);
-    if (n === 0) return x === null || x === 0 ? null : 0;
+    if (n <= 0) return null;
     let st = this.rocSites.get(site);
     if (st === undefined || st.length !== n) {
       st = { length: n, window: [] };
@@ -631,27 +685,29 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.vwmaSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, srcWindow: [], volWindow: [] };
+      st = { period: n, srcWindow: [], volWindow: [], sumPv: 0, sumV: 0, naCount: 0 };
       this.vwmaSites.set(site, st);
     }
+    const s = finiteCell(source);
+    const v = finiteCell(volume);
     if (st.srcWindow.length === n) {
-      st.srcWindow.shift();
-      st.volWindow.shift();
+      const oldS = st.srcWindow.shift()!;
+      const oldV = st.volWindow.shift()!;
+      if (oldS === null || oldV === null) st.naCount -= 1;
+      else {
+        st.sumPv -= oldS * oldV;
+        st.sumV -= oldV;
+      }
     }
-    st.srcWindow.push(finiteCell(source));
-    st.volWindow.push(finiteCell(volume));
-    if (st.srcWindow.length < n) return null;
-    let sumPv = 0;
-    let sumV = 0;
-    for (let i = 0; i < n; i++) {
-      const s = st.srcWindow[i];
-      const v = st.volWindow[i];
-      if (s == null || v == null) return null;
-      sumPv += s * v;
-      sumV += v;
+    st.srcWindow.push(s);
+    st.volWindow.push(v);
+    if (s === null || v === null) st.naCount += 1;
+    else {
+      st.sumPv += s * v;
+      st.sumV += v;
     }
-    if (sumV === 0) return null;
-    return sumPv / sumV;
+    if (st.srcWindow.length < n || st.naCount > 0 || st.sumV === 0) return null;
+    return st.sumPv / st.sumV;
   }
 
   /** CCI: (tp - sma(tp)) / (0.015 * meanDev). Any na in window → na. */
@@ -850,12 +906,12 @@ export class TaEngine {
    * `0` = current bar is the high; `-n+1` = oldest bar.
    */
   highestbars(site: string, source: Cell, period: number): Cell {
-    return this.extremeBars(this.highestSites, site, source, period, true);
+    return this.extremeBars(this.highestBarsSites, site, source, period, true);
   }
 
   /** Offset of the lowest in the window (negative TV style). */
   lowestbars(site: string, source: Cell, period: number): Cell {
-    return this.extremeBars(this.lowestSites, site, source, period, false);
+    return this.extremeBars(this.lowestBarsSites, site, source, period, false);
   }
 
   private extremeBars(
@@ -867,10 +923,10 @@ export class TaEngine {
   ): Cell {
     const n = pinePeriod(period);
     if (n === null) return null;
-    let st = sites.get(`${site}:bars`);
+    let st = sites.get(site);
     if (st === undefined || st.period !== n) {
       st = { period: n, window: [] };
-      sites.set(`${site}:bars`, st);
+      sites.set(site, st);
     }
     if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
@@ -880,7 +936,8 @@ export class TaEngine {
     for (let i = 0; i < st.window.length; i++) {
       const v = st.window[i];
       if (v === null) continue;
-      if (best === null || (highest ? v >= best : v <= best)) {
+      // Strict compare so ties keep the oldest bar (Python `_highestbars`).
+      if (best === null || (highest ? v > best : v < best)) {
         best = v;
         bestI = i;
       }
@@ -893,8 +950,9 @@ export class TaEngine {
   alma(site: string, source: Cell, period: number, offset = 0.85, sigma = 6): Cell {
     const n = pinePeriod(period);
     if (n === null) return null;
-    const off = Number.isFinite(offset) ? offset : 0.85;
-    const sig = Number.isFinite(sigma) ? sigma : 6;
+    if (!Number.isFinite(offset) || !Number.isFinite(sigma)) return null;
+    const off = offset;
+    const sig = sigma;
     let st = this.almaSites.get(site);
     if (st === undefined || st.period !== n || st.offset !== off || st.sigma !== sig) {
       const m = off * (n - 1);
@@ -927,34 +985,41 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.cmoSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: [], up: 0, down: 0 };
       this.cmoSites.set(site, st);
     }
-    if (st.window.length === n + 1) st.window.shift();
-    st.window.push(finiteCell(source));
-    if (st.window.length < n + 1) return null;
-    let up = 0;
-    let down = 0;
-    let prev: Cell = null;
-    for (const v of st.window) {
-      if (prev !== null && v !== null) {
-        const d = v - prev;
-        if (d > 0) up += d;
-        else down += -d;
+    const x = finiteCell(source);
+    if (st.window.length === n + 1) {
+      const old = st.window[0]!;
+      const nxt = st.window[1]!;
+      if (old !== null && nxt !== null) {
+        const d = nxt - old;
+        if (d > 0) st.up -= d;
+        else st.down -= -d;
       }
-      prev = v;
+      st.window.shift();
     }
-    const denom = up + down;
+    const prev = st.window.length === 0 ? null : st.window[st.window.length - 1]!;
+    st.window.push(x);
+    if (prev !== null && x !== null) {
+      const d = x - prev;
+      if (d > 0) st.up += d;
+      else st.down += -d;
+    }
+    if (st.window.length < n + 1) return null;
+    const denom = st.up + st.down;
     if (denom === 0) return 0;
-    return (100 * (up - down)) / denom;
+    return (100 * (st.up - st.down)) / denom;
   }
 
   /** Kaufman AMA. First output on bar index `length` (need length+1 samples). */
   kama(site: string, source: Cell, period: number, fast = 2, slow = 30): Cell {
     const n = pinePeriod(period);
     if (n === null) return null;
-    const f = Number.isFinite(fast) && fast > 0 ? Math.trunc(fast) : 2;
-    const sl = Number.isFinite(slow) && slow > 0 ? Math.trunc(slow) : 30;
+    const f = Number.isFinite(fast) ? Math.trunc(fast) : 2;
+    const sl = Number.isFinite(slow) ? Math.trunc(slow) : 30;
+    // 2/(fast+1) / 2/(slow+1) — reject the singular -1 case (NaN-poison).
+    if (f === -1 || sl === -1) return null;
     let st = this.kamaSites.get(site);
     if (st === undefined || st.period !== n || st.fast !== f || st.slow !== sl) {
       st = {
@@ -1069,5 +1134,331 @@ export class TaEngine {
       if (high ? leftVal >= current : leftVal <= current) return null;
     }
     return current;
+  }
+
+  /**
+   * Hull MA: WMA(2*WMA(n/2)-WMA(n), sqrt(n)).
+   * Nested wma sites `${site}:half` / `:full` / `:sqrt` (`_hma_inc_update`).
+   */
+  hma(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    const half = Math.max(1, Math.trunc(n / 2));
+    const sqrtN = Math.max(1, Math.trunc(Math.sqrt(n)));
+    const wh = this.wma(`${site}:half`, source, half);
+    const wf = this.wma(`${site}:full`, source, n);
+    const raw = wh === null || wf === null ? null : 2 * wh - wf;
+    return this.wma(`${site}:sqrt`, raw, sqrtN);
+  }
+
+  /**
+   * Money Flow Index. Needs `period+1` typical prices; equal TP is neither side.
+   * Only +MF → 100; only −MF → 0; both 0 → 50 (`_mfi_inc_update`).
+   */
+  mfi(
+    site: string,
+    high: Cell,
+    low: Cell,
+    close: Cell,
+    volume: Cell,
+    period: number,
+  ): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.mfiSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, tps: [], mfs: [] };
+      this.mfiSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const c = finiteCell(close);
+    if (st.tps.length === n + 1) {
+      st.tps.shift();
+      st.mfs.shift();
+    }
+    if (h === null || l === null || c === null) {
+      st.tps.push(null);
+      st.mfs.push(null);
+      return null;
+    }
+    const vol = finiteCell(volume) ?? 0;
+    const tp = (h + l + c) / 3;
+    st.tps.push(tp);
+    st.mfs.push(tp * vol);
+    if (st.tps.length <= n) return null;
+
+    let pos = 0;
+    let neg = 0;
+    const startK = st.tps.length - n;
+    for (let k = startK; k < st.tps.length; k++) {
+      const tpCur = st.tps[k]!;
+      const tpPrev = st.tps[k - 1]!;
+      const mf = st.mfs[k]!;
+      if (tpCur === null || tpPrev === null || mf === null) return null;
+      if (tpCur > tpPrev) pos += mf;
+      else if (tpCur < tpPrev) neg += mf;
+    }
+    if (neg === 0) return pos === 0 ? 50 : 100;
+    const ratio = pos / neg;
+    return 100 - 100 / (1 + ratio);
+  }
+
+  /**
+   * Parabolic SAR. First valid bar is low; leading na stays na (`_sar_inc_update`).
+   */
+  sar(
+    site: string,
+    high: Cell,
+    low: Cell,
+    start = 0.02,
+    increment = 0.02,
+    maximum = 0.2,
+  ): Cell {
+    if (!Number.isFinite(start) || !Number.isFinite(increment) || !Number.isFinite(maximum)) {
+      return null;
+    }
+    const startF = start;
+    const incF = increment;
+    const maxF = maximum;
+    let st = this.sarSites.get(site);
+    if (
+      st === undefined ||
+      st.start !== startF ||
+      st.increment !== incF ||
+      st.maximum !== maxF
+    ) {
+      st = {
+        start: startF,
+        increment: incF,
+        maximum: maxF,
+        started: false,
+        sar: null,
+        ep: null,
+        trend: 1,
+        af: startF,
+      };
+      this.sarSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    if (!st.started) {
+      if (h === null || l === null) return null;
+      st.started = true;
+      st.sar = l;
+      st.ep = h;
+      st.trend = 1;
+      st.af = startF;
+      return l;
+    }
+    const previous = st.sar;
+    const ep = st.ep;
+    if (previous === null || h === null || l === null || ep === null) return previous;
+    let trend = st.trend;
+    let af = st.af;
+    let epF = ep;
+    let sarV: number;
+    if (trend === 1) {
+      sarV = previous + af * (epF - previous);
+      if (h > epF) {
+        epF = h;
+        af = Math.min(af + incF, maxF);
+      }
+      if (sarV > l) {
+        trend = -1;
+        sarV = epF;
+        epF = l;
+        af = startF;
+      }
+    } else {
+      sarV = previous - af * (previous - epF);
+      if (l < epF) {
+        epF = l;
+        af = Math.min(af + incF, maxF);
+      }
+      if (sarV < h) {
+        trend = 1;
+        sarV = epF;
+        epF = h;
+        af = startF;
+      }
+    }
+    st.sar = sarV;
+    st.ep = epF;
+    st.trend = trend;
+    st.af = af;
+    return Number.isFinite(sarV) ? sarV : null;
+  }
+
+  /**
+   * ADX (nan-first DM). Early bars and unseeded ATR/DX → 0 (`_adx_inc_update`).
+   */
+  adx(site: string, high: Cell, low: Cell, close: Cell, length: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null) return 0;
+    let st = this.adxSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, prevH: null, prevL: null, prevC: null, n: 0 };
+      this.adxSites.set(site, st);
+    }
+    let tr: Cell;
+    let plusDm: Cell;
+    let minusDm: Cell;
+    if (st.prevH === null || st.prevL === null || st.prevC === null) {
+      tr = null;
+      plusDm = null;
+      minusDm = null;
+    } else {
+      const hf = high !== null && Number.isFinite(high) ? high : Number.NaN;
+      const lf = low !== null && Number.isFinite(low) ? low : Number.NaN;
+      const trRaw = Math.max(
+        hf - lf,
+        Math.abs(hf - st.prevC),
+        Math.abs(lf - st.prevC),
+      );
+      tr = Number.isFinite(trRaw) ? trRaw : null;
+      const highDiff = hf - st.prevH;
+      const lowDiff = st.prevL - lf;
+      plusDm = highDiff > lowDiff && highDiff > 0 ? highDiff : 0;
+      minusDm = lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0;
+    }
+    st.prevH = finiteCell(high);
+    st.prevL = finiteCell(low);
+    st.prevC = finiteCell(close);
+    st.n += 1;
+
+    const atr = this.rma(`${site}:tr`, tr, n);
+    const pd = this.rma(`${site}:pdm`, plusDm, n);
+    const md = this.rma(`${site}:mdm`, minusDm, n);
+    if (st.n < n) return 0;
+    if (atr === null) return 0;
+
+    let dxIn: Cell;
+    if (pd === null || md === null) {
+      dxIn = null;
+    } else {
+      const plusDi = atr !== 0 ? 100 * pd / atr : 0;
+      const minusDi = atr !== 0 ? 100 * md / atr : 0;
+      const denom = plusDi + minusDi;
+      dxIn = denom !== 0 ? 100 * Math.abs(plusDi - minusDi) / denom : 0;
+    }
+    const adxV = this.rma(`${site}:dx`, dxIn, n);
+    return adxV === null ? 0 : adxV;
+  }
+
+  /**
+   * DMI: 0-first +DI/−DI (RMA diLength) + nan-first ADX via `${site}:adx`.
+   */
+  dmi(
+    site: string,
+    high: Cell,
+    low: Cell,
+    close: Cell,
+    diLength: number,
+    adxSmoothing: number,
+  ): { plus: Cell; minus: Cell; adx: Cell } {
+    const diN = pinePeriod(diLength);
+    if (diN === null) return { plus: null, minus: null, adx: null };
+    let st = this.dmiSites.get(site);
+    if (st === undefined || st.diLen !== diN) {
+      st = { diLen: diN, prevH: null, prevL: null, prevC: null };
+      this.dmiSites.set(site, st);
+    }
+    let tr: Cell;
+    let plusDm: number;
+    let minusDm: number;
+    if (st.prevH === null || st.prevL === null || st.prevC === null) {
+      tr = null;
+      plusDm = 0;
+      minusDm = 0;
+    } else {
+      const hf = finiteCell(high) ?? 0;
+      const lf = finiteCell(low) ?? 0;
+      const ph = st.prevH;
+      const pl = st.prevL;
+      const pc = st.prevC;
+      tr = Math.max(hf - lf, Math.abs(hf - pc), Math.abs(lf - pc));
+      const highDiff = hf - ph;
+      const lowDiff = pl - lf;
+      plusDm = highDiff > lowDiff && highDiff > 0 ? highDiff : 0;
+      minusDm = lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0;
+    }
+    st.prevH = finiteCell(high);
+    st.prevL = finiteCell(low);
+    st.prevC = finiteCell(close);
+
+    const atr = this.rma(`${site}:tr`, tr, diN);
+    const pd = this.rma(`${site}:pdm`, plusDm, diN);
+    const md = this.rma(`${site}:mdm`, minusDm, diN);
+    let plus: Cell;
+    let minus: Cell;
+    if (atr === null) {
+      plus = null;
+      minus = null;
+    } else if (atr === 0) {
+      plus = 0;
+      minus = 0;
+    } else {
+      plus = 100 * (pd ?? 0) / atr;
+      minus = 100 * (md ?? 0) / atr;
+    }
+    const adx = this.adx(`${site}:adx`, high, low, close, adxSmoothing);
+    return { plus, minus, adx };
+  }
+
+  /**
+   * Pearson correlation over `length` samples (na pairs skipped).
+   * `length<2`, short window, <2 pairs, or zero variance → na.
+   */
+  correlation(site: string, a: Cell, b: Cell, length: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null || n < 2) return null;
+    let st = this.correlationSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, a: [], b: [] };
+      this.correlationSites.set(site, st);
+    }
+    if (st.a.length === n) {
+      st.a.shift();
+      st.b.shift();
+    }
+    st.a.push(finiteCell(a));
+    st.b.push(finiteCell(b));
+    if (st.a.length < n) return null;
+
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const x = st.a[i]!;
+      const y = st.b[i]!;
+      if (x !== null && y !== null) {
+        xs.push(x);
+        ys.push(y);
+      }
+    }
+    if (xs.length < 2) return null;
+    const m = xs.length;
+    let mx = 0;
+    let my = 0;
+    for (let i = 0; i < m; i++) {
+      mx += xs[i]!;
+      my += ys[i]!;
+    }
+    mx /= m;
+    my /= m;
+    let num = 0;
+    let denx = 0;
+    let deny = 0;
+    for (let i = 0; i < m; i++) {
+      const dx = xs[i]! - mx;
+      const dy = ys[i]! - my;
+      num += dx * dy;
+      denx += dx * dx;
+      deny += dy * dy;
+    }
+    const sx = Math.sqrt(denx);
+    const sy = Math.sqrt(deny);
+    if (sx === 0 || sy === 0) return null;
+    return num / (sx * sy);
   }
 }

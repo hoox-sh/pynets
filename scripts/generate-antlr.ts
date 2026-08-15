@@ -61,8 +61,12 @@ function resolveGrammar(): string {
   console.error(
     [
       "missing PinescriptLexer.g4 / PinescriptParser.g4",
+      "looked at:",
+      envGrammar ? `  PYNETS_GRAMMAR=${resolve(envGrammar)}` : "  PYNETS_GRAMMAR (unset)",
+      envRoot ? `  PYNESCRIPT_ROOT → ${join(resolve(envRoot), GRAMMAR_REL)}` : "  PYNESCRIPT_ROOT (unset)",
+      ...candidates.map((dir) => `  ${dir}`),
       "clone hoox-sh/pyne next to this repo, use this repo as the pynets/ submodule of pyne,",
-      "or set PYNESCRIPT_ROOT / PYNETS_GRAMMAR",
+      "or set PYNESCRIPT_ROOT (checkout root) / PYNETS_GRAMMAR (directory with the two .g4 files)",
     ].join("\n"),
   );
   process.exit(1);

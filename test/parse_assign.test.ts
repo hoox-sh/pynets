@@ -40,4 +40,35 @@ describe("parse assign", () => {
     expect(src).toContain("plot(close)");
     expect(dump(parse(src))).toBe(dumped);
   });
+
+  test("x = switch is one Assign with Switch value, not a sibling Switch", () => {
+    const src = `x = switch
+    close > 0 => 1
+    => 0
+`;
+    const tree = parse(src);
+    expect(tree.kind).toBe("Script");
+    const dumped = dump(tree);
+    expect(dumped).toContain("Assign");
+    expect(dumped).toContain("Switch");
+    expect(tree).toMatchObject({
+      kind: "Script",
+      body: [{ kind: "Assign", value: { kind: "Switch" } }],
+    });
+    expect(dump(parse(unparse(tree)))).toBe(dumped);
+  });
+
+  test("x := switch is one ReAssign with Switch value", () => {
+    const src = `x := switch
+    1 => 2
+    => 0
+`;
+    const tree = parse(src);
+    const dumped = dump(tree);
+    expect(tree).toMatchObject({
+      kind: "Script",
+      body: [{ kind: "ReAssign", value: { kind: "Switch" } }],
+    });
+    expect(dump(parse(unparse(tree)))).toBe(dumped);
+  });
 });

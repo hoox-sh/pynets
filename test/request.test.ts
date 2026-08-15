@@ -5,7 +5,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   isRequestBuiltin,
+  lastRequestSeed,
+  resolveCurrencyRate,
+  resolveForeignNa,
+  resolveRequest,
   resolveSecurity,
+  resolveSeed,
   timeframeMinutes,
 } from "../src/runtime/request.ts";
 
@@ -137,10 +142,122 @@ describe("isRequestBuiltin", () => {
     expect(isRequestBuiltin("request.security_lower_tf")).toBe(true);
   });
 
+  test("fundamentals and other request names resolve", () => {
+    expect(isRequestBuiltin("request.dividends")).toBe(true);
+    expect(isRequestBuiltin("request.earnings")).toBe(true);
+    expect(isRequestBuiltin("request.splits")).toBe(true);
+    expect(isRequestBuiltin("request.financial")).toBe(true);
+    expect(isRequestBuiltin("request.economic")).toBe(true);
+    expect(isRequestBuiltin("request.quandl")).toBe(true);
+    expect(isRequestBuiltin("request.currency_rate")).toBe(true);
+    expect(isRequestBuiltin("request.seed")).toBe(true);
+    expect(isRequestBuiltin("request.footprint")).toBe(true);
+  });
+
   test("other names are not request builtins", () => {
-    expect(isRequestBuiltin("request.dividends")).toBe(false);
     expect(isRequestBuiltin("security")).toBe(false);
+    expect(isRequestBuiltin("ta.sma")).toBe(false);
     expect(isRequestBuiltin(null)).toBe(false);
     expect(isRequestBuiltin(undefined)).toBe(false);
+  });
+});
+
+describe("resolveCurrencyRate", () => {
+  test("identical currencies are 1.0", () => {
+    expect(resolveCurrencyRate("USD", "USD")).toBe(1);
+    expect(resolveCurrencyRate("usd", "USD")).toBe(1);
+    expect(resolveCurrencyRate("EUR", "eur")).toBe(1);
+    expect(resolveCurrencyRate("USDUSD")).toBe(1);
+    expect(resolveCurrencyRate("USD/USD")).toBe(1);
+  });
+
+  test("cross rates are na (no invented FX)", () => {
+    expect(resolveCurrencyRate("USD", "EUR")).toBeNull();
+    expect(resolveCurrencyRate("EURUSD")).toBeNull();
+  });
+});
+
+describe("resolveForeignNa", () => {
+  test("foreign financial is na", () => {
+    expect(resolveForeignNa()).toBeNull();
+    expect(
+      resolveRequest("request.financial", { symbol: "AAPL" }, { symbol: "MSFT" }),
+    ).toBeNull();
+    expect(
+      resolveRequest("request.dividends", { symbol: "AAPL" }, { symbol: "MSFT" }),
+    ).toBeNull();
+    expect(
+      resolveRequest("request.earnings", { symbol: "AAPL" }, { symbol: "MSFT" }),
+    ).toBeNull();
+    expect(
+      resolveRequest("request.splits", { symbol: "AAPL" }, { symbol: "MSFT" }),
+    ).toBeNull();
+    expect(
+      resolveRequest("request.economic", { symbol: "AAPL" }, ["US", "UNRATE"]),
+    ).toBeNull();
+    expect(
+      resolveRequest("request.quandl", { symbol: "AAPL" }, ["EIA/PET_RWTC_D"]),
+    ).toBeNull();
+    expect(resolveRequest("request.footprint", { symbol: "AAPL" }, [100, 70])).toBeNull();
+  });
+});
+
+describe("resolveSeed", () => {
+  test("records seed and returns na", () => {
+    expect(resolveSeed(42)).toBeNull();
+    expect(lastRequestSeed()).toBe(42);
+    expect(resolveRequest("request.seed", { symbol: "AAPL" }, { seed: 7 })).toBeNull();
+    expect(lastRequestSeed()).toBe(7);
+  });
+});
+
+describe("resolveRequest security unchanged", () => {
+  test("same-symbol passthrough", () => {
+    expect(
+      resolveRequest(
+        "request.security",
+        { symbol: "AAPL", timeframe: "D" },
+        { symbol: "AAPL", timeframe: "D", sameSymbolValue: 42 },
+      ),
+    ).toBe(42);
+  });
+
+  test("foreign stays na", () => {
+    expect(
+      resolveRequest(
+        "request.security",
+        { symbol: "AAPL", timeframe: "D" },
+        { symbol: "MSFT", timeframe: "D", sameSymbolValue: 42 },
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("resolveSecurity non-finite / empty harden", () => {
+  test("non-finite same-symbol value is na", () => {
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, Number.NaN),
+    ).toBeNull();
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, Number.POSITIVE_INFINITY),
+    ).toBeNull();
+    expect(
+      resolveSecurity("AAPL", "15", { symbol: "AAPL", timeframe: "60" }, Number.NEGATIVE_INFINITY),
+    ).toBeNull();
+  });
+
+  test("empty symbol + null timeframe still passthrough finite value", () => {
+    expect(resolveSecurity("AAPL", "D", { symbol: "", timeframe: null }, 12)).toBe(12);
+    expect(resolveSecurity("AAPL", null, { symbol: "   ", timeframe: undefined }, 12)).toBe(12);
+  });
+
+  test("empty symbol does not invent a foreign close", () => {
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "MSFT", timeframe: null }, 185.5),
+    ).toBeNull();
+  });
+
+  test("null args object is treated as chart passthrough", () => {
+    expect(resolveSecurity("AAPL", "D", null as unknown as { symbol?: string }, 4)).toBe(4);
   });
 });

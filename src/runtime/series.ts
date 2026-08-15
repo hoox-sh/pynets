@@ -25,12 +25,17 @@ export class PineSeries {
     return this.data.length === 0 ? NA : this.data[this.data.length - 1]!;
   }
 
-  /** `offset` bars ago. `0` is current; negative / OOB is `na`. */
+  /** `offset` bars ago. `0` is current; negative / non-finite / OOB is `na`. */
   get(offset: number): Cell {
-    if (!Number.isFinite(offset) || offset < 0) return NA;
-    const idx = this.data.length - 1 - Math.trunc(offset);
-    if (idx < 0 || idx >= this.data.length) return NA;
-    return this.data[idx]!;
+    if (typeof offset !== "number" || !Number.isFinite(offset) || offset < 0) return NA;
+    const n = this.data.length;
+    if (n === 0) return NA;
+    const idx = n - 1 - Math.trunc(offset);
+    if (idx < 0 || idx >= n) return NA;
+    const v = this.data[idx];
+    if (v == null) return NA;
+    if (typeof v === "number" && !Number.isFinite(v)) return NA;
+    return v;
   }
 
   get length(): number {
