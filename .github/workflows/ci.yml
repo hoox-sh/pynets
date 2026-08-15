@@ -38,9 +38,24 @@ jobs:
         env:
           NO_COLOR: "1"
 
+      - name: Build Node / browser bundles
+        run: bun run build
+        timeout-minutes: 5
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Node bundle smoke
+        run: |
+          node --input-type=module -e '
+          import { parse, Runtime } from "./dist/index.js";
+          const src = "//@version=5\nindicator(\"t\")\nplot(close)";
+          if (parse(src).kind !== "Script") throw new Error("parse");
+          const out = new Runtime("T").run(src, [{ close: 1 }, { close: 2 }]);
+          if (out.plots[1] !== 2) throw new Error(String(out.error ?? out.plots));
+          console.log("node bundle ok");
+          '
 
       - name: Pack dry-run
         run: npm pack --dry-run

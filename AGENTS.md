@@ -14,6 +14,7 @@ bun install
 bun test                 # unit tests (bun native runner)
 bun test test/foo.test.ts
 bun run typecheck        # tsc --noEmit (excludes src/generated)
+bun run build            # Node + browser ESM → dist/ (gitignored)
 bun run src/cli.ts -- help
 bun run generate         # ANTLR TS regen — needs Java + PYNE .g4
 ```

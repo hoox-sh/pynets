@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Node / browser ESM bundles** (`bun run build` → `dist/index.js`, `dist/browser.js`, `dist/index.d.ts`). Bun still imports `src/index.ts`. `prepack` builds before `npm pack`.
+
 ## [0.1.0] - 2026-08-15
 
 First public `@hoox/pynets` release. TypeScript / Bun port of PYNE interpret.

@@ -26,12 +26,31 @@ const out = new Runtime("AAPL").run(src, [
 // out.plots, out.series, out.count
 ```
 
-Install with Bun (published TypeScript source):
+Install with Bun (published TypeScript source — no bundle needed):
 
 ```bash
 bun add @hoox/pynets
 bunx pynets -- help
 ```
+
+Node and browsers use the Bun-built ESM in `dist/` (`bun run build`; `npm pack` runs it via `prepack`):
+
+```bash
+# Node 20+
+npm install @hoox/pynets
+```
+
+```js
+import { parse, Runtime } from "@hoox/pynets";
+```
+
+```html
+<script type="module">
+  import { Runtime } from "https://esm.sh/@hoox/pynets";
+</script>
+```
+
+The CLI still needs Bun on `PATH`. This is not a Cloudflare Worker package.
 
 <p align="center">
   <img src="docs/assets/cli-help.png" alt="pynets -- help" width="720" />

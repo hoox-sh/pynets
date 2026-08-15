@@ -32,30 +32,40 @@
   },
   "files": [
     "src",
+    "dist",
     "LICENSE",
     "NOTICE",
     "README.md",
     "CHANGELOG.md"
   ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "browser": "./dist/browser.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
       "bun": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "bin": {
     "pynets": "./src/cli.ts"
   },
   "engines": {
-    "bun": ">=1.2.0"
+    "bun": ">=1.2.0",
+    "node": ">=20"
   },
   "scripts": {
     "generate": "bun run scripts/generate-antlr.ts",
+    "build": "bun run scripts/build.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "pynets": "bun run src/cli.ts",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "bun run build && npm pack --dry-run",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "antlr4": "4.13.2"
