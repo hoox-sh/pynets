@@ -1558,6 +1558,60 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       lenArg(node, env, 1),
     );
   }
+  if (fname === "ta.alma" || fname === "alma") {
+    if (typeof ta.alma !== "function") return NA;
+    return (ta.alma as TaEngine["alma"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+      lenOrDefault(node, env, 2, ["offset"], 0.85),
+      lenOrDefault(node, env, 3, ["sigma"], 6),
+    );
+  }
+  if (fname === "ta.cmo" || fname === "cmo") {
+    if (typeof ta.cmo !== "function") return NA;
+    return (ta.cmo as TaEngine["cmo"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.kama" || fname === "kama") {
+    if (typeof ta.kama !== "function") return NA;
+    return (ta.kama as TaEngine["kama"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+      lenOrDefault(node, env, 2, ["fastLength", "fast", "fastlen"], 2),
+      lenOrDefault(node, env, 3, ["slowLength", "slow", "slowlen"], 30),
+    );
+  }
+  if (fname === "ta.obv" || fname === "obv") {
+    if (typeof ta.obv !== "function") return NA;
+    const cArg = callArg(node.args, 0, ["source", "close"]);
+    const vArg = callArg(node.args, 1, ["volume"]);
+    const close = cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
+    const volume = vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
+    return (ta.obv as TaEngine["obv"]).call(env.ta, site, close, volume);
+  }
+  if (fname === "ta.pivothigh" || fname === "pivothigh") {
+    if (typeof ta.pivothigh !== "function") return NA;
+    return (ta.pivothigh as TaEngine["pivothigh"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenOrDefault(node, env, 1, ["leftbars", "left"], 5),
+      lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
+    );
+  }
+  if (fname === "ta.pivotlow" || fname === "pivotlow") {
+    if (typeof ta.pivotlow !== "function") return NA;
+    return (ta.pivotlow as TaEngine["pivotlow"]).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenOrDefault(node, env, 1, ["leftbars", "left"], 5),
+      lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
+    );
+  }
   return undefined;
 }
 
@@ -1806,6 +1860,62 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     const v = unwrap(evalExpr(callArg(node.args, 1, ["value"]), env));
     m?.fill(v);
     return NA;
+  }
+  if (name === "matrix.transpose") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.transpose() : NA;
+  }
+  if (name === "matrix.copy") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.copy() : NA;
+  }
+  if (name === "matrix.elements_count") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.elementsCount() : NA;
+  }
+  if (name === "matrix.is_square") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isSquare() ? 1 : 0;
+  }
+  if (name === "matrix.sum" || name === "matrix.sum_all") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.sum() : NA;
+  }
+  if (name === "matrix.avg" || name === "matrix.avg_all") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.avg() : NA;
+  }
+  if (name === "matrix.min" || name === "matrix.min_all") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.min() : NA;
+  }
+  if (name === "matrix.max" || name === "matrix.max_all") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.max() : NA;
+  }
+  if (name === "matrix.trace") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.trace() : NA;
+  }
+  if (name === "matrix.det") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.det() : NA;
+  }
+  if (name === "matrix.row") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    if (!m || i == null) return NA;
+    const arr = new PineArray();
+    for (const v of m.row(i)) arr.push(v);
+    return arr;
+  }
+  if (name === "matrix.col" || name === "matrix.column") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["column", "col", "index"]), env));
+    if (!m || i == null) return NA;
+    const arr = new PineArray();
+    for (const v of m.col(i)) arr.push(v);
+    return arr;
   }
   return undefined;
 }

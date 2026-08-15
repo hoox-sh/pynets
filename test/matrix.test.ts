@@ -56,6 +56,36 @@ describe("PineMatrix OOB / na-safe get", () => {
   });
 });
 
+describe("PineMatrix aggregates / det", () => {
+  test("sum avg min max trace det", () => {
+    const m = new PineMatrix(2, 2, 0);
+    m.set(0, 0, 1);
+    m.set(0, 1, 2);
+    m.set(1, 0, 3);
+    m.set(1, 1, 4);
+    expect(m.sum()).toBe(10);
+    expect(m.avg()).toBe(2.5);
+    expect(m.min()).toBe(1);
+    expect(m.max()).toBe(4);
+    expect(m.trace()).toBe(5);
+    expect(m.det()).toBeCloseTo(-2);
+    expect(m.elementsCount()).toBe(4);
+    expect(m.isSquare()).toBe(true);
+    const c = m.copy();
+    m.set(0, 0, 99);
+    expect(c.get(0, 0)).toBe(1);
+  });
+
+  test("na element poisons sum; non-square det is na", () => {
+    const m = new PineMatrix(2, 2, 1);
+    m.set(0, 1, null);
+    expect(m.sum()).toBeNull();
+    const rect = new PineMatrix(2, 3, 1);
+    expect(rect.det()).toBeNull();
+    expect(rect.isSquare()).toBe(false);
+  });
+});
+
 describe("PineMatrix transpose", () => {
   test("transpose swaps rows and columns", () => {
     const m = new PineMatrix(2, 3, 0);

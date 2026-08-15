@@ -103,6 +103,26 @@ plot(close)`,
   });
 });
 
+describe("matrix extras", () => {
+  test("matrix.det / transpose / sum", () => {
+    const out = new Runtime("TEST").run(
+      `indicator("t")
+m = matrix.new<float>(2, 2, 0)
+matrix.set(m, 0, 0, 1)
+matrix.set(m, 0, 1, 2)
+matrix.set(m, 1, 0, 3)
+matrix.set(m, 1, 1, 4)
+plot(matrix.det(m))
+plot(matrix.sum(m), title="sum")
+plot(matrix.trace(m), title="tr")`,
+      BARS,
+    );
+    expect(out.plots[0]).toBeCloseTo(-2);
+    expect(out.series.sum?.[0]).toBe(10);
+    expect(out.series.tr?.[0]).toBe(5);
+  });
+});
+
 describe("ta extras", () => {
   test("ta.cross / ta.bbw resolve", () => {
     const cross = interpret(`indicator("t")\nplot(ta.cross(close, 3))`, BARS);
@@ -110,5 +130,18 @@ describe("ta extras", () => {
     const bbw = interpret(`indicator("t")\nplot(ta.bbw(close, 3, 2))`, BARS);
     expect(bbw.plots.slice(0, 2).every((v) => v == null)).toBe(true);
     expect(typeof bbw.plots[4]).toBe("number");
+  });
+
+  test("ta.cmo / ta.obv / ta.alma resolve", () => {
+    const cmo = interpret(`indicator("t")\nplot(ta.cmo(close, 3))`, BARS);
+    expect(cmo.plots.slice(0, 3).every((v) => v == null)).toBe(true);
+    expect(typeof cmo.plots[4]).toBe("number");
+    const obv = interpret(`indicator("t")\nplot(ta.obv())`, BARS);
+    expect(obv.plots[0]).toBe(0);
+    expect(obv.plots[1]).toBe(0);
+    expect(typeof obv.plots[4]).toBe("number");
+    const alma = interpret(`indicator("t")\nplot(ta.alma(close, 3))`, BARS);
+    expect(alma.plots[0]).toBeNull();
+    expect(typeof alma.plots[4]).toBe("number");
   });
 });

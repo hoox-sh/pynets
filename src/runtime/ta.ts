@@ -104,6 +104,45 @@ interface RiseFallState {
   started: boolean;
 }
 
+interface AlmaState {
+  period: number;
+  offset: number;
+  sigma: number;
+  window: Cell[];
+  weights: number[];
+  wsum: number;
+}
+
+interface CmoState {
+  period: number;
+  window: Cell[];
+}
+
+interface KamaState {
+  period: number;
+  fast: number;
+  slow: number;
+  prices: number[];
+  diffs: number[];
+  vol: number;
+  kama: number | null;
+  seeded: boolean;
+  bars: number;
+}
+
+interface ObvState {
+  prev: Cell;
+  obv: number;
+  bars: number;
+}
+
+interface PivotState {
+  left: number;
+  right: number;
+  window: Cell[];
+  n: number;
+}
+
 function finiteCell(value: Cell): Cell {
   return value !== null && Number.isFinite(value) ? value : null;
 }
@@ -157,6 +196,12 @@ export class TaEngine {
   private readonly vwapSites = new Map<string, VwapState>();
   private readonly risingSites = new Map<string, RiseFallState>();
   private readonly fallingSites = new Map<string, RiseFallState>();
+  private readonly almaSites = new Map<string, AlmaState>();
+  private readonly cmoSites = new Map<string, CmoState>();
+  private readonly kamaSites = new Map<string, KamaState>();
+  private readonly obvSites = new Map<string, ObvState>();
+  private readonly pivotHighSites = new Map<string, PivotState>();
+  private readonly pivotLowSites = new Map<string, PivotState>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -842,5 +887,187 @@ export class TaEngine {
     }
     if (bestI < 0) return null;
     return bestI - (st.window.length - 1);
+  }
+
+  /** Arnaud Legoux MA. na in window → na. Defaults offset=0.85, sigma=6. */
+  alma(site: string, source: Cell, period: number, offset = 0.85, sigma = 6): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    const off = Number.isFinite(offset) ? offset : 0.85;
+    const sig = Number.isFinite(sigma) ? sigma : 6;
+    let st = this.almaSites.get(site);
+    if (st === undefined || st.period !== n || st.offset !== off || st.sigma !== sig) {
+      const m = off * (n - 1);
+      const s = sig === 0 ? 0 : n / sig;
+      const weights: number[] = [];
+      let wsum = 0;
+      for (let i = 0; i < n; i++) {
+        const w = s === 0 ? 1 : Math.exp(-((i - m) ** 2) / (2 * s * s));
+        weights.push(w);
+        wsum += w;
+      }
+      st = { period: n, offset: off, sigma: sig, window: [], weights, wsum };
+      this.almaSites.set(site, st);
+    }
+    if (st.window.length === n) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n || st.wsum === 0) return null;
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const v = st.window[i];
+      if (v == null) return null;
+      total += v * st.weights[i]!;
+    }
+    return total / st.wsum;
+  }
+
+  /** Chande Momentum Oscillator. Window of length+1; denom 0 → 0. */
+  cmo(site: string, source: Cell, period: number): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    let st = this.cmoSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, window: [] };
+      this.cmoSites.set(site, st);
+    }
+    if (st.window.length === n + 1) st.window.shift();
+    st.window.push(finiteCell(source));
+    if (st.window.length < n + 1) return null;
+    let up = 0;
+    let down = 0;
+    let prev: Cell = null;
+    for (const v of st.window) {
+      if (prev !== null && v !== null) {
+        const d = v - prev;
+        if (d > 0) up += d;
+        else down += -d;
+      }
+      prev = v;
+    }
+    const denom = up + down;
+    if (denom === 0) return 0;
+    return (100 * (up - down)) / denom;
+  }
+
+  /** Kaufman AMA. First output on bar index `length` (need length+1 samples). */
+  kama(site: string, source: Cell, period: number, fast = 2, slow = 30): Cell {
+    const n = pinePeriod(period);
+    if (n === null) return null;
+    const f = Number.isFinite(fast) && fast > 0 ? Math.trunc(fast) : 2;
+    const sl = Number.isFinite(slow) && slow > 0 ? Math.trunc(slow) : 30;
+    let st = this.kamaSites.get(site);
+    if (st === undefined || st.period !== n || st.fast !== f || st.slow !== sl) {
+      st = {
+        period: n,
+        fast: f,
+        slow: sl,
+        prices: [],
+        diffs: [],
+        vol: 0,
+        kama: null,
+        seeded: false,
+        bars: 0,
+      };
+      this.kamaSites.set(site, st);
+    }
+    const x = finiteCell(source);
+    if (x === null) return null;
+    const prev = st.prices.length === 0 ? null : st.prices[st.prices.length - 1]!;
+    if (st.prices.length === n + 1) st.prices.shift();
+    st.prices.push(x);
+    st.bars += 1;
+    if (prev !== null) {
+      const d = Math.abs(x - prev);
+      if (st.diffs.length === n) st.vol -= st.diffs.shift()!;
+      st.diffs.push(d);
+      st.vol += d;
+    }
+    if (!st.seeded) {
+      if (st.bars < n) return null;
+      st.kama = x;
+      st.seeded = true;
+      return null;
+    }
+    const oldest = st.prices[0]!;
+    const change = Math.abs(x - oldest);
+    const volatility = st.vol;
+    let sc: number;
+    if (volatility !== 0) {
+      const efficiency = change / volatility;
+      const fastest = 2 / (f + 1);
+      const slowest = 2 / (sl + 1);
+      const smoothing = efficiency * (fastest - slowest) + slowest;
+      sc = smoothing * smoothing;
+    } else {
+      sc = (2 / (sl + 1)) ** 2;
+    }
+    st.kama = (st.kama ?? x) + sc * (x - (st.kama ?? x));
+    return st.kama;
+  }
+
+  /**
+   * On-Balance Volume. Python `_obv`: 0 until 3 samples; then signed volume
+   * from index 2 onward.
+   */
+  obv(site: string, close: Cell, volume: Cell): Cell {
+    let st = this.obvSites.get(site);
+    if (st === undefined) {
+      st = { prev: null, obv: 0, bars: 0 };
+      this.obvSites.set(site, st);
+    }
+    const c = finiteCell(close);
+    const v = finiteCell(volume) ?? 0;
+    st.bars += 1;
+    if (st.bars < 3) {
+      st.prev = c;
+      return 0;
+    }
+    if (c !== null && st.prev !== null) {
+      if (c > st.prev) st.obv += v;
+      else if (c < st.prev) st.obv -= v;
+    }
+    st.prev = c;
+    return st.obv;
+  }
+
+  /** Left-only pivothigh (Python incremental). */
+  pivothigh(site: string, source: Cell, left: number, right: number): Cell {
+    return this.pivotStep(this.pivotHighSites, site, source, left, right, true);
+  }
+
+  /** Left-only pivotlow (Python incremental). */
+  pivotlow(site: string, source: Cell, left: number, right: number): Cell {
+    return this.pivotStep(this.pivotLowSites, site, source, left, right, false);
+  }
+
+  private pivotStep(
+    sites: Map<string, PivotState>,
+    site: string,
+    source: Cell,
+    left: number,
+    right: number,
+    high: boolean,
+  ): Cell {
+    if (!Number.isFinite(left) || !Number.isFinite(right) || left < 0 || right < 0) return null;
+    const L = Math.trunc(left);
+    const R = Math.trunc(right);
+    let st = sites.get(site);
+    if (st === undefined || st.left !== L || st.right !== R) {
+      st = { left: L, right: R, window: [], n: 0 };
+      sites.set(site, st);
+    }
+    const need = L + 1;
+    if (st.window.length === need) st.window.shift();
+    st.window.push(finiteCell(source));
+    st.n += 1;
+    if (st.n <= L + R || st.window.length < need) return null;
+    const current = st.window[st.window.length - 1];
+    if (current === null) return null;
+    for (let i = 1; i <= L; i++) {
+      const leftVal = st.window[st.window.length - 1 - i];
+      if (leftVal === null) continue;
+      if (high ? leftVal >= current : leftVal <= current) return null;
+    }
+    return current;
   }
 }
