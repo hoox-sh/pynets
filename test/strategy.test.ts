@@ -339,3 +339,106 @@ describe("StrategyBook pending orders", () => {
     expect(book.position.qty).toBe(0);
   });
 });
+
+describe("StrategyBook trade ledger", () => {
+  test("long 1@100 close@110 → one winning closed trade", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    expect(book.opentrades).toBe(1);
+    expect(book.openTrades).toHaveLength(1);
+    expect(book.openEntryPrice(0)).toBe(100);
+    expect(book.openEntryBar(0)).toBe(0);
+    expect(book.openSize(0)).toBe(1);
+    expect(book.openId(0)).toBe("L");
+    expect(book.openProfit(0, 105)).toBe(5);
+    expect(book.closedtrades).toBe(0);
+    expect(book.closedCount).toBe(0);
+
+    book.fillClose(1, "L", 110);
+    expect(book.openTrades).toHaveLength(0);
+    expect(book.opentrades).toBe(0);
+    expect(book.closedtrades).toBe(1);
+    expect(book.closedCount).toBe(1);
+    expect(book.closedTrades).toHaveLength(1);
+    expect(book.closedTrades[0]?.profit).toBe(10);
+    expect(book.wintrades).toBe(1);
+    expect(book.losstrades).toBe(0);
+    expect(book.eventrades).toBe(0);
+    expect(book.grossprofit).toBe(10);
+    expect(book.grossloss).toBe(0);
+    expect(book.closedEntryPrice(0)).toBe(100);
+    expect(book.closedExitPrice(0)).toBe(110);
+    expect(book.closedEntryBar(0)).toBe(0);
+    expect(book.closedExitBar(0)).toBe(1);
+    expect(book.closedProfit(0)).toBe(10);
+    expect(book.closedSize(0)).toBe(1);
+    expect(book.closedId(0)).toBe("L");
+    expect(book.closedCommission(0)).toBe(0);
+    expect(book.avgTrade()).toBe(10);
+    expect(book.avgWinningTrade()).toBe(10);
+    expect(book.avgLosingTrade()).toBe(0);
+
+    expect(book.closedTrade(1)).toBeNull();
+    expect(book.closedEntryPrice(1)).toBeNull();
+    expect(book.closedProfit(-1)).toBeNull();
+    expect(book.openTrade(0)).toBeNull();
+    expect(book.openEntryPrice(0)).toBeNull();
+    expect(book.openProfit(0, 110)).toBeNull();
+  });
+
+  test("closed profit subtracts commission", () => {
+    const book = new StrategyBook({ commission: 0.001 });
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillClose(1, "L", 110);
+    expect(book.closedProfit(0)).toBeCloseTo(10 - 0.21);
+    expect(book.closedCommission(0)).toBeCloseTo(0.21);
+    expect(book.wintrades).toBe(1);
+  });
+
+  test("reverse leftover closes the old trade then opens the new", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillEntry(1, "S", "short", 1, 110);
+    expect(book.closedtrades).toBe(1);
+    expect(book.closedProfit(0)).toBe(10);
+    expect(book.closedId(0)).toBe("L");
+    expect(book.wintrades).toBe(1);
+    expect(book.opentrades).toBe(1);
+    expect(book.openTrade(0)?.direction).toBe("short");
+    expect(book.openEntryPrice(0)).toBe(110);
+    expect(book.openId(0)).toBe("S");
+    expect(book.openProfit(0, 100)).toBe(10);
+  });
+
+  test("same-dir add merges into one open trade", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillEntry(1, "L", "long", 1, 110);
+    expect(book.opentrades).toBe(1);
+    expect(book.openSize(0)).toBe(2);
+    expect(book.openEntryPrice(0)).toBe(105);
+    book.fillClose(2, "L", 120);
+    expect(book.closedtrades).toBe(1);
+    expect(book.closedSize(0)).toBe(2);
+    expect(book.closedProfit(0)).toBe(30);
+  });
+
+  test("order is a placeEntry alias", () => {
+    const book = new StrategyBook();
+    book.order(0, "L", "long", 1, { price: 100 });
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+    expect(book.opentrades).toBe(1);
+    expect(book.openId(0)).toBe("L");
+  });
+
+  test("losing short increments losstrades and grossloss", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "S", "short", 1, 100);
+    book.fillClose(1, "S", 110);
+    expect(book.closedProfit(0)).toBe(-10);
+    expect(book.wintrades).toBe(0);
+    expect(book.losstrades).toBe(1);
+    expect(book.grossloss).toBe(10);
+    expect(book.avgLosingTrade()).toBe(10);
+  });
+});

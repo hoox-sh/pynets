@@ -21,6 +21,8 @@ import type {
   ForIn,
   ForTo,
   FunctionDef,
+  TypeDef,
+  EnumDef,
   Param,
   ReAssign,
   Script,
@@ -31,7 +33,32 @@ import type {
   stmt,
 } from "../ast/nodes.ts";
 import { PineArray } from "./array.ts";
-import { colorNew, parseColor, type Color } from "./color.ts";
+import {
+  colorByName,
+  colorFromGradient,
+  colorNew,
+  colorR,
+  colorRgb,
+  parseColor,
+  type Color,
+} from "./color.ts";
+import {
+  EnumMember,
+  EnumType,
+  UdtInstance,
+  UdtType,
+  enumTypeFromNames,
+  udtTypeFromAssigns,
+} from "./udt.ts";
+import {
+  timeframeFromSeconds,
+  timeframeInSeconds,
+  timeframeIsDaily,
+  timeframeIsIntraday,
+  timeframeIsMonthly,
+  timeframeIsWeekly,
+  timeframeMultiplier as tfMultiplier,
+} from "./timeframe.ts";
 import { DrawingBook, type DrawingEvent } from "./drawings.ts";
 import { LogBook, formatLogParts, type LogRecord } from "./log.ts";
 import { MemoryProvider, type BarProvider } from "./provider.ts";
@@ -157,7 +184,11 @@ type Value =
   | PineArray
   | PineMap
   | PineMatrix
-  | TickerId;
+  | TickerId
+  | UdtType
+  | UdtInstance
+  | EnumType
+  | EnumMember;
 
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
@@ -409,6 +440,11 @@ export function interpretTree(
         low: num(env.ctx.low) ?? undefined,
         close: num(env.ctx.close) ?? undefined,
       });
+      env.book.markOpenTrades(
+        num(env.ctx.high) ?? num(env.ctx.close) ?? 0,
+        num(env.ctx.low) ?? num(env.ctx.close) ?? 0,
+        num(env.ctx.close) ?? 0,
+      );
 
       try {
         for (const stmt of body) {
@@ -536,13 +572,18 @@ function bindDerived(env: Env, id: string, value: Cell): void {
   }
 }
 
-function callName(node: Call): string | null {
-  if (node.func.kind === "Name") return node.func.id;
-  if (node.func.kind === "Attribute") {
-    const base = node.func.value.kind === "Name" ? node.func.value.id : null;
-    return base ? `${base}.${node.func.attr}` : node.func.attr;
+function attrPath(node: expr): string | null {
+  if (node.kind === "Name") return node.id;
+  if (node.kind === "Attribute") {
+    const base = attrPath(node.value);
+    return base ? `${base}.${node.attr}` : node.attr;
   }
   return null;
+}
+
+function callName(node: Call): string | null {
+  if (node.func.kind === "Name") return node.func.id;
+  return attrPath(node.func);
 }
 
 function asArgs(args: Arg | Arg[] | null | undefined): Arg[] {
@@ -785,6 +826,15 @@ function evalReAssign(stmt: ReAssign, env: Env): Value {
     unpackTuple(stmt.target, packed, env);
     return packed;
   }
+  if (stmt.target.kind === "Attribute") {
+    const obj = evalExpr(stmt.target.value, env);
+    const value = evalExpr(stmt.value, env);
+    if (obj instanceof UdtInstance) {
+      obj.set(stmt.target.attr, value);
+      return value;
+    }
+    return NA;
+  }
   if (stmt.target.kind !== "Name") return NA;
   const value = evalExpr(stmt.value, env);
   bindName(env, stmt.target.id, value);
@@ -834,6 +884,14 @@ function execStmt(
 ): Value {
   if (stmt.kind === "FunctionDef") {
     registerUdf(stmt as FunctionDef, env);
+    return NA;
+  }
+  if (stmt.kind === "TypeDef") {
+    registerTypeDef(stmt as TypeDef, env);
+    return NA;
+  }
+  if (stmt.kind === "EnumDef") {
+    registerEnumDef(stmt as EnumDef, env);
     return NA;
   }
   if (stmt.kind === "Assign") {
@@ -1133,10 +1191,21 @@ function evalAttribute(node: Attribute, env: Env): Value {
         return q * (mark - avg);
       }
       if (node.attr === "equity") return env.book.equity(num(env.ctx.close) ?? 0);
-      if (node.attr === "opentrades") return env.book.position.qty === 0 ? 0 : 1;
-      if (node.attr === "closedtrades") return env.book.closedCount;
+      if (node.attr === "opentrades") return env.book.opentrades;
+      if (node.attr === "closedtrades") return env.book.closedtrades;
+      if (node.attr === "wintrades") return env.book.wintrades;
+      if (node.attr === "losstrades") return env.book.losstrades;
+      if (node.attr === "eventrades") return env.book.eventrades;
+      if (node.attr === "grossprofit") return env.book.grossprofit;
+      if (node.attr === "grossloss") return env.book.grossloss;
+      if (node.attr === "avg_trade") return env.book.avgTrade();
+      if (node.attr === "avg_winning_trade") return env.book.avgWinningTrade();
+      if (node.attr === "avg_losing_trade") return env.book.avgLosingTrade();
       if (node.attr === "initial_capital") return env.book.initialCapital;
       if (node.attr === "commission") return 0;
+      if (node.attr === "cash") return "cash";
+      if (node.attr === "fixed") return "fixed";
+      if (node.attr === "percent_of_equity") return "percent_of_equity";
     }
     if (node.value.id === "syminfo") {
       if (node.attr === "ticker" || node.attr === "tickerid") return env.symbol;
@@ -1147,11 +1216,15 @@ function evalAttribute(node: Attribute, env: Env): Value {
     }
     if (node.value.id === "timeframe") {
       if (node.attr === "period") return env.timeframe ?? "";
-      if (node.attr === "multiplier") return timeframeMultiplier(env.timeframe);
-      if (node.attr === "isintraday") {
-        const p = env.timeframe ?? "";
-        return p === "" || /[SHm]/.test(p) || /^\d+$/.test(p) ? 1 : 0;
-      }
+      if (node.attr === "multiplier") return tfMultiplier(env.timeframe);
+      if (node.attr === "isintraday") return timeframeIsIntraday(env.timeframe) ? 1 : 0;
+      if (node.attr === "isdaily") return timeframeIsDaily(env.timeframe) ? 1 : 0;
+      if (node.attr === "isweekly") return timeframeIsWeekly(env.timeframe) ? 1 : 0;
+      if (node.attr === "ismonthly") return timeframeIsMonthly(env.timeframe) ? 1 : 0;
+    }
+    if (node.value.id === "color") {
+      const named = colorByName(node.attr);
+      if (named) return named;
     }
     if (node.value.id === "barstate") {
       const last = env.barIndex === env.barCount - 1;
@@ -1186,6 +1259,17 @@ function evalAttribute(node: Attribute, env: Env): Value {
       const taAttr = evalTaAttr(node.attr, env);
       if (taAttr !== undefined) return taAttr;
     }
+  }
+  const obj = evalExpr(node.value, env);
+  if (obj instanceof UdtInstance) {
+    const v = obj.get(node.attr);
+    if (typeof v === "number" || v === null || typeof v === "string") return v as Value;
+    if (v instanceof UdtInstance || v instanceof EnumMember) return v;
+    return NA;
+  }
+  if (obj instanceof UdtType && node.attr === "new") return obj;
+  if (obj instanceof EnumType) {
+    return obj.members.get(node.attr) ?? NA;
   }
   return NA;
 }
@@ -1273,6 +1357,8 @@ function isNaVal(value: Value): boolean {
 function valuesEq(left: Value, right: Value): boolean {
   if (isNaVal(left) && isNaVal(right)) return true;
   if (isNaVal(left) || isNaVal(right)) return false;
+  if (left instanceof EnumMember) return left.equals(right);
+  if (right instanceof EnumMember) return right.equals(left);
   if (typeof left === "string" || typeof right === "string") return left === right;
   if (typeof left === "number" && typeof right === "number") return left === right;
   return left === right;
@@ -1389,6 +1475,14 @@ function evalCall(node: Call, env: Env): Value {
     else env.logs.error(env.barIndex, msg);
     return NA;
   }
+  if (fname === "timeframe.in_seconds") {
+    const p = evalAsString(callArg(node.args, 0, ["timeframe", "period"]), env) ?? env.timeframe;
+    return timeframeInSeconds(p);
+  }
+  if (fname === "timeframe.from_seconds") {
+    const s = unwrap(evalExpr(callArg(node.args, 0, ["seconds"]), env));
+    return s == null ? NA : timeframeFromSeconds(s);
+  }
   if (fname === "runtime.error") {
     const parts = asArgs(node.args).map((a) => {
       const v = evalExpr(a.value, env);
@@ -1444,7 +1538,10 @@ function evalCall(node: Call, env: Env): Value {
     return NA;
   }
   if (fname === "strategy.close") {
-    env.book.close(env.barIndex, evalId(callArg(node.args, 0, ["id"])));
+    const id = evalId(callArg(node.args, 0, ["id"]));
+    const mark = num(env.ctx.close);
+    if (env.book.position.qty !== 0 && mark != null) env.book.fillClose(env.barIndex, id, mark);
+    else env.book.close(env.barIndex, id);
     return NA;
   }
   if (fname === "strategy.exit") {
@@ -1462,6 +1559,32 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "strategy.cancel_all") {
     env.book.cancelAll(env.barIndex);
     return NA;
+  }
+  if (fname === "strategy.order") {
+    const id = evalId(callArg(node.args, 0, ["id"]));
+    const dir = evalDirection(callArg(node.args, 1, ["direction"]), env);
+    const qtyRaw = unwrap(evalExpr(callArg(node.args, 2, ["qty"]), env));
+    const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? Number.NaN : qtyRaw;
+    env.book.order(env.barIndex, id, dir, qty, {
+      limit: unwrap(evalExpr(callArg(node.args, -1, ["limit"]), env)),
+      stop: unwrap(evalExpr(callArg(node.args, -1, ["stop"]), env)),
+      price: num(env.ctx.close) ?? undefined,
+    });
+    return NA;
+  }
+  const tradeVal = evalStrategyTradeCall(fname, node, env);
+  if (tradeVal !== undefined) return tradeVal;
+  if (fname != null && fname.endsWith(".new")) {
+    const typeName = fname.slice(0, -4);
+    const t = ctxGet(env, typeName);
+    if (t instanceof UdtType) {
+      const overrides: Record<string, unknown> = {};
+      for (const a of asArgs(node.args)) {
+        const key = argKeyword(a);
+        if (key) overrides[key] = evalExpr(a.value, env);
+      }
+      return t.newInstance(overrides);
+    }
   }
   if (fname != null) {
     const udf = env.udfs.get(fname);
@@ -1694,6 +1817,45 @@ function evalAsString(node: expr | undefined, env: Env): string | null {
   if (node.kind === "Constant" && typeof node.value === "string") return node.value;
   const v = evalExpr(node, env);
   return typeof v === "string" ? v : null;
+}
+
+function evalStrategyTradeCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname == null || !fname.startsWith("strategy.")) return undefined;
+  const idx = unwrap(evalExpr(callArg(node.args, 0, ["trade_num", "trade_index", "index"]), env));
+  const i = idx == null ? 0 : Math.trunc(idx);
+  const mark = num(env.ctx.close) ?? 0;
+  const book = env.book;
+  switch (fname) {
+    case "strategy.closedtrades.entry_bar_index":
+      return book.closedEntryBar(i);
+    case "strategy.closedtrades.entry_price":
+      return book.closedEntryPrice(i);
+    case "strategy.closedtrades.exit_bar_index":
+      return book.closedExitBar(i);
+    case "strategy.closedtrades.exit_price":
+      return book.closedExitPrice(i);
+    case "strategy.closedtrades.profit":
+      return book.closedProfit(i);
+    case "strategy.closedtrades.size":
+      return book.closedSize(i);
+    case "strategy.closedtrades.entry_id":
+    case "strategy.closedtrades.exit_id":
+      return book.closedId(i);
+    case "strategy.closedtrades.commission":
+      return book.closedCommission(i);
+    case "strategy.opentrades.entry_bar_index":
+      return book.openEntryBar(i);
+    case "strategy.opentrades.entry_price":
+      return book.openEntryPrice(i);
+    case "strategy.opentrades.size":
+      return book.openSize(i);
+    case "strategy.opentrades.entry_id":
+      return book.openId(i);
+    case "strategy.opentrades.profit":
+      return book.openProfit(i, mark);
+    default:
+      return undefined;
+  }
 }
 
 function evalRequestSecurity(node: Call, env: Env): Cell {
@@ -2743,6 +2905,85 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     return m && m.isTriangular() ? 1 : 0;
   }
+  if (name === "matrix.add_row") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const idx = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    const arr = asArray(evalExpr(callArg(node.args, 2, ["array"]), env));
+    m?.addRow(idx ?? undefined, arr?.toValues());
+    return NA;
+  }
+  if (name === "matrix.add_col" || name === "matrix.add_column") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const idx = unwrap(evalExpr(callArg(node.args, 1, ["column", "index"]), env));
+    const arr = asArray(evalExpr(callArg(node.args, 2, ["array"]), env));
+    m?.addCol(idx ?? undefined, arr?.toValues());
+    return NA;
+  }
+  if (name === "matrix.remove_row") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const idx = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    if (m && idx != null) m.removeRow(idx);
+    return NA;
+  }
+  if (name === "matrix.remove_col" || name === "matrix.remove_column") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const idx = unwrap(evalExpr(callArg(node.args, 1, ["column", "index"]), env));
+    if (m && idx != null) m.removeCol(idx);
+    return NA;
+  }
+  if (name === "matrix.reshape") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const r = unwrap(evalExpr(callArg(node.args, 1, ["rows"]), env));
+    const c = unwrap(evalExpr(callArg(node.args, 2, ["columns", "cols"]), env));
+    return m && r != null && c != null ? m.reshape(r, c) : NA;
+  }
+  if (name === "matrix.concat") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asMatrix(evalExpr(callArg(node.args, 1, ["other"]), env));
+    return m && other ? m.concat(other) : NA;
+  }
+  if (name === "matrix.submatrix") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (!m) return NA;
+    return m.submatrix(
+      unwrap(evalExpr(callArg(node.args, 1, ["from_row"]), env)) ?? 0,
+      unwrap(evalExpr(callArg(node.args, 2, ["to_row"]), env)) ?? m.rows(),
+      unwrap(evalExpr(callArg(node.args, 3, ["from_column", "from_col"]), env)) ?? 0,
+      unwrap(evalExpr(callArg(node.args, 4, ["to_column", "to_col"]), env)) ?? m.columns(),
+    );
+  }
+  if (name === "matrix.reverse") {
+    asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env))?.reverse();
+    return NA;
+  }
+  if (name === "matrix.sort") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const col = unwrap(evalExpr(callArg(node.args, 1, ["column", "col"]), env)) ?? 0;
+    const orderRaw = evalExpr(callArg(node.args, 2, ["order"]), env);
+    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
+    m?.sort(col, order);
+    return NA;
+  }
+  if (name === "matrix.median") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.median() : NA;
+  }
+  if (name === "matrix.mode") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.mode() : NA;
+  }
+  if (name === "matrix.is_binary") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isBinary() ? 1 : 0;
+  }
+  if (name === "matrix.is_stochastic") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isStochastic() ? 1 : 0;
+  }
+  if (name === "matrix.is_antidiagonal") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m && m.isAntidiagonal() ? 1 : 0;
+  }
   return undefined;
 }
 
@@ -2800,6 +3041,29 @@ function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | un
     }
     return NA;
   }
+  if (fname === "line.set_color") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) env.drawings.lineSetColor(id, evalAsString(callArg(node.args, 1, ["color"]), env) ?? "");
+    return NA;
+  }
+  if (fname === "line.get_price") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const x = unwrap(evalExpr(callArg(node.args, 1, ["x"]), env));
+    return id != null && x != null ? env.drawings.lineGetPrice(id, x) : NA;
+  }
+  if (fname === "label.set_color") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) env.drawings.labelSetColor(id, evalAsString(callArg(node.args, 1, ["color"]), env) ?? "");
+    return NA;
+  }
+  if (fname === "table.cell") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const col = unwrap(evalExpr(callArg(node.args, 1, ["column"]), env));
+    const row = unwrap(evalExpr(callArg(node.args, 2, ["row"]), env));
+    const text = evalAsString(callArg(node.args, 3, ["text"]), env) ?? undefined;
+    if (id != null && col != null && row != null) env.drawings.tableCell(id, col, row, text);
+    return NA;
+  }
   return undefined;
 }
 
@@ -2812,6 +3076,39 @@ function evalAlertMessage(node: expr | undefined, env: Env): string {
 }
 
 function evalColorCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname === "color.r") {
+    const v = evalExpr(callArg(node.args, 0, ["color"]), env);
+    if (v && typeof v === "object" && "r" in v) return colorR(v as Color);
+    if (typeof v === "string") {
+      const c = parseColor(v);
+      return c ? colorR(c) : NA;
+    }
+    return NA;
+  }
+  if (fname === "color.rgb") {
+    return colorRgb(
+      unwrap(evalExpr(callArg(node.args, 0, ["red", "r"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["green", "g"]), env)),
+      unwrap(evalExpr(callArg(node.args, 2, ["blue", "b"]), env)),
+      unwrap(evalExpr(callArg(node.args, 3, ["transp", "t"]), env)) ?? undefined,
+    );
+  }
+  if (fname === "color.from_gradient") {
+    const c1 = evalExpr(callArg(node.args, 3, ["color1"]), env);
+    const c2 = evalExpr(callArg(node.args, 4, ["color2"]), env);
+    const asColor = (v: Value): Color | null => {
+      if (v && typeof v === "object" && "r" in v && "g" in v) return v as Color;
+      if (typeof v === "string") return parseColor(v);
+      return null;
+    };
+    return colorFromGradient(
+      unwrap(evalExpr(callArg(node.args, 0, ["value"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["bottom_value", "bottom"]), env)),
+      unwrap(evalExpr(callArg(node.args, 2, ["top_value", "top"]), env)),
+      asColor(c1) ?? { r: 0, g: 0, b: 0, a: 255 },
+      asColor(c2) ?? { r: 255, g: 255, b: 255, a: 255 },
+    );
+  }
   if (fname === "color.new") {
     const raw = evalExpr(callArg(node.args, 0, ["color"]), env);
     if (typeof raw === "string") {
@@ -2955,6 +3252,35 @@ function asStmts(body: stmt | stmt[] | null | undefined): stmt[] {
 function registerUdf(node: FunctionDef, env: Env): void {
   if (env.barIndex !== 0) return;
   env.udfs.set(node.name, { params: asParams(node.args), body: asStmts(node.body) });
+}
+
+function registerTypeDef(node: TypeDef, env: Env): void {
+  if (env.barIndex !== 0) return;
+  const fields: Array<{ name: string; default: unknown }> = [];
+  for (const s of asStmts(node.body as unknown as stmt[])) {
+    if (s.kind !== "Assign") continue;
+    const a = s as Assign;
+    if (a.target.kind !== "Name") continue;
+    fields.push({
+      name: a.target.id,
+      default: a.value == null ? null : evalExpr(a.value, env),
+    });
+  }
+  bindName(env, node.name, udtTypeFromAssigns(node.name, fields));
+}
+
+function registerEnumDef(node: EnumDef, env: Env): void {
+  if (env.barIndex !== 0) return;
+  const names: string[] = [];
+  for (const s of asStmts(node.body as unknown as stmt[])) {
+    if (s.kind === "Assign") {
+      const t = (s as Assign).target;
+      if (t.kind === "Name") names.push(t.id);
+    } else if (s.kind === "Expr" && (s as { value?: expr }).value?.kind === "Name") {
+      names.push(((s as { value: { id: string } }).value).id);
+    }
+  }
+  bindName(env, node.name, enumTypeFromNames(node.name, names));
 }
 
 function pushUdfFrame(env: Env, site: string): void {

@@ -60,6 +60,15 @@ function setNum(extra: Record<string, unknown>, key: string, value: unknown): vo
   if (isFiniteNumber(value)) extra[key] = value;
 }
 
+function setAny(extra: Record<string, unknown>, key: string, value: unknown): void {
+  extra[key] = value;
+}
+
+function cellKey(column: unknown, row: unknown): string | undefined {
+  if (!isFiniteNumber(column) || !isFiniteNumber(row)) return undefined;
+  return `${column},${row}`;
+}
+
 export class DrawingBook {
   readonly items: DrawingEvent[] = [];
   private readonly byId = new Map<number, DrawingEvent>();
@@ -179,6 +188,132 @@ export class DrawingBook {
     ev.extra = { ...(ev.extra ?? {}), ...patch };
   }
 
+  lineSetColor(id: number, color: unknown): void {
+    const extra = this.extraOf(id, "line");
+    if (!extra) return;
+    setAny(extra, "color", color);
+  }
+
+  lineSetWidth(id: number, width: unknown): void {
+    const extra = this.extraOf(id, "line");
+    if (!extra) return;
+    setNum(extra, "width", width);
+  }
+
+  lineSetStyle(id: number, style: unknown): void {
+    const extra = this.extraOf(id, "line");
+    if (!extra) return;
+    setAny(extra, "style", style);
+  }
+
+  lineSetExtend(id: number, extend: unknown): void {
+    const extra = this.extraOf(id, "line");
+    if (!extra) return;
+    setAny(extra, "extend", extend);
+  }
+
+  lineGetX1(id: number): number | null {
+    return this.lineGetNum(id, "x1");
+  }
+
+  lineGetY1(id: number): number | null {
+    return this.lineGetNum(id, "y1");
+  }
+
+  lineGetX2(id: number): number | null {
+    return this.lineGetNum(id, "x2");
+  }
+
+  lineGetY2(id: number): number | null {
+    return this.lineGetNum(id, "y2");
+  }
+
+  lineGetPrice(id: number, x: unknown): number | null {
+    if (!isFiniteNumber(x)) return null;
+    const x1 = this.lineGetNum(id, "x1");
+    const y1 = this.lineGetNum(id, "y1");
+    const x2 = this.lineGetNum(id, "x2");
+    const y2 = this.lineGetNum(id, "y2");
+    if (x1 == null || y1 == null || x2 == null || y2 == null) return null;
+    if (x1 === x2) return y1;
+    const t = (x - x1) / (x2 - x1);
+    return y1 + t * (y2 - y1);
+  }
+
+  labelSetColor(id: number, color: unknown): void {
+    const extra = this.extraOf(id, "label");
+    if (!extra) return;
+    setAny(extra, "color", color);
+  }
+
+  labelSetStyle(id: number, style: unknown): void {
+    const extra = this.extraOf(id, "label");
+    if (!extra) return;
+    setAny(extra, "style", style);
+  }
+
+  labelSetSize(id: number, size: unknown): void {
+    const extra = this.extraOf(id, "label");
+    if (!extra) return;
+    setAny(extra, "size", size);
+  }
+
+  labelSetTextalign(id: number, textalign: unknown): void {
+    const extra = this.extraOf(id, "label");
+    if (!extra) return;
+    setAny(extra, "textalign", textalign);
+  }
+
+  labelSetTooltip(id: number, tooltip: unknown): void {
+    const extra = this.extraOf(id, "label");
+    if (!extra) return;
+    setAny(extra, "tooltip", tooltip);
+  }
+
+  boxSetBgcolor(id: number, bgcolor: unknown): void {
+    const extra = this.extraOf(id, "box");
+    if (!extra) return;
+    setAny(extra, "bgcolor", bgcolor);
+  }
+
+  boxSetBorderColor(id: number, color: unknown): void {
+    const extra = this.extraOf(id, "box");
+    if (!extra) return;
+    setAny(extra, "border_color", color);
+  }
+
+  boxSetText(id: number, text: unknown): void {
+    const extra = this.extraOf(id, "box");
+    if (!extra) return;
+    setAny(extra, "text", text == null ? "" : String(text));
+  }
+
+  boxSetExtend(id: number, extend: unknown): void {
+    const extra = this.extraOf(id, "box");
+    if (!extra) return;
+    setAny(extra, "extend", extend);
+  }
+
+  tableCell(id: number, column: unknown, row: unknown, text?: unknown): void {
+    this.upsertCell(id, column, row, text, text !== undefined);
+  }
+
+  tableCellSetText(id: number, column: unknown, row: unknown, text: unknown): void {
+    this.upsertCell(id, column, row, text, true);
+  }
+
+  tableSetPosition(id: number, position: unknown): void {
+    const extra = this.extraOf(id, "table");
+    if (!extra) return;
+    setAny(extra, "position", position);
+  }
+
+  linefillSetColor(id: number, color: unknown): void {
+    const extra = this.extraOf(id, "linefill");
+    if (!extra) return;
+    setAny(extra, "color", color);
+  }
+
   lineDelete(id: number): void {
     this.markDeleted(id);
   }
@@ -207,11 +342,45 @@ export class DrawingBook {
     return id;
   }
 
-  private extraOf(id: number): Record<string, unknown> | undefined {
+  private extraOf(id: number, kind?: DrawingKind): Record<string, unknown> | undefined {
     const ev = this.byId.get(id);
     if (!ev) return undefined;
+    if (kind != null && ev.kind !== kind) return undefined;
     if (ev.extra == null) ev.extra = {};
     return ev.extra;
+  }
+
+  private lineGetNum(id: number, key: "x1" | "y1" | "x2" | "y2"): number | null {
+    const ev = this.byId.get(id);
+    if (!ev || ev.kind !== "line") return null;
+    const v = ev.extra?.[key];
+    return isFiniteNumber(v) ? v : null;
+  }
+
+  private upsertCell(
+    id: number,
+    column: unknown,
+    row: unknown,
+    text: unknown,
+    setText: boolean,
+  ): void {
+    const extra = this.extraOf(id, "table");
+    const key = cellKey(column, row);
+    if (!extra || key == null) return;
+    const prev = extra.cells;
+    const cells =
+      prev != null && typeof prev === "object" && !Array.isArray(prev)
+        ? (prev as Record<string, unknown>)
+        : {};
+    if (cells !== prev) extra.cells = cells;
+    const cur = cells[key];
+    const rec =
+      cur != null && typeof cur === "object" && !Array.isArray(cur)
+        ? (cur as Record<string, unknown>)
+        : {};
+    if (setText) rec.text = text == null ? "" : String(text);
+    else if (rec.text === undefined) rec.text = "";
+    cells[key] = rec;
   }
 
   private markDeleted(id: number): void {

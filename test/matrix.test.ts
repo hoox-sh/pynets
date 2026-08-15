@@ -486,3 +486,246 @@ describe("PineMatrix pow / kron / rank / diff / swap", () => {
     expect(m.get(1, 1)).toBe(1);
   });
 });
+
+describe("PineMatrix addRow / addCol / remove", () => {
+  test("addRow appends, inserts, pads na, truncates", () => {
+    const m = fill([
+      [1, 2],
+      [3, 4],
+    ]);
+    m.addRow();
+    expect(m.rows()).toBe(3);
+    expect(m.get(2, 0)).toBeNull();
+    expect(m.get(2, 1)).toBeNull();
+    m.addRow(0, [9, 8]);
+    expect(m.rows()).toBe(4);
+    expect(m.get(0, 0)).toBe(9);
+    expect(m.get(1, 0)).toBe(1);
+    expect(m.get(2, 0)).toBe(3);
+    m.addRow(undefined, [7]);
+    expect(m.rows()).toBe(5);
+    expect(m.get(4, 0)).toBe(7);
+    expect(m.get(4, 1)).toBeNull();
+    m.addRow(m.rows(), [1, 2, 3]);
+    expect(m.columns()).toBe(2);
+    expect(m.get(5, 0)).toBe(1);
+    expect(m.get(5, 1)).toBe(2);
+  });
+
+  test("addRow on 0×0 adopts column count; negative index is a no-op", () => {
+    const m = new PineMatrix(0, 0);
+    m.addRow(0, [1, 2, 3]);
+    expect(m.rows()).toBe(1);
+    expect(m.columns()).toBe(3);
+    expect(m.get(0, 1)).toBe(2);
+    m.addRow(-1, [9, 8, 7]);
+    m.addRow(Number.NaN, [9, 8, 7]);
+    expect(m.rows()).toBe(1);
+    expect(m.get(0, 0)).toBe(1);
+  });
+
+  test("addCol appends / inserts; 0×0 becomes N×1", () => {
+    const m = fill([
+      [1, 2],
+      [3, 4],
+    ]);
+    m.addCol(undefined, [5, 6]);
+    expect(m.columns()).toBe(3);
+    expect(m.get(0, 2)).toBe(5);
+    expect(m.get(1, 2)).toBe(6);
+    m.addCol(0, [9, 8]);
+    expect(m.columns()).toBe(4);
+    expect(m.get(0, 0)).toBe(9);
+    expect(m.get(0, 1)).toBe(1);
+    const empty = new PineMatrix(0, 0);
+    empty.addCol(0, [1, 3]);
+    expect(empty.rows()).toBe(2);
+    expect(empty.columns()).toBe(1);
+    expect(empty.get(0, 0)).toBe(1);
+    expect(empty.get(1, 0)).toBe(3);
+  });
+
+  test("removeRow / removeCol; OOB is a no-op", () => {
+    const m = fill([
+      [1, 2, 3],
+      [4, 5, 6],
+      [7, 8, 9],
+    ]);
+    m.removeRow(1);
+    expect(m.rows()).toBe(2);
+    expect(m.get(0, 0)).toBe(1);
+    expect(m.get(1, 0)).toBe(7);
+    m.removeCol(1);
+    expect(m.columns()).toBe(2);
+    expect(m.get(0, 0)).toBe(1);
+    expect(m.get(0, 1)).toBe(3);
+    m.removeRow(99);
+    m.removeRow(-1);
+    m.removeCol(Number.NaN);
+    expect(m.rows()).toBe(2);
+    expect(m.columns()).toBe(2);
+    expect(m.get(0, 0)).toBe(1);
+  });
+});
+
+describe("PineMatrix reshape / concat / submatrix", () => {
+  test("reshape is row-major and returns a new matrix", () => {
+    const m = fill([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    const r = m.reshape(3, 2);
+    expect(r).not.toBeNull();
+    expect(r!.rows()).toBe(3);
+    expect(r!.columns()).toBe(2);
+    expect(r!.get(0, 0)).toBe(1);
+    expect(r!.get(0, 1)).toBe(2);
+    expect(r!.get(1, 0)).toBe(3);
+    expect(r!.get(1, 1)).toBe(4);
+    expect(r!.get(2, 0)).toBe(5);
+    expect(r!.get(2, 1)).toBe(6);
+    expect(m.rows()).toBe(2);
+    expect(m.columns()).toBe(3);
+    expect(m.get(0, 0)).toBe(1);
+    expect(m.reshape(2, 2)).toBeNull();
+    expect(m.reshape(-1, 6)).toBeNull();
+    expect(m.reshape(Number.NaN, 6)).toBeNull();
+    const empty = new PineMatrix(0, 3);
+    const z = empty.reshape(0, 0);
+    expect(z).not.toBeNull();
+    expect(z!.rows()).toBe(0);
+    expect(z!.columns()).toBe(0);
+  });
+
+  test("concat stacks vertically when columns match", () => {
+    const a = fill([
+      [1, 2],
+      [3, 4],
+    ]);
+    const b = fill([[5, 6]]);
+    const c = a.concat(b);
+    expect(c).not.toBeNull();
+    expect(c!.rows()).toBe(3);
+    expect(c!.columns()).toBe(2);
+    expect(c!.get(2, 0)).toBe(5);
+    expect(c!.get(2, 1)).toBe(6);
+    expect(a.rows()).toBe(2);
+    expect(a.concat(new PineMatrix(1, 3, 0))).toBeNull();
+  });
+
+  test("submatrix is half-open and returns a copy", () => {
+    const m = fill([
+      [1, 2, 3],
+      [4, 5, 6],
+      [7, 8, 9],
+    ]);
+    const s = m.submatrix(0, 2, 1, 3);
+    expect(s).not.toBeNull();
+    expect(s!.rows()).toBe(2);
+    expect(s!.columns()).toBe(2);
+    expect(s!.get(0, 0)).toBe(2);
+    expect(s!.get(0, 1)).toBe(3);
+    expect(s!.get(1, 0)).toBe(5);
+    expect(s!.get(1, 1)).toBe(6);
+    s!.set(0, 0, 99);
+    expect(m.get(0, 1)).toBe(2);
+    expect(m.submatrix(0, 2, 1, 4)).toBeNull();
+    expect(m.submatrix(2, 1, 0, 1)).toBeNull();
+    expect(m.submatrix(-1, 1, 0, 1)).toBeNull();
+    const empty = m.submatrix(1, 1, 0, 3);
+    expect(empty).not.toBeNull();
+    expect(empty!.rows()).toBe(0);
+    expect(empty!.columns()).toBe(3);
+  });
+});
+
+describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
+  test("sort rows by column; na last; desc", () => {
+    const m = fill([
+      [3, 30],
+      [1, 10],
+      [2, 20],
+    ]);
+    m.sort(0);
+    expect(m.get(0, 0)).toBe(1);
+    expect(m.get(1, 0)).toBe(2);
+    expect(m.get(2, 0)).toBe(3);
+    expect(m.get(0, 1)).toBe(10);
+    m.sort(0, "desc");
+    expect(m.get(0, 0)).toBe(3);
+    expect(m.get(1, 0)).toBe(2);
+    expect(m.get(2, 0)).toBe(1);
+    m.set(1, 0, null);
+    m.sort(0);
+    expect(m.get(0, 0)).toBe(1);
+    expect(m.get(1, 0)).toBe(3);
+    expect(m.get(2, 0)).toBeNull();
+    m.sort(99);
+    expect(m.get(0, 0)).toBe(1);
+  });
+
+  test("reverse flips element order (rows then each row)", () => {
+    const m = fill([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    m.reverse();
+    expect(m.get(0, 0)).toBe(6);
+    expect(m.get(0, 1)).toBe(5);
+    expect(m.get(0, 2)).toBe(4);
+    expect(m.get(1, 0)).toBe(3);
+    expect(m.get(1, 1)).toBe(2);
+    expect(m.get(1, 2)).toBe(1);
+  });
+
+  test("median / mode skip na; empty → na", () => {
+    const m = fill([
+      [1, 3],
+      [2, 3],
+    ]);
+    expect(m.median()).toBe(2.5);
+    expect(m.mode()).toBe(3);
+    m.set(0, 1, null);
+    expect(m.median()).toBe(2);
+    expect(m.mode()).toBe(1);
+    expect(new PineMatrix(0, 0).median()).toBeNull();
+    expect(new PineMatrix(2, 2).mode()).toBeNull();
+  });
+
+  test("isBinary / isStochastic / isAntidiagonal", () => {
+    expect(fill([
+      [0, 1],
+      [1, 0],
+    ]).isBinary()).toBe(true);
+    expect(fill([
+      [0, 2],
+      [1, 0],
+    ]).isBinary()).toBe(false);
+    expect(new PineMatrix(0, 0).isBinary()).toBe(true);
+    const binNa = fill([
+      [0, 1],
+      [1, 0],
+    ]);
+    binNa.set(1, 1, null);
+    expect(binNa.isBinary()).toBe(false);
+    expect(fill([
+      [0.5, 0.5],
+      [1, 0],
+    ]).isStochastic()).toBe(true);
+    expect(fill([
+      [0.5, 0.4],
+      [1, 0],
+    ]).isStochastic()).toBe(false);
+    expect(new PineMatrix(0, 0).isStochastic()).toBe(true);
+    expect(fill([
+      [0, 1],
+      [1, 0],
+    ]).isAntidiagonal()).toBe(true);
+    expect(fill([
+      [1, 0],
+      [0, 1],
+    ]).isAntidiagonal()).toBe(false);
+    expect(new PineMatrix(0, 0).isAntidiagonal()).toBe(true);
+    expect(new PineMatrix(2, 3, 0).isAntidiagonal()).toBe(false);
+  });
+});

@@ -23,10 +23,23 @@ function dim(n: number): number {
   return Math.min(Math.trunc(n), MAX_MATRIX_ELEMENTS);
 }
 
+function fitsElements(rows: number, cols: number): boolean {
+  if (rows <= 0 || cols <= 0) return true;
+  return cols <= Math.floor(MAX_MATRIX_ELEMENTS / rows);
+}
+
+/** Pad with `na` or truncate so the vector has length *n*. */
+function padOrTrunc(values: Cell[] | undefined, n: number): Cell[] {
+  const out: Cell[] = [];
+  const src = values ?? [];
+  for (let i = 0; i < n; i++) out.push(i < src.length ? src[i]! : null);
+  return out;
+}
+
 export class PineMatrix {
   private readonly cells: Cell[][] = [];
-  private readonly nRows: number;
-  private readonly nCols: number;
+  private nRows: number;
+  private nCols: number;
 
   constructor(rows: number, cols: number, initial?: Cell) {
     let r = dim(rows);
@@ -446,6 +459,226 @@ export class PineMatrix {
     }
   }
 
+  /**
+   * Insert a row at *index* (append if omitted / past end).
+   * Short rows pad `na`; long rows truncate. 0×0 adopts column count from *values*.
+   * Negative / non-finite index or size cap → no-op.
+   */
+  addRow(index?: number, values?: Cell[]): void {
+    const adopt = this.nRows === 0 && this.nCols === 0;
+    const cols = adopt ? (values?.length ?? 0) : this.nCols;
+    if (!fitsElements(this.nRows + 1, cols)) return;
+    if (index !== undefined) {
+      if (!Number.isFinite(index)) return;
+      if (Math.trunc(index) < 0) return;
+    }
+    const row = padOrTrunc(values, cols);
+    if (adopt) this.nCols = cols;
+    const at = index === undefined ? this.nRows : Math.trunc(index);
+    if (at >= this.nRows) this.cells.push(row);
+    else this.cells.splice(at, 0, row);
+    this.nRows += 1;
+  }
+
+  /**
+   * Insert a column at *index* (append if omitted / past end).
+   * Short cols pad `na`; long cols truncate. 0×0 becomes N×1 from *values*.
+   */
+  addCol(index?: number, values?: Cell[]): void {
+    if (this.nRows === 0 && this.nCols === 0) {
+      const n = values?.length ?? 0;
+      if (!fitsElements(n, n === 0 ? 0 : 1)) return;
+      for (const v of values ?? []) this.cells.push([v]);
+      this.nRows = n;
+      this.nCols = n === 0 ? 0 : 1;
+      return;
+    }
+    if (!fitsElements(this.nRows, this.nCols + 1)) return;
+    if (index !== undefined) {
+      if (!Number.isFinite(index)) return;
+      if (Math.trunc(index) < 0) return;
+    }
+    const col = padOrTrunc(values, this.nRows);
+    const at =
+      index === undefined ? this.nCols : Math.min(Math.trunc(index), this.nCols);
+    for (let i = 0; i < this.nRows; i++) this.cells[i]!.splice(at, 0, col[i]!);
+    this.nCols += 1;
+  }
+
+  /** OOB / non-finite index is a no-op. */
+  removeRow(index: number): void {
+    const i = resolveIndex(index, this.nRows);
+    if (i === null) return;
+    this.cells.splice(i, 1);
+    this.nRows -= 1;
+  }
+
+  /** OOB / non-finite index is a no-op. */
+  removeCol(index: number): void {
+    const i = resolveIndex(index, this.nCols);
+    if (i === null) return;
+    for (const row of this.cells) row.splice(i, 1);
+    this.nCols -= 1;
+  }
+
+  /** New matrix, same element count, row-major. Bad size → `na`. */
+  reshape(rows: number, cols: number): PineMatrix | null {
+    if (!Number.isFinite(rows) || !Number.isFinite(cols)) return null;
+    const r = Math.trunc(rows);
+    const c = Math.trunc(cols);
+    if (r < 0 || c < 0) return null;
+    if (r * c !== this.nRows * this.nCols) return null;
+    if (!fitsElements(r, c)) return null;
+    const flat = this.flatten();
+    const out = new PineMatrix(r, c);
+    for (let i = 0; i < r; i++) {
+      for (let j = 0; j < c; j++) out.set(i, j, flat[i * c + j]!);
+    }
+    return out;
+  }
+
+  /** Vertical stack when column counts match; else `na`. */
+  concat(other: PineMatrix): PineMatrix | null {
+    if (this.nCols !== other.nCols) return null;
+    const r = this.nRows + other.nRows;
+    const c = this.nCols;
+    if (!fitsElements(r, c)) return null;
+    const out = new PineMatrix(r, c);
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < c; j++) out.set(i, j, this.cells[i]![j]!);
+    }
+    for (let i = 0; i < other.nRows; i++) {
+      for (let j = 0; j < c; j++) out.set(this.nRows + i, j, other.cells[i]![j]!);
+    }
+    return out;
+  }
+
+  /** Half-open `[fromRow, toRow) × [fromCol, toCol)`. Invalid range → `na`. */
+  submatrix(fromRow: number, toRow: number, fromCol: number, toCol: number): PineMatrix | null {
+    if (
+      !Number.isFinite(fromRow) ||
+      !Number.isFinite(toRow) ||
+      !Number.isFinite(fromCol) ||
+      !Number.isFinite(toCol)
+    ) {
+      return null;
+    }
+    const r0 = Math.trunc(fromRow);
+    const r1 = Math.trunc(toRow);
+    const c0 = Math.trunc(fromCol);
+    const c1 = Math.trunc(toCol);
+    if (!(0 <= r0 && r0 <= r1 && r1 <= this.nRows)) return null;
+    if (!(0 <= c0 && c0 <= c1 && c1 <= this.nCols)) return null;
+    const out = new PineMatrix(r1 - r0, c1 - c0);
+    for (let i = r0; i < r1; i++) {
+      for (let j = c0; j < c1; j++) out.set(i - r0, j - c0, this.cells[i]![j]!);
+    }
+    return out;
+  }
+
+  /** Reverse element order: reverse rows, then each row (Python `matrix.reverse`). */
+  reverse(): void {
+    this.cells.reverse();
+    for (const row of this.cells) row.reverse();
+  }
+
+  /** Sort rows by *column*. `na` / non-finite keys always last. */
+  sort(column = 0, order: "asc" | "desc" = "asc"): void {
+    if (this.nRows === 0) return;
+    const c = resolveIndex(column, this.nCols);
+    if (c === null) return;
+    const desc = order === "desc";
+    const nonNa: Cell[][] = [];
+    const naRows: Cell[][] = [];
+    for (const row of this.cells) {
+      const v = row[c]!;
+      if (v === null || !Number.isFinite(v)) naRows.push(row);
+      else nonNa.push(row);
+    }
+    nonNa.sort((a, b) => {
+      const d = (a[c] as number) - (b[c] as number);
+      return desc ? -d : d;
+    });
+    this.cells.length = 0;
+    for (const row of nonNa) this.cells.push(row);
+    for (const row of naRows) this.cells.push(row);
+  }
+
+  /** Median of finite cells (Python skips `na`). Empty → `na`. */
+  median(): Cell {
+    const vals: number[] = [];
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < this.nCols; j++) {
+        const v = this.cells[i]![j]!;
+        if (v !== null && Number.isFinite(v)) vals.push(v);
+      }
+    }
+    if (vals.length === 0) return null;
+    vals.sort((a, b) => a - b);
+    const mid = Math.floor(vals.length / 2);
+    if (vals.length % 2 === 1) return vals[mid]!;
+    return (vals[mid - 1]! + vals[mid]!) / 2;
+  }
+
+  /** Most common finite cell; first-seen wins ties. Empty / all `na` → `na`. */
+  mode(): Cell {
+    const counts = new Map<number, number>();
+    let best: number | null = null;
+    let bestCount = 0;
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < this.nCols; j++) {
+        const v = this.cells[i]![j]!;
+        if (v === null || !Number.isFinite(v)) continue;
+        const n = (counts.get(v) ?? 0) + 1;
+        counts.set(v, n);
+        if (n > bestCount) {
+          best = v;
+          bestCount = n;
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Every cell is 0 or 1. `na` / other values → false. Empty is true. */
+  isBinary(): boolean {
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < this.nCols; j++) {
+        const v = this.cells[i]![j]!;
+        if (v !== 0 && v !== 1) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Each row is non-negative and sums to 1. Empty is true; `na` → false. */
+  isStochastic(): boolean {
+    for (let i = 0; i < this.nRows; i++) {
+      let total = 0;
+      for (let j = 0; j < this.nCols; j++) {
+        const v = this.cells[i]![j]!;
+        if (v === null || !Number.isFinite(v) || v < 0) return false;
+        total += v;
+      }
+      if (Math.abs(total - 1) > 1e-9) return false;
+    }
+    return true;
+  }
+
+  /** Square; off-antidiagonal cells are 0 or `na`. 0×0 is true. */
+  isAntidiagonal(): boolean {
+    if (this.nRows !== this.nCols) return false;
+    const n = this.nRows;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i + j === n - 1) continue;
+        const v = this.cells[i]![j]!;
+        if (v !== null && v !== 0) return false;
+      }
+    }
+    return true;
+  }
+
   /** Element-wise `self - other` (Python `Matrix.diff`). Shape mismatch → `na`. */
   diff(other: PineMatrix): PineMatrix | null {
     if (this.nRows !== other.nRows || this.nCols !== other.nCols) return null;
@@ -530,6 +763,14 @@ export class PineMatrix {
         if (v === null || !Number.isFinite(v)) return null;
         out.push(v);
       }
+    }
+    return out;
+  }
+
+  private flatten(): Cell[] {
+    const out: Cell[] = [];
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < this.nCols; j++) out.push(this.cells[i]![j]!);
     }
     return out;
   }

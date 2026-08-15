@@ -32,3 +32,4 @@ export type { BarProvider, ProviderBar } from "./runtime/provider.ts";
 export { LogBook } from "./runtime/log.ts";
 export type { LogLevel, LogRecord } from "./runtime/log.ts";
 export { TickerId, tickerNew, tickerHeikinashi, tickerStandard } from "./runtime/ticker.ts";
+export { UdtType, UdtInstance, EnumType, EnumMember } from "./runtime/udt.ts";

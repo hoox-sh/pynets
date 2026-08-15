@@ -3,7 +3,19 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
-import { colorNew, colorRgb, parseColor } from "../src/runtime/color.ts";
+import {
+  COLOR_BY_NAME,
+  colorB,
+  colorByName,
+  colorFromGradient,
+  colorG,
+  colorNew,
+  colorR,
+  colorRgb,
+  colorT,
+  colorToHex,
+  parseColor,
+} from "../src/runtime/color.ts";
 import {
   strContains,
   strEndsWith,
@@ -58,15 +70,112 @@ describe("colorNew / colorRgb", () => {
     expect(colorNew(255, 0, 0, 50)).toEqual({ r: 255, g: 0, b: 0, a: 128 });
   });
 
-  test("colorRgb packs bytes", () => {
+  test("colorRgb packs bytes with optional transparency", () => {
     expect(colorRgb(1, 2, 3)).toEqual({ r: 1, g: 2, b: 3, a: 255 });
-    expect(colorRgb(1, 2, 3, 4)).toEqual({ r: 1, g: 2, b: 3, a: 4 });
+    expect(colorRgb(255, 0, 0, 0)).toEqual({ r: 255, g: 0, b: 0, a: 255 });
+    expect(colorRgb(255, 0, 0, 100)).toEqual({ r: 255, g: 0, b: 0, a: 0 });
+    expect(colorRgb(255, 0, 0, 50)).toEqual({ r: 255, g: 0, b: 0, a: 128 });
+    expect(colorRgb(300, -20, 10)).toEqual({ r: 255, g: 0, b: 10, a: 255 });
   });
 
   test("na / non-finite channels → null", () => {
     expect(colorNew(null, 0, 0)).toBeNull();
     expect(colorNew(Number.NaN, 0, 0)).toBeNull();
     expect(colorRgb(1, null, 3)).toBeNull();
+    expect(colorRgb(Number.NaN, 2, 3)).toBeNull();
+  });
+});
+
+describe("colorFromGradient", () => {
+  const black = { r: 0, g: 0, b: 0, a: 255 };
+  const white = { r: 255, g: 255, b: 255, a: 255 };
+  const red = { r: 255, g: 0, b: 0, a: 255 };
+  const blue = { r: 0, g: 0, b: 255, a: 0 };
+
+  test("lerps RGB at mid / ends", () => {
+    expect(colorFromGradient(0, 0, 10, black, white)).toEqual(black);
+    expect(colorFromGradient(10, 0, 10, black, white)).toEqual(white);
+    expect(colorFromGradient(5, 0, 10, black, white)).toEqual({
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    });
+    expect(colorFromGradient(0.5, 0, 1, red, blue)).toEqual({
+      r: 128,
+      g: 0,
+      b: 128,
+      a: 128,
+    });
+  });
+
+  test("value outside range clamps", () => {
+    expect(colorFromGradient(-5, 0, 10, black, white)).toEqual(black);
+    expect(colorFromGradient(99, 0, 10, black, white)).toEqual(white);
+  });
+
+  test("any na / non-finite → null", () => {
+    expect(colorFromGradient(null, 0, 10, black, white)).toBeNull();
+    expect(colorFromGradient(5, null, 10, black, white)).toBeNull();
+    expect(colorFromGradient(5, 0, null, black, white)).toBeNull();
+    expect(colorFromGradient(Number.NaN, 0, 10, black, white)).toBeNull();
+    expect(colorFromGradient(5, 0, 10, null, white)).toBeNull();
+    expect(colorFromGradient(5, 0, 10, black, null)).toBeNull();
+  });
+});
+
+describe("named colors", () => {
+  test("COLOR_BY_NAME has CSS / Pine typical RGB", () => {
+    expect(COLOR_BY_NAME.red).toEqual({ r: 255, g: 0, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.green).toEqual({ r: 0, g: 128, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.blue).toEqual({ r: 0, g: 0, b: 255, a: 255 });
+    expect(COLOR_BY_NAME.black).toEqual({ r: 0, g: 0, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.white).toEqual({ r: 255, g: 255, b: 255, a: 255 });
+    expect(COLOR_BY_NAME.gray).toEqual({ r: 128, g: 128, b: 128, a: 255 });
+    expect(COLOR_BY_NAME.silver).toEqual({ r: 192, g: 192, b: 192, a: 255 });
+    expect(COLOR_BY_NAME.yellow).toEqual({ r: 255, g: 255, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.orange).toEqual({ r: 255, g: 165, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.purple).toEqual({ r: 128, g: 0, b: 128, a: 255 });
+    expect(COLOR_BY_NAME.aqua).toEqual({ r: 0, g: 255, b: 255, a: 255 });
+    expect(COLOR_BY_NAME.fuchsia).toEqual({ r: 255, g: 0, b: 255, a: 255 });
+    expect(COLOR_BY_NAME.lime).toEqual({ r: 0, g: 255, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.maroon).toEqual({ r: 128, g: 0, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.navy).toEqual({ r: 0, g: 0, b: 128, a: 255 });
+    expect(COLOR_BY_NAME.olive).toEqual({ r: 128, g: 128, b: 0, a: 255 });
+    expect(COLOR_BY_NAME.teal).toEqual({ r: 0, g: 128, b: 128, a: 255 });
+  });
+
+  test("colorByName is case-insensitive and accepts color. prefix", () => {
+    expect(colorByName("red")).toEqual(COLOR_BY_NAME.red);
+    expect(colorByName("RED")).toEqual(COLOR_BY_NAME.red);
+    expect(colorByName("color.red")).toEqual(COLOR_BY_NAME.red);
+    expect(colorByName("COLOR.Lime")).toEqual(COLOR_BY_NAME.lime);
+    expect(colorByName("  color.navy  ")).toEqual(COLOR_BY_NAME.navy);
+    expect(colorByName("grey")).toEqual(COLOR_BY_NAME.gray);
+    expect(colorByName("not-a-color")).toBeNull();
+    expect(colorByName("color.")).toBeNull();
+  });
+});
+
+describe("color channels / hex", () => {
+  test("colorR / G / B / T", () => {
+    const c = { r: 10, g: 20, b: 30, a: 255 };
+    expect(colorR(c)).toBe(10);
+    expect(colorG(c)).toBe(20);
+    expect(colorB(c)).toBe(30);
+    expect(colorT(c)).toBe(0);
+    expect(colorT({ r: 0, g: 0, b: 0, a: 0 })).toBe(100);
+    expect(colorT({ r: 255, g: 0, b: 0, a: 128 })).toBe(50);
+    expect(colorR(null)).toBeNull();
+    expect(colorG(null)).toBeNull();
+    expect(colorB(null)).toBeNull();
+    expect(colorT(null)).toBeNull();
+  });
+
+  test("colorToHex omits AA when opaque", () => {
+    expect(colorToHex({ r: 255, g: 0, b: 0, a: 255 })).toBe("#FF0000");
+    expect(colorToHex({ r: 0, g: 255, b: 0, a: 128 })).toBe("#00FF0080");
+    expect(colorToHex({ r: 1, g: 2, b: 3, a: 0 })).toBe("#01020300");
   });
 });
 

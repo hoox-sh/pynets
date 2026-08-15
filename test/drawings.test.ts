@@ -125,6 +125,105 @@ describe("DrawingBook", () => {
     expect(book.items.find((e) => e.kind === "label")?.text).toBe("b");
   });
 
+  test("line style setters and getters", () => {
+    const book = new DrawingBook();
+    const id = book.lineNew(0);
+    book.lineSetColor(id, "blue");
+    book.lineSetWidth(id, 3);
+    book.lineSetStyle(id, "dashed");
+    book.lineSetExtend(id, "both");
+    book.lineSetXy(id, 0, 10, 10, 20);
+    expect(book.get(id)?.extra).toEqual({
+      color: "blue",
+      width: 3,
+      style: "dashed",
+      extend: "both",
+      x1: 0,
+      y1: 10,
+      x2: 10,
+      y2: 20,
+    });
+    expect(book.lineGetX1(id)).toBe(0);
+    expect(book.lineGetY1(id)).toBe(10);
+    expect(book.lineGetX2(id)).toBe(10);
+    expect(book.lineGetY2(id)).toBe(20);
+    expect(book.lineGetPrice(id, 5)).toBe(15);
+    expect(book.lineGetPrice(id, 0)).toBe(10);
+    expect(book.lineGetPrice(id, 10)).toBe(20);
+  });
+
+  test("lineGetPrice null unless both xy set", () => {
+    const book = new DrawingBook();
+    const id = book.lineNew(0);
+    expect(book.lineGetX1(id)).toBeNull();
+    expect(book.lineGetY2(id)).toBeNull();
+    expect(book.lineGetPrice(id, 1)).toBeNull();
+    expect(book.lineGetPrice(id, Number.NaN)).toBeNull();
+    book.lineSetXy1(id, 0, 10);
+    expect(book.lineGetPrice(id, 1)).toBeNull();
+    book.lineSetXy2(id, 0, 20);
+    expect(book.lineGetPrice(id, 5)).toBe(10);
+  });
+
+  test("label / box / table / linefill extra setters", () => {
+    const book = new DrawingBook();
+    const label = book.labelNew(0, "hi");
+    const box = book.boxNew(1);
+    const table = book.tableNew(2);
+    const fill = book.linefillNew(3, 0, 1);
+    book.labelSetColor(label, "red");
+    book.labelSetStyle(label, "label_down");
+    book.labelSetSize(label, "small");
+    book.labelSetTextalign(label, "left");
+    book.labelSetTooltip(label, "tip");
+    book.boxSetBgcolor(box, "#111");
+    book.boxSetBorderColor(box, "#222");
+    book.boxSetText(box, "inside");
+    book.boxSetExtend(box, "right");
+    book.tableCell(table, 0, 1, "a");
+    book.tableCell(table, 2, 3);
+    book.tableCellSetText(table, 2, 3, "b");
+    book.tableSetPosition(table, "bottom_right");
+    book.linefillSetColor(fill, "green");
+    expect(book.get(label)?.extra).toEqual({
+      color: "red",
+      style: "label_down",
+      size: "small",
+      textalign: "left",
+      tooltip: "tip",
+    });
+    expect(book.get(box)?.extra).toEqual({
+      bgcolor: "#111",
+      border_color: "#222",
+      text: "inside",
+      extend: "right",
+    });
+    expect(book.get(table)?.extra).toEqual({
+      cells: { "0,1": { text: "a" }, "2,3": { text: "b" } },
+      position: "bottom_right",
+    });
+    expect(book.get(fill)?.extra).toEqual({ id1: 0, id2: 1, color: "green" });
+  });
+
+  test("new setters no-op if missing or wrong kind", () => {
+    const book = new DrawingBook();
+    const line = book.lineNew(0);
+    const label = book.labelNew(1, "x");
+    book.lineSetColor(label, "red");
+    book.lineSetWidth(label, 2);
+    book.labelSetColor(line, "red");
+    book.boxSetBgcolor(line, "red");
+    book.tableCell(line, 0, 0, "a");
+    book.tableCellSetText(99, 0, 0, "a");
+    book.tableSetPosition(label, "top_left");
+    book.linefillSetColor(99, "red");
+    expect(book.get(line)?.extra).toBeUndefined();
+    expect(book.get(label)?.extra).toBeUndefined();
+    expect(book.lineGetX1(label)).toBeNull();
+    expect(book.lineGetPrice(label, 1)).toBeNull();
+    expect(book.get(99)).toBeUndefined();
+  });
+
   test("bad args do not throw", () => {
     const book = new DrawingBook();
     expect(() => book.lineNew(Number.NaN, "nope" as unknown as Record<string, unknown>)).not.toThrow();
