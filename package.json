@@ -1,0 +1,36 @@
+{
+  "name": "@hoox/pynets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "author": "jango_blockchained",
+  "description": "PyneTS — TypeScript port of pynescript (parse, unparse, interpret). Python Runtime remains the source of truth.",
+  "homepage": "https://github.com/hoox-sh/pynets",
+  "bugs": {
+    "url": "https://github.com/hoox-sh/pynets/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hoox-sh/pynets.git"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "pynets": "./src/cli.ts"
+  },
+  "scripts": {
+    "generate": "bun run scripts/generate-antlr.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "pynets": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "antlr4": "4.13.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.9.3"
+  }
+}

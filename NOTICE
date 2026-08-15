@@ -1,0 +1,47 @@
+PyneTS — NOTICE
+===============
+
+Copyright (c) 2026 HOOX · PYNE · jango-blockchained
+https://github.com/hoox-sh/pynets
+
+License
+-------
+This project is licensed under the GNU Affero General Public License
+**version 3 or any later version** (SPDX: AGPL-3.0-or-later).
+
+Full text: LICENSE
+
+“Later version” means a future FSF AGPL version if published — it does
+**not** mean a separate “AGPL 4” product name. There is currently only AGPL v3.
+
+Source files should carry:
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+package.json: AGPL-3.0-or-later
+
+Relationship to PYNE
+--------------------
+PyneTS (`@hoox/pynets`) is the TypeScript / Bun counterpart of
+**PYNE / pynescript**. Python `pynescript.runtime` is the source of
+truth: when semantics disagree, Python wins.
+
+The ANTLR4 grammars are **not** vendored here. `bun run generate` reads
+`PinescriptLexer.g4` / `PinescriptParser.g4` from a sibling or parent
+`hoox-sh/pyne` checkout (or `PYNESCRIPT_ROOT` / `PYNETS_GRAMMAR`).
+Do not fork those `.g4` files into this repository.
+
+In the PYNE repo this package is consumed only as the `pynets/` git
+submodule.
+
+Related
+-------
+  PYNE (pynescript): AGPL-3.0-or-later  https://github.com/hoox-sh/pyne
+  pyne-worker:       AGPL-3.0-or-later
+  pine-worker:       AGPL-3.0-or-later
+  AXIS:              AGPL-3.0-only
+  HOOX monorepo:     Apache-2.0 (code) / CC-BY-4.0 (docs)
+
+Third-party marks
+-----------------
+Pine Script™ and TradingView® are trademarks of TradingView, Inc.
+Cloudflare® is a registered trademark of Cloudflare, Inc.

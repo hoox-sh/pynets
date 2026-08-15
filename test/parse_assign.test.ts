@@ -1,0 +1,43 @@
+/**
+ * Copyright (C) 2024-2026 jango_blockchained
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+import { describe, expect, test } from "bun:test";
+import { dump, parse, unparse } from "../src/index.ts";
+
+const ASSIGN_SCRIPT = `indicator("t")
+x = close
+var y = close
+y := y + 1
+plot(x)`;
+
+const LENGTH_SCRIPT = `length = 14
+plot(close)`;
+
+describe("parse assign", () => {
+  test("assignment script produces Assign/ReAssign/Var and round-trips", () => {
+    const tree = parse(ASSIGN_SCRIPT);
+    expect(tree.kind).toBe("Script");
+    const dumped = dump(tree);
+    expect(dumped).toContain("Assign");
+    expect(dumped).toContain("ReAssign");
+    expect(dumped).toContain("Var");
+    const src = unparse(tree);
+    expect(src).toContain('indicator("t")');
+    expect(src).toContain("x = close");
+    expect(src).toContain("var y = close");
+    expect(src).toContain("y := y + 1");
+    expect(src).toContain("plot(x)");
+    expect(dump(parse(src))).toBe(dumped);
+  });
+
+  test("length = 14 assignment round-trips", () => {
+    const tree = parse(LENGTH_SCRIPT);
+    const dumped = dump(tree);
+    expect(dumped).toContain("Assign");
+    const src = unparse(tree);
+    expect(src).toContain("length = 14");
+    expect(src).toContain("plot(close)");
+    expect(dump(parse(src))).toBe(dumped);
+  });
+});
