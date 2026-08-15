@@ -54,7 +54,8 @@ import {
   strUpper,
 } from "../str.ts";
 import { TaEngine } from "../ta.ts";
-import { utcPartsFromMs, type UtcParts } from "../time.ts";
+import { utcPartsFromMs, timestamp, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
+import { timeframeInSeconds } from "../timeframe.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
 import { createCompileDraw } from "./draw.ts";
 import {
@@ -150,6 +151,10 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     minute: calendarMinute,
     second: calendarSecond,
     dayofweek: calendarDayofweek,
+    timestamp,
+    weekOfYear,
+    timeTradingDay,
+    timeframeInSeconds,
     strLength,
     strContains,
     strStartsWith,

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compile array / map / matrix, UDT (`Type.new` / field get-set), drawings (`label`/`line`/`box`), named UDF kwargs
 - Compile input overrides, `color.*` / named colors, enums, extra array/matrix/drawing mutators; `mode: "auto"` no longer skips compile when inputs are set
 - Compile `request.security` same-symbol passthrough (foreign → `na`), `barstate.*` / `syminfo` stubs, calendar `year`/`month`/…, `str.*`, UDT `method` calls
+- Compile Heikin-Ashi `ticker.heikinashi` + `timestamp` / `timeframe.in_seconds` / `weekofyear`
 
 ## [0.1.0] - 2026-08-15
 

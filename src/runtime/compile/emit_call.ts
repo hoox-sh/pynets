@@ -247,6 +247,26 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     const t = pick(args, 0, ["time"], "time");
     return `__h.${name}(${t})`;
   }
+  if (name === "timestamp") {
+    const parts = args.pos.length > 0 ? args.pos : Object.values(args.kw);
+    return `__h.timestamp(${parts.join(", ")})`;
+  }
+  if (name === "weekofyear") {
+    return `__h.weekOfYear(${pick(args, 0, ["time", "timestamp"], "time")})`;
+  }
+  if (name === "time_tradingday") {
+    return `__h.timeTradingDay(${pick(args, 0, ["time", "timestamp"], "time")})`;
+  }
+  if (name === "timeframe_in_seconds") {
+    if (hasArg(args, 0, ["timeframe", "period"])) {
+      return `__h.timeframeInSeconds(${pick(args, 0, ["timeframe", "period"], "null")})`;
+    }
+    return "86400";
+  }
+  if (name === "ticker_heikinashi" || name === "heikinashi") {
+    ctx.needsHeikinashi = true;
+    return `"__HEIKINASHI__"`;
+  }
   if (name === "str_tostring" || name === "tostring") {
     const x = pick(args, 0, ["value", "source", "x"], "null");
     return `String(${x} ?? "")`;
@@ -293,7 +313,7 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   const mx = emitMatrix(name, args);
   if (mx != null) return mx;
 
-  const req = emitRequest(name, args);
+  const req = emitRequest(ctx, name, args);
   if (req != null) return req;
 
   return "null";
@@ -708,11 +728,15 @@ function emitUdtMethod(
   return emitUserFuncCall(ctx, name, [visit(methodSrc), ...args.pos]);
 }
 
-/** Same-symbol OHLCV passthrough only. Foreign / complex expr → `null`. */
-function emitRequest(name: string, args: CallArgs): string | null {
+/** Same-symbol OHLCV passthrough only. HA marker remaps OHLC. Foreign / complex expr → `null`. */
+function emitRequest(ctx: EmitCtx, name: string, args: CallArgs): string | null {
   if (SECURITY_FUNCS.has(name)) {
     const symbol = pick(args, 0, ["symbol", "ticker"], "null");
     const expression = pick(args, 2, ["expression", "expr"], "close");
+    if (isHeikinashiSecurity(symbol) && isSimpleSecurityExpr(expression)) {
+      ctx.needsHeikinashi = true;
+      return mapOhlcvExprToHeikinashi(expression);
+    }
     if (isSimpleSecurityExpr(expression) && isChartSecuritySymbol(symbol)) return expression;
     return "null";
   }
@@ -741,11 +765,52 @@ function unquoteJsString(s: string): string {
   return s;
 }
 
+function isHeikinashiSecurity(sym: string): boolean {
+  const s = sym.trim();
+  if (s === "__HEIKINASHI__" || s === "'__HEIKINASHI__'" || s === '"__HEIKINASHI__"') return true;
+  if (/^['"]__HEIKINASHI__['"]$/.test(s)) return true;
+  if (s.includes("__HEIKINASHI__") && !s.toUpperCase().includes("HA(")) return true;
+  return false;
+}
+
+const HA_OHLC_MAP: Record<string, string> = {
+  open: "ha_open_arr[__bar_idx]",
+  high: "ha_high_arr[__bar_idx]",
+  low: "ha_low_arr[__bar_idx]",
+  close: "ha_close_arr[__bar_idx]",
+  Open: "ha_open_arr[__bar_idx]",
+  High: "ha_high_arr[__bar_idx]",
+  Low: "ha_low_arr[__bar_idx]",
+  Close: "ha_close_arr[__bar_idx]",
+  open_arr: "ha_open_arr",
+  high_arr: "ha_high_arr",
+  low_arr: "ha_low_arr",
+  close_arr: "ha_close_arr",
+  Open_arr: "ha_open_arr",
+  High_arr: "ha_high_arr",
+  Low_arr: "ha_low_arr",
+  Close_arr: "ha_close_arr",
+  "open_arr[__bar_idx]": "ha_open_arr[__bar_idx]",
+  "high_arr[__bar_idx]": "ha_high_arr[__bar_idx]",
+  "low_arr[__bar_idx]": "ha_low_arr[__bar_idx]",
+  "close_arr[__bar_idx]": "ha_close_arr[__bar_idx]",
+  "Open_arr[__bar_idx]": "ha_open_arr[__bar_idx]",
+  "High_arr[__bar_idx]": "ha_high_arr[__bar_idx]",
+  "Low_arr[__bar_idx]": "ha_low_arr[__bar_idx]",
+  "Close_arr[__bar_idx]": "ha_close_arr[__bar_idx]",
+};
+
+/** Chart OHLC → HA arrays. volume / time stay as chart. */
+function mapOhlcvExprToHeikinashi(expr: string): string {
+  return HA_OHLC_MAP[expr.trim()] ?? expr;
+}
+
 function isChartSecuritySymbol(sym: string): boolean {
   const s = sym.trim();
   if (!s || s === "null" || s === "na" || s === "undefined" || s === "None" || s === "np.nan") {
     return true;
   }
+  if (isHeikinashiSecurity(s)) return true;
   const inner = unquoteJsString(s).trim();
   if (!inner || inner === "na" || inner === "null" || inner === "SYMBOL") return true;
   if (s === "SYMBOL" || s === "tickerid" || s === "ticker") return true;

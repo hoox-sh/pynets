@@ -77,6 +77,7 @@ export interface EmitCtx {
   enumTypes: Map<string, string[]>;
   /** Method names collected from TypeDef FunctionDefs. */
   udtMethodNames: Set<string>;
+  needsHeikinashi: boolean;
 }
 
 export interface EmitFns {

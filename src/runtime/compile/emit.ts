@@ -147,6 +147,7 @@ export function newEmitCtx(): EmitCtx {
     usesDrawings: false,
     enumTypes: new Map(),
     udtMethodNames: new Set(),
+    needsHeikinashi: false,
   };
 }
 
@@ -183,6 +184,11 @@ function collectMissedArrays(ctx: EmitCtx, body: string[]): void {
 }
 
 function assemble(ctx: EmitCtx, body: string[]): string {
+  if (ctx.needsHeikinashi) {
+    for (const arr of ["ha_open_arr", "ha_high_arr", "ha_low_arr", "ha_close_arr"] as const) {
+      ctx.arrays.add(arr);
+    }
+  }
   const lines: string[] = [
     "function execute_script_compiled(open_arr, high_arr, low_arr, close_arr, vol_arr, time_arr, __h) {",
     "  const n_bars = close_arr.length;",
@@ -219,6 +225,16 @@ function assemble(ctx: EmitCtx, body: string[]): string {
   lines.push("    const ohlc4 = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);");
   if (ctx.usesStrategy) {
     lines.push("    __h.strategy.beginBar(__bar_idx, open, high, low, close, time);");
+  }
+  if (ctx.needsHeikinashi) {
+    lines.push("    const _ha_c = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);");
+    lines.push(
+      "    const _ha_o = (__bar_idx === 0 || __h.isNa(ha_open_arr[__bar_idx - 1])) ? __h.div(__h.add(open, close), 2) : __h.div(__h.add(ha_open_arr[__bar_idx - 1], ha_close_arr[__bar_idx - 1]), 2);",
+    );
+    lines.push("    ha_open_arr[__bar_idx] = _ha_o;");
+    lines.push("    ha_close_arr[__bar_idx] = _ha_c;");
+    lines.push("    ha_high_arr[__bar_idx] = __h.max(high, __h.max(_ha_o, _ha_c));");
+    lines.push("    ha_low_arr[__bar_idx] = __h.min(low, __h.min(_ha_o, _ha_c));");
   }
   for (const line of body) {
     lines.push(indentBlock(line, 4));
