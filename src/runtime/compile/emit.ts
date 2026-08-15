@@ -252,6 +252,7 @@ function assemble(ctx: EmitCtx, body: string[]): string {
   const extras: string[] = [];
   if (ctx.usesStrategy) extras.push("__h.strategy.extras()");
   extras.push("((__h.draw && __h.draw.extras()) || {})");
+  extras.push("((__h.log && __h.log.extras && __h.log.extras()) || {})");
   lines.push(`  return Object.assign(${plotObj}, ${extras.join(", ")});`);
   lines.push("}");
   return lines.join("\n");
@@ -517,6 +518,9 @@ const ATTR_NAMESPACES = new Set([
   "line",
   "box",
   "table",
+  "session",
+  "chart",
+  "log",
 ]);
 
 function emitBarstate(attr: string): string {
@@ -534,8 +538,49 @@ function emitBarstate(attr: string): string {
       return "true";
     case "isconfirmed":
       return "true";
+    case "islastconfirmedhistory":
+      return "(__bar_idx === last_bar_index)";
     default:
       return "false";
+  }
+}
+
+function emitSession(attr: string): string {
+  switch (attr) {
+    case "regular":
+      return `"regular"`;
+    case "extended":
+      return `"extended"`;
+    case "ismarket":
+      return "1";
+    case "ispremarket":
+    case "ispostmarket":
+      return "0";
+    case "isfirstbar":
+    case "isfirstbar_regular":
+      return "(__bar_idx === 0 ? 1 : 0)";
+    case "islastbar":
+    case "islastbar_regular":
+      return "(__bar_idx === last_bar_index ? 1 : 0)";
+    default:
+      return "null";
+  }
+}
+
+function emitChart(attr: string): string {
+  switch (attr) {
+    case "is_heikinashi":
+    case "is_renko":
+    case "is_kagi":
+    case "is_linebreak":
+    case "is_pointfigure":
+      return "0";
+    case "fg_color":
+      return `"#ffffff"`;
+    case "bg_color":
+      return `"#131722"`;
+    default:
+      return "null";
   }
 }
 
@@ -574,6 +619,12 @@ function emitAttribute(state: State, node: Attribute): string {
   }
   if (node.value.kind === "Name" && node.value.id === "barstate") {
     return emitBarstate(node.attr);
+  }
+  if (node.value.kind === "Name" && node.value.id === "session") {
+    return emitSession(node.attr);
+  }
+  if (node.value.kind === "Name" && node.value.id === "chart") {
+    return emitChart(node.attr);
   }
   if (node.value.kind === "Name" && node.value.id === "timeframe") {
     return emitTimeframe(node.attr);

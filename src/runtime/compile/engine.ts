@@ -17,6 +17,7 @@ import { defaultTime, defaultVolume, naNum, toFloatArr } from "./helpers.ts";
 import { createCompileHelpers } from "./runtime.ts";
 import type { CompileHelperInputs } from "./runtime.ts";
 import type { DrawingEvent } from "../drawings.ts";
+import type { LogRecord } from "../log.ts";
 import type { Fill, StrategyEvent, StrategySummary } from "../strategy.ts";
 
 export type CompileRunExtras = {
@@ -47,6 +48,7 @@ export type CompileHostResult = {
   fills?: Fill[];
   strategy?: StrategySummary;
   drawings?: DrawingEvent[];
+  logs?: LogRecord[];
 };
 
 /** Generated `execute_script_compiled` — helpers are injected per `run()`, not cached. */
@@ -256,6 +258,7 @@ export function compileToResult(
   if ("__fills" in blob) result.fills = blob.__fills as Fill[];
   if ("__strategy" in blob) result.strategy = blob.__strategy as StrategySummary;
   if ("__drawings" in blob) result.drawings = blob.__drawings as DrawingEvent[];
+  if ("__logs" in blob) result.logs = blob.__logs as LogRecord[];
   return result;
 }
 

@@ -1967,11 +1967,13 @@ function packCompiled(
     __equity?: number;
     __strategy?: StrategySummary;
     __drawings?: DrawingEvent[];
+    __logs?: LogRecord[];
   };
   const events = raw.__events;
   const fillsIn = raw.__fills;
   const strategy = raw.__strategy;
   const drawings = raw.__drawings;
+  const logs = raw.__logs;
   const series: Record<string, Array<number | null>> = {};
   for (const [key, value] of Object.entries(raw)) {
     if (key.startsWith("__")) continue;
@@ -1997,6 +1999,7 @@ function packCompiled(
       : {}),
     ...(strategy != null ? { strategy } : {}),
     ...(drawings != null ? { drawings } : {}),
+    ...(logs != null ? { logs } : {}),
   };
 }
 

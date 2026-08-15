@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compile `request.security` same-symbol passthrough (foreign → `na`), `barstate.*` / `syminfo` stubs, calendar `year`/`month`/…, `str.*`, UDT `method` calls
 - Compile Heikin-Ashi `ticker.heikinashi` + `timestamp` / `timeframe.in_seconds` / `weekofyear`
 - Compile `import`: inline registered library sources; unresolved aliases stub to `na`. `str.format` / `str.format_time`
+- Compile `session.*` / `chart.*`, `log.*` (result `logs`), `ticker.new/standard`, `request.currency_rate`, `alertcondition`
 
 ## [0.1.0] - 2026-08-15
 

@@ -27,7 +27,6 @@ import {
   mathFixnan,
   mathFloor,
   mathIff,
-  mathLog,
   mathLog10,
   mathMax,
   mathMin,
@@ -55,6 +54,8 @@ import {
   strTrim,
   strUpper,
 } from "../str.ts";
+import { LogBook, formatLogParts } from "../log.ts";
+import { resolveCurrencyRate } from "../request.ts";
 import { TaEngine } from "../ta.ts";
 import { utcPartsFromMs, timestamp, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
 import { timeframeInSeconds } from "../timeframe.ts";
@@ -92,6 +93,7 @@ export type CompileHelperOpts = {
 export function createCompileHelpers(opts?: CompileHelperOpts) {
   const ta = new TaEngine();
   const inputs = opts?.inputs;
+  const book = new LogBook();
   return {
     na: NA_FN,
     nz,
@@ -130,7 +132,23 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     round: mathRound,
     sqrt: mathSqrt,
     exp: mathExp,
-    log: mathLog,
+    log: {
+      info(bar: unknown, ...parts: unknown[]) {
+        book.info(logBar(bar), formatLogParts(parts));
+      },
+      warning(bar: unknown, ...parts: unknown[]) {
+        book.warning(logBar(bar), formatLogParts(parts));
+      },
+      error(bar: unknown, ...parts: unknown[]) {
+        book.error(logBar(bar), formatLogParts(parts));
+      },
+      clear() {
+        book.clear();
+      },
+      extras() {
+        return { __logs: book.snapshot() };
+      },
+    },
     log10: mathLog10,
     pow: mathPow,
     min: mathMin,
@@ -194,6 +212,10 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     udtGet,
     udtSet,
     udtRegister,
+    currencyRate: resolveCurrencyRate,
+    runtimeError(msg: unknown): never {
+      throw new Error(String(msg));
+    },
   };
 }
 
@@ -268,4 +290,8 @@ function calendarSecond(t: unknown): number | null {
 
 function calendarDayofweek(t: unknown): number | null {
   return utcPart(t, "dayofweek");
+}
+
+function logBar(bar: unknown): number {
+  return typeof bar === "number" && Number.isFinite(bar) ? bar : 0;
 }

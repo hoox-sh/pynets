@@ -279,6 +279,26 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     ctx.needsHeikinashi = true;
     return `"__HEIKINASHI__"`;
   }
+  // ticker.new / standard / modify / renko / kagi / linebreak / pointfigure → first arg or "SYMBOL"
+  if (name.startsWith("ticker_")) {
+    return pick(args, 0, ["symbol", "ticker", "tickerid"], `"SYMBOL"`);
+  }
+
+  if (name === "log_info" || name === "log_warning" || name === "log_error") {
+    const level = name.slice("log_".length);
+    const parts = args.pos.length > 0 ? args.pos : Object.values(args.kw);
+    return parts.length > 0
+      ? `__h.log.${level}(__bar_idx, ${parts.join(", ")})`
+      : `__h.log.${level}(__bar_idx)`;
+  }
+  if (name === "log_clear") return "__h.log.clear()";
+
+  if (name === "runtime_error") {
+    const msg = pick(args, 0, ["message", "msg"], `"runtime.error"`);
+    return `(() => { throw new Error(String(${msg})); })()`;
+  }
+
+  if (name === "alertcondition") return "null";
   if (name === "str_tostring" || name === "tostring") {
     const x = pick(args, 0, ["value", "source", "x"], "null");
     return `String(${x} ?? "")`;
@@ -763,6 +783,9 @@ function emitRequest(ctx: EmitCtx, name: string, args: CallArgs): string | null 
     }
     if (isSimpleSecurityExpr(expression) && isChartSecuritySymbol(symbol)) return expression;
     return "null";
+  }
+  if (name === "request_currency_rate" || name === "currency_rate") {
+    return `__h.currencyRate(${pick(args, 0, ["from", "from_currency"], "null")}, ${pick(args, 1, ["to", "to_currency"], "null")})`;
   }
   if (name.startsWith("request_")) return "null";
   return null;
