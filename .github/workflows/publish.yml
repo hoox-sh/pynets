@@ -7,10 +7,10 @@
 #        Repository: pynets
 #        Workflow: publish.yml
 #        Environment: npm
-#        Leave NPM_TOKEN unset so the job uses OIDC.
-#   2. Granular access token
+#        Leave NPM_TOKEN_HOOXSH unset so the job uses OIDC.
+#   2. Granular access token (org secret NPM_TOKEN_HOOXSH)
 #        npmjs.com → Access Tokens → Granular (read/write for @hoox-sh/pynets)
-#        gh secret set NPM_TOKEN -R hoox-sh/pynets
+#        Must be available to hoox-sh/pynets (org secret → selected/all repos).
 #
 # Usage:
 #   bump package.json + CHANGELOG.md
@@ -117,22 +117,22 @@ jobs:
       - name: Resolve publish auth
         id: auth
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN_HOOXSH }}
         run: |
           set -euo pipefail
           if [ -n "${NPM_TOKEN:-}" ]; then
             echo "mode=token" >> "$GITHUB_OUTPUT"
-            echo "Using NPM_TOKEN secret."
+            echo "Using NPM_TOKEN_HOOXSH secret."
           else
             echo "mode=oidc" >> "$GITHUB_OUTPUT"
-            echo "No NPM_TOKEN — using Trusted Publishing (OIDC)."
+            echo "No NPM_TOKEN_HOOXSH — using Trusted Publishing (OIDC)."
           fi
 
       - name: Publish (token)
         if: steps.auth.outputs.mode == 'token'
         run: npm publish --access public --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_HOOXSH }}
 
       - name: Publish (OIDC)
         if: steps.auth.outputs.mode == 'oidc'
