@@ -9,14 +9,43 @@
 
 export type UdtField = { name: string; default: unknown };
 
+/** Stored method; `body` is opaque (interpret owns FunctionDef). */
+export type UdtMethod = {
+  name: string;
+  params: Array<{ name: string; default?: unknown }>;
+  body?: unknown;
+  exported?: boolean;
+};
+
 export class UdtType {
   readonly fields: UdtField[];
+  readonly methods = new Map<string, UdtMethod>();
+  isExported = false;
 
   constructor(
     readonly name: string,
     fields: UdtField[],
   ) {
     this.fields = fields.map((f) => ({ name: f.name, default: f.default ?? null }));
+  }
+
+  addMethod(name: string, method: UdtMethod): void {
+    this.methods.set(name, method);
+  }
+
+  getMethod(name: string): UdtMethod | undefined {
+    return this.methods.get(name);
+  }
+
+  /** Shallow copy of fields + methods for library `export type`. */
+  cloneType(): UdtType {
+    const copy = new UdtType(
+      this.name,
+      this.fields.map((f) => ({ name: f.name, default: f.default })),
+    );
+    copy.isExported = this.isExported;
+    for (const [name, method] of this.methods) copy.addMethod(name, method);
+    return copy;
   }
 
   /** Pine `Type.new(...)` — defaults fill first; missing default is `na`. */
@@ -32,10 +61,12 @@ export class UdtType {
 }
 
 export class UdtInstance {
+  readonly type: UdtType;
   readonly typeName: string;
   private readonly values = new Map<string, unknown>();
 
   constructor(type: UdtType) {
+    this.type = type;
     this.typeName = type.name;
     for (const field of type.fields) this.values.set(field.name, field.default ?? null);
   }
@@ -47,6 +78,10 @@ export class UdtInstance {
   set(field: string, value: unknown): void {
     if (!this.values.has(field)) return;
     this.values.set(field, value);
+  }
+
+  getMethod(name: string): UdtMethod | undefined {
+    return this.type.getMethod(name);
   }
 }
 

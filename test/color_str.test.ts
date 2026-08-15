@@ -20,6 +20,7 @@ import {
   strContains,
   strEndsWith,
   strFormat,
+  strFormatTime,
   strJoin,
   strLength,
   strLower,
@@ -289,5 +290,20 @@ describe("str helpers", () => {
     expect(strJoin(["a", null, "b"], ",")).toBe("a,,b");
     expect(strJoin(["a", "b"], null)).toBe("ab");
     expect(strJoin(null, ",")).toBeNull();
+  });
+
+  test("strFormatTime default / custom / seconds / na / UTC-5", () => {
+    const ms2020 = Date.UTC(2020, 0, 1);
+    expect(strFormatTime(ms2020)).toBe("2020-01-01T00:00:00Z");
+    expect(strFormatTime(ms2020, null)).toBe("2020-01-01T00:00:00Z");
+    expect(strFormatTime(ms2020, "yyyy-MM-dd")).toBe("2020-01-01");
+    expect(strFormatTime(1_577_836_800)).toBe("2020-01-01T00:00:00Z");
+    expect(strFormatTime(null)).toBe("NaN");
+    expect(strFormatTime(Number.NaN)).toBe("NaN");
+    expect(strFormatTime("not-a-time")).toBe("NaN");
+    expect(strFormatTime(ms2020, "yyyy-MM-dd HH:mm:ss", "UTC-5")).toBe(
+      "2019-12-31 19:00:00",
+    );
+    expect(strFormatTime(ms2020, "HH", "GMT+10")).toBe("10");
   });
 });

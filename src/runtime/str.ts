@@ -205,6 +205,166 @@ export function strMatch(s: unknown, regex: unknown): string | null {
   }
 }
 
+const DEFAULT_FORMAT_TIME = "yyyy-MM-dd'T'HH:mm:ssZ";
+
+const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+/** Unix-ms → UTC civil parts. `Date.UTC` getters stay TZ-stable. */
+function utcCivilFromMs(ms: number): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+} {
+  const d = new Date(ms);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    second: d.getUTCSeconds(),
+  };
+}
+
+/**
+ * Python `_format_time` offset: `UTC` / `GMT` / `UTC-5` / `GMT+10`.
+ * Hour integers only (`int("+10")`). Unknown / IANA → 0 (UTC).
+ */
+function parseTimezoneOffsetHours(timezone: unknown): number {
+  let spec: unknown = timezone;
+  if (Array.isArray(spec)) spec = spec.length ? spec[spec.length - 1] : null;
+  if (typeof spec !== "string") return 0;
+  const z = spec.trim();
+  if (
+    !z ||
+    z === "syminfo.timezone" ||
+    z === "UTC" ||
+    z === "utc" ||
+    z === "Etc/UTC" ||
+    z === "GMT"
+  ) {
+    return 0;
+  }
+  if (
+    z.toUpperCase().includes("GMT") ||
+    z.startsWith("UTC+") ||
+    z.startsWith("UTC-") ||
+    z.startsWith("utc+") ||
+    z.startsWith("utc-")
+  ) {
+    const offsetStr = z.toUpperCase().replaceAll("GMT", "").replaceAll("UTC", "").trim();
+    if (!offsetStr || !/^[+-]?\d+$/.test(offsetStr)) return 0;
+    const offset = Number.parseInt(offsetStr, 10);
+    return Number.isFinite(offset) ? offset : 0;
+  }
+  return 0;
+}
+
+function coerceFormatTimeMs(time: unknown): number | null {
+  let raw: unknown = time;
+  if (raw != null && typeof raw === "object" && "current" in raw) {
+    raw = (raw as { current: unknown }).current;
+  }
+  if (raw == null || typeof raw === "boolean" || typeof raw === "string") return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  let ts = Math.trunc(raw);
+  // Python: 0 < timestamp < 10_000_000_000 → Unix seconds, coerce to ms.
+  if (ts > 0 && ts < 10_000_000_000) ts *= 1000;
+  return ts;
+}
+
+function formatOffsetHours(offsetHours: number): string {
+  const sign = offsetHours >= 0 ? "+" : "-";
+  return `${sign}${pad2(Math.abs(offsetHours))}00`;
+}
+
+function formatTzName(offsetHours: number): string {
+  if (offsetHours === 0) return "UTC";
+  const sign = offsetHours >= 0 ? "+" : "-";
+  return `UTC${sign}${pad2(Math.abs(offsetHours))}:00`;
+}
+
+/**
+ * `str.format_time(time[, format[, timezone]])`.
+ * na / non-numeric time → `"NaN"`. Default format is Pine ISO
+ * `yyyy-MM-dd'T'HH:mm:ssZ`; `'` markers are stripped (`2020-01-01T00:00:00Z`).
+ * `Z` is not a token (literal). `z` → `+0000`.
+ */
+export function strFormatTime(
+  time: unknown,
+  format?: unknown,
+  timezone?: unknown,
+): string {
+  const ms = coerceFormatTimeMs(time);
+  if (ms == null) return "NaN";
+  const formatStr =
+    format == null ? DEFAULT_FORMAT_TIME : (asStr(format) ?? DEFAULT_FORMAT_TIME);
+  const offsetHours = parseTimezoneOffsetHours(timezone);
+  const parts = utcCivilFromMs(ms + offsetHours * 3_600_000);
+  const h12 = ((parts.hour - 1) % 12) + 1;
+  const replacements: Record<string, string> = {
+    yyyy: String(parts.year),
+    yy: String(parts.year).slice(-2),
+    MMMM: MONTHS_LONG[parts.month - 1] ?? "",
+    MMM: MONTHS_SHORT[parts.month - 1] ?? "",
+    MM: pad2(parts.month),
+    M: String(parts.month),
+    dd: pad2(parts.day),
+    d: String(parts.day),
+    HH: pad2(parts.hour),
+    H: String(parts.hour),
+    hh: pad2(h12),
+    h: String(h12),
+    mm: pad2(parts.minute),
+    m: String(parts.minute),
+    ss: pad2(parts.second),
+    s: String(parts.second),
+    a: parts.hour < 12 ? "AM" : "PM",
+    zzz: formatTzName(offsetHours),
+    z: formatOffsetHours(offsetHours),
+  };
+  let formatted = formatStr;
+  for (const key of Object.keys(replacements).sort((a, b) => b.length - a.length)) {
+    formatted = formatted.split(key).join(replacements[key]!);
+  }
+  return formatted.replaceAll("'", "");
+}
+
 /**
  * `str.format(fmt, ...)` — Java MessageFormat-ish `{0}` / `{1,number,#.##}`.
  * na format → `"NaN"`; missing index → `""`; na arg → `"NaN"`.

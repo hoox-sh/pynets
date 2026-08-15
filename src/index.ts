@@ -22,7 +22,7 @@ export type {
 } from "./runtime/interpret.ts";
 export { NA, PineSeries } from "./runtime/series.ts";
 export { TaEngine } from "./runtime/ta.ts";
-export type { BrokerSettings } from "./runtime/strategy.ts";
+export type { BrokerSettings, StrategySummary } from "./runtime/strategy.ts";
 export { PineArray } from "./runtime/array.ts";
 export { PineMap } from "./runtime/map.ts";
 export { PineMatrix } from "./runtime/matrix.ts";

@@ -521,3 +521,92 @@ describe("StrategyBook risk + OCA", () => {
     expect(book.fills).toHaveLength(1);
   });
 });
+
+describe("StrategyBook summary stats", () => {
+  test("long 1@100 close@110 → netprofit 10, percentProfitable 100, profitFactor > 0, summary fields", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillClose(1, "L", 110);
+    expect(book.netprofit()).toBe(10);
+    expect(book.percentProfitable()).toBe(100);
+    expect(book.profitFactor()).toBeGreaterThan(0);
+    const s = book.summary(110);
+    expect(s.netprofit).toBe(10);
+    expect(s.netprofitPercent).toBeCloseTo(100 * 10 / 1_000_000);
+    expect(s.openprofit).toBe(0);
+    expect(s.equity).toBe(book.equity(110));
+    expect(s.wintrades).toBe(1);
+    expect(s.losstrades).toBe(0);
+    expect(s.eventrades).toBe(0);
+    expect(s.closedtrades).toBe(1);
+    expect(s.opentrades).toBe(0);
+    expect(s.grossprofit).toBe(10);
+    expect(s.grossloss).toBe(0);
+    expect(s.avgTrade).toBe(10);
+    expect(s.avgWinningTrade).toBe(10);
+    expect(s.avgLosingTrade).toBe(0);
+    expect(s.percentProfitable).toBe(100);
+    expect(s.profitFactor).toBeGreaterThan(0);
+    expect(s.maxDrawdown).toBe(book.maxDrawdown());
+    expect(s.maxDrawdownPercent).toBe(book.maxDrawdownPercent());
+    expect(s.maxRunup).toBe(book.maxRunup());
+    expect(s.maxRunupPercent).toBe(book.maxRunupPercent());
+    expect(s.initialCapital).toBe(1_000_000);
+    expect(book.openprofit(Number.NaN)).toBe(0);
+  });
+
+  test("win then loss → percentProfitable 50, profitFactor = gp/gl", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillClose(1, "L", 110);
+    book.fillEntry(2, "L2", "long", 1, 110);
+    book.fillClose(3, "L2", 100);
+    expect(book.wintrades).toBe(1);
+    expect(book.losstrades).toBe(1);
+    expect(book.percentProfitable()).toBe(50);
+    expect(book.grossprofit).toBe(10);
+    expect(book.grossloss).toBe(10);
+    expect(book.profitFactor()).toBe(book.grossprofit / book.grossloss);
+    expect(book.summary(100).percentProfitable).toBe(50);
+    expect(book.summary(100).profitFactor).toBe(1);
+  });
+
+  test("maxDrawdown after a losing close is positive magnitude", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillClose(1, "L", 90);
+    expect(book.maxDrawdown()).toBeGreaterThan(0);
+    expect(book.maxDrawdown()).toBe(10);
+    expect(book.maxDrawdownPercent()).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.netprofit()).toBe(-10);
+  });
+
+  test("maxContractsHeldAll after qty 2 then flatten", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 2, 100);
+    expect(book.maxContractsHeldAll()).toBe(2);
+    expect(book.maxContractsHeldLong()).toBe(2);
+    expect(book.maxContractsHeldShort()).toBe(0);
+    book.fillClose(1, "L", 110);
+    expect(book.position.qty).toBe(0);
+    expect(book.maxContractsHeldAll()).toBe(2);
+    expect(book.maxContractsHeldLong()).toBe(2);
+  });
+
+  test("percents are 100 * x / 1e6 default capital", () => {
+    const book = new StrategyBook();
+    expect(book.initialCapital).toBe(1_000_000);
+    book.fillEntry(0, "L", "long", 1, 100);
+    expect(book.openprofit(110)).toBe(10);
+    expect(book.openprofitPercent(110)).toBeCloseTo((100 * 10) / 1_000_000);
+    book.fillClose(1, "L", 110);
+    expect(book.netprofit()).toBe(10);
+    expect(book.netprofitPercent(110)).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.grossprofitPercent()).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.grosslossPercent()).toBe(0);
+    expect(book.avgTradePercent()).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.avgWinningTradePercent()).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.avgLosingTradePercent()).toBe(0);
+    expect(book.summary(110).netprofitPercent).toBeCloseTo((100 * 10) / 1_000_000);
+  });
+});

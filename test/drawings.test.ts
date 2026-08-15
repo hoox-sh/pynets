@@ -224,6 +224,76 @@ describe("DrawingBook", () => {
     expect(book.get(99)).toBeUndefined();
   });
 
+  test("boxSetCorners writes extra; missing or wrong kind no-op", () => {
+    const book = new DrawingBook();
+    const box = book.boxNew(0);
+    const line = book.lineNew(1);
+    book.boxSetCorners(box, 1, 10, 3, 0);
+    book.boxSetCorners(line, 9, 9, 9, 9);
+    book.boxSetCorners(99, 1, 2, 3, 4);
+    book.boxSetCorners(box, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN);
+    expect(book.get(box)?.extra).toEqual({ left: 1, top: 10, right: 3, bottom: 0 });
+    expect(book.get(line)?.extra).toBeUndefined();
+    expect(book.get(99)).toBeUndefined();
+  });
+
+  test("getX1/Y1/X2/Y2 and label getters read extra / text; na if missing", () => {
+    const book = new DrawingBook();
+    const line = book.lineNew(0);
+    const label = book.labelNew(1, "hi");
+    const bare = book.labelNew(2);
+    expect(book.getX1(line)).toBeNull();
+    expect(book.getY2(line)).toBeNull();
+    expect(book.getX1(99)).toBeNull();
+    expect(book.labelGetText(line)).toBeNull();
+    expect(book.labelGetX(label)).toBeNull();
+    expect(book.labelGetY(label)).toBeNull();
+    expect(book.labelGetText(bare)).toBeNull();
+    book.lineSetXy(line, 0, 10, 4, 20);
+    book.labelSetXy(label, 8, 9);
+    book.labelSetText(bare, "");
+    expect(book.getX1(line)).toBe(0);
+    expect(book.getY1(line)).toBe(10);
+    expect(book.getX2(line)).toBe(4);
+    expect(book.getY2(line)).toBe(20);
+    expect(book.labelGetX(label)).toBe(8);
+    expect(book.labelGetY(label)).toBe(9);
+    expect(book.labelGetText(label)).toBe("hi");
+    expect(book.labelGetText(bare)).toBe("");
+    expect(book.labelGetX(line)).toBeNull();
+    expect(book.getX1(label)).toBeNull();
+  });
+
+  test("linefillNew stores extra dict", () => {
+    const book = new DrawingBook();
+    const a = book.linefillNew(0, { color: "red", id1: 1, id2: 2 });
+    const b = book.linefillNew(1);
+    expect(book.get(a)).toEqual({
+      kind: "linefill",
+      bar: 0,
+      extra: { color: "red", id1: 1, id2: 2 },
+    });
+    expect(book.get(b)).toEqual({ kind: "linefill", bar: 1 });
+  });
+
+  test("exportForApi lists non-deleted compact items", () => {
+    const book = new DrawingBook();
+    const line = book.lineNew(0, { color: "red" });
+    book.labelNew(1, "hi");
+    const box = book.boxNew(2);
+    book.alert(3, "cross");
+    book.lineSetXy(line, 0, 1, 2, 3);
+    book.boxSetCorners(box, 1, 10, 3, 0);
+    book.lineDelete(line);
+    expect(book.exportForApi()).toEqual([
+      { kind: "label", bar: 1, text: "hi" },
+      { kind: "box", bar: 2, extra: { left: 1, top: 10, right: 3, bottom: 0 } },
+      { kind: "alert", bar: 3, text: "cross" },
+    ]);
+    expect(book.exportForApi()[1]?.extra).not.toBe(book.get(box)?.extra);
+    expect(new DrawingBook().exportForApi()).toEqual([]);
+  });
+
   test("bad args do not throw", () => {
     const book = new DrawingBook();
     expect(() => book.lineNew(Number.NaN, "nope" as unknown as Record<string, unknown>)).not.toThrow();

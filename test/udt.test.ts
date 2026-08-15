@@ -7,6 +7,7 @@ import {
   EnumMember,
   EnumType,
   UdtInstance,
+  type UdtMethod,
   UdtType,
   enumTypeFromNames,
   udtTypeFromAssigns,
@@ -77,6 +78,45 @@ describe("UdtInstance field access", () => {
     const b = Point.newInstance();
     a.set("x", 3);
     expect(b.get("x")).toBe(0);
+  });
+});
+
+describe("UdtType methods", () => {
+  test("addMethod + getMethod", () => {
+    const Point = new UdtType("Point", [{ name: "x", default: 0 }]);
+    const method: UdtMethod = {
+      name: "move",
+      params: [{ name: "dx" }, { name: "dy", default: 0 }],
+      body: { kind: "FunctionDef" },
+    };
+    Point.addMethod("move", method);
+    expect(Point.getMethod("move")).toBe(method);
+    expect(Point.getMethod("move")?.params).toEqual([
+      { name: "dx" },
+      { name: "dy", default: 0 },
+    ]);
+  });
+
+  test("missing method is undefined", () => {
+    const Point = new UdtType("Point", [{ name: "x", default: 0 }]);
+    expect(Point.getMethod("move")).toBeUndefined();
+  });
+
+  test("instance.getMethod sees type methods", () => {
+    const Point = new UdtType("Point", [{ name: "x", default: 0 }]);
+    const method: UdtMethod = { name: "len", params: [] };
+    Point.addMethod("len", method);
+    const p = Point.newInstance();
+    expect(p.type).toBe(Point);
+    expect(p.getMethod("len")).toBe(method);
+    expect(p.getMethod("missing")).toBeUndefined();
+  });
+
+  test("isExported flag", () => {
+    const Point = new UdtType("Point", [{ name: "x", default: 0 }]);
+    expect(Point.isExported).toBe(false);
+    Point.isExported = true;
+    expect(Point.isExported).toBe(true);
   });
 });
 

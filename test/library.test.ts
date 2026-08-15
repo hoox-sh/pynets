@@ -77,6 +77,43 @@ describe("LibraryModule", () => {
     expect(mod.get("UNIT")).toBe(1);
     expect(mod.has("UNIT")).toBe(true);
   });
+
+  test("setExport + get + kindOf", () => {
+    const mod = new LibraryModule("Consts");
+    mod.setExport("PI", 3.14);
+    expect(mod.get("PI")).toBe(3.14);
+    expect(mod.has("PI")).toBe(true);
+    expect(mod.kindOf("PI")).toBe("const");
+    expect(mod.kindOf("missing")).toBeUndefined();
+  });
+
+  test("exportType/exportEnum/exportFn set kinds", () => {
+    const mod = new LibraryModule("Typed");
+    const typeVal = { name: "Point" };
+    const enumVal = { Long: "Side.Long", Short: "Side.Short" };
+    const fnVal = (x: unknown) => x;
+    mod.exportType("Point", typeVal);
+    mod.exportEnum("Side", enumVal);
+    mod.exportFn("identity", fnVal);
+    expect(mod.get("Point")).toBe(typeVal);
+    expect(mod.get("Side")).toBe(enumVal);
+    expect(mod.get("identity")).toBe(fnVal);
+    expect(mod.kindOf("Point")).toBe("type");
+    expect(mod.kindOf("Side")).toBe("enum");
+    expect(mod.kindOf("identity")).toBe("fn");
+  });
+
+  test("allExports snapshot is a copy", () => {
+    const mod = new LibraryModule("Snap");
+    mod.setExport("UNIT", 1);
+    const snap = mod.allExports();
+    expect(snap).toEqual({ UNIT: 1 });
+    snap.UNIT = 99;
+    snap.NEW = 2;
+    expect(mod.get("UNIT")).toBe(1);
+    expect(mod.has("NEW")).toBe(false);
+    expect(mod.allExports()).toEqual({ UNIT: 1 });
+  });
 });
 
 describe("stub polyfills", () => {
@@ -135,5 +172,8 @@ describe("createStubModule", () => {
     expect(inv(10, 5, 13)).toEqual([2, 3]);
     expect(stub.get("missing")).toBeUndefined();
     expect(stub.has("missing")).toBe(false);
+    expect(stub.kindOf("index_2d_to_1d")).toBe("fn");
+    expect(stub.kindOf("index_1d_to_2d")).toBe("fn");
+    expect(stub.kindOf("missing")).toBeUndefined();
   });
 });

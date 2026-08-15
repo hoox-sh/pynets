@@ -123,11 +123,12 @@ import {
   strStartsWith,
   strSubstring,
   strToNumber,
+  strFormatTime,
   strTostring,
   strTrim,
   strUpper,
 } from "./str.ts";
-import { StrategyBook, type BrokerSettings, type StrategyEvent } from "./strategy.ts";
+import { StrategyBook, type BrokerSettings, type StrategyEvent, type StrategySummary } from "./strategy.ts";
 import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
 import { TaEngine } from "./ta.ts";
@@ -177,6 +178,8 @@ export interface RuntimeResult {
   logs?: LogRecord[];
   /** Titled plot series as `{ data: [{ value, time? }] }` for host/stream consumers. */
   plot_data?: Record<string, { data: Array<{ value: number | null; time?: number }> }>;
+  /** Book-level strategy scalars when the script is a strategy (or any fills ran). */
+  strategy?: StrategySummary;
   error?: string;
   error_kind?: string;
 }
@@ -523,6 +526,9 @@ export function interpretTree(
     drawings: packDrawings(env.drawings),
     logs: env.logs.records.length ? env.logs.records : undefined,
     plot_data: packPlotData(plots, env.barTimes),
+    ...(script_type === "strategy" || env.book.fills.length > 0
+      ? { strategy: env.book.summary(num(env.ctx.close) ?? 0) }
+      : {}),
     ...(runError ?? {}),
   };
 }
@@ -1242,6 +1248,27 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "avg_trade") return env.book.avgTrade();
       if (node.attr === "avg_winning_trade") return env.book.avgWinningTrade();
       if (node.attr === "avg_losing_trade") return env.book.avgLosingTrade();
+      if (node.attr === "netprofit_percent") {
+        return env.book.netprofitPercent(num(env.ctx.close) ?? 0);
+      }
+      if (node.attr === "openprofit_percent") {
+        return env.book.openprofitPercent(num(env.ctx.close) ?? 0);
+      }
+      if (node.attr === "grossprofit_percent") return env.book.grossprofitPercent();
+      if (node.attr === "grossloss_percent") return env.book.grosslossPercent();
+      if (node.attr === "avg_trade_percent") return env.book.avgTradePercent();
+      if (node.attr === "avg_winning_trade_percent") return env.book.avgWinningTradePercent();
+      if (node.attr === "avg_losing_trade_percent") return env.book.avgLosingTradePercent();
+      if (node.attr === "max_drawdown") return env.book.maxDrawdown();
+      if (node.attr === "max_drawdown_percent") return env.book.maxDrawdownPercent();
+      if (node.attr === "max_runup") return env.book.maxRunup();
+      if (node.attr === "max_runup_percent") return env.book.maxRunupPercent();
+      if (node.attr === "percent_profitable" || node.attr === "winrate") {
+        return env.book.percentProfitable();
+      }
+      if (node.attr === "profitfactor" || node.attr === "profit_factor") {
+        return env.book.profitFactor();
+      }
       if (node.attr === "initial_capital") return env.book.initialCapital;
       if (node.attr === "commission") return 0;
       if (node.attr === "cash") return "cash";
@@ -1438,6 +1465,18 @@ function evalCall(node: Call, env: Env): Value {
     const obj = evalExpr(node.func.value, env);
     if (obj instanceof LibraryModule) {
       return evalLibraryMemberCall(obj, node.func.attr, node, env);
+    }
+    if (obj instanceof UdtInstance) {
+      const meth = obj.getMethod(node.func.attr);
+      if (meth && isUdfDef(meth.body)) return evalUdf(meth.body, node, env, obj);
+    }
+    if (obj instanceof UdtType && node.func.attr === "new") {
+      const overrides: Record<string, unknown> = {};
+      for (const a of asArgs(node.args)) {
+        const key = argKeyword(a);
+        if (key) overrides[key] = evalExpr(a.value, env);
+      }
+      return obj.newInstance(overrides);
     }
   }
   const fname = callName(node);
@@ -3260,6 +3299,50 @@ function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | un
     const x = unwrap(evalExpr(callArg(node.args, 1, ["x"]), env));
     return id != null && x != null ? env.drawings.lineGetPrice(id, x) : NA;
   }
+  if (fname === "line.get_x1") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return id != null ? env.drawings.getX1(id) : NA;
+  }
+  if (fname === "line.get_y1") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return id != null ? env.drawings.getY1(id) : NA;
+  }
+  if (fname === "line.get_x2") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return id != null ? env.drawings.getX2(id) : NA;
+  }
+  if (fname === "line.get_y2") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return id != null ? env.drawings.getY2(id) : NA;
+  }
+  if (fname === "label.get_text") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return id != null ? env.drawings.labelGetText(id) : NA;
+  }
+  if (fname === "label.set_xy") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) {
+      env.drawings.labelSetXy(
+        id,
+        unwrap(evalExpr(callArg(node.args, 1, ["x"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 2, ["y"]), env)) ?? 0,
+      );
+    }
+    return NA;
+  }
+  if (fname === "box.set_lefttop" || fname === "box.set_corners") {
+    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (id != null) {
+      env.drawings.boxSetCorners(
+        id,
+        unwrap(evalExpr(callArg(node.args, 1, ["left", "x1"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 2, ["top", "y1"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 3, ["right", "x2"]), env)) ?? 0,
+        unwrap(evalExpr(callArg(node.args, 4, ["bottom", "y2"]), env)) ?? 0,
+      );
+    }
+    return NA;
+  }
   if (fname === "label.set_color") {
     const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
     if (id != null) env.drawings.labelSetColor(id, evalAsString(callArg(node.args, 1, ["color"]), env) ?? "");
@@ -3429,6 +3512,14 @@ function evalStrCall(fname: string | null, node: Call, env: Env): Value | undefi
       evalAsString(callArg(node.args, 1, ["regex", "pattern"]), env),
     );
   }
+  if (fname === "str.format_time") {
+    return strFormatTime(
+      unwrap(evalExpr(callArg(node.args, 0, ["time", "timestamp"]), env)) ??
+        evalExpr(callArg(node.args, 0, ["time", "timestamp"]), env),
+      evalAsString(callArg(node.args, 1, ["format"]), env),
+      evalAsString(callArg(node.args, 2, ["timezone"]), env),
+    );
+  }
   if (fname === "str.format") {
     const fmt = evalAsString(callArg(node.args, 0, ["formatString", "format"]), env);
     const args = asArgs(node.args).slice(1).map((a) => {
@@ -3463,6 +3554,19 @@ function registerUdf(node: FunctionDef, env: Env): void {
   const def: UdfDef = { __udf: true, params: asParams(node.args), body: asStmts(node.body) };
   env.udfs.set(node.name, def);
   if (node.export) env.pendingExports.set(node.name, def);
+  if (node.method) {
+    const first = asParams(node.args)[0];
+    const typeName = typeNameFromExpr(first?.type ?? null);
+    const owner = typeName != null ? ctxGet(env, typeName) : undefined;
+    if (owner instanceof UdtType) {
+      owner.addMethod(node.name, {
+        name: node.name,
+        params: asParams(node.args).map((p) => ({ name: p.name })),
+        body: def,
+        exported: Boolean(node.export),
+      });
+    }
+  }
 }
 
 function registerTypeDef(node: TypeDef, env: Env): void {
@@ -3514,12 +3618,26 @@ function pushUdfFrame(env: Env, site: string): void {
   env.frames.push(state);
 }
 
-function evalUdf(def: UdfDef, node: Call, env: Env): Value {
+function typeNameFromExpr(node: expr | null | undefined): string | null {
+  if (node == null) return null;
+  if (node.kind === "Name") return node.id;
+  if (node.kind === "Attribute") return node.attr;
+  return null;
+}
+
+function evalUdf(def: UdfDef, node: Call, env: Env, implicitThis?: Value): Value {
   const args = asArgs(node.args);
   const bound = new Set<string>();
   pushUdfFrame(env, siteKey(node, env));
   try {
     let pos = 0;
+    if (implicitThis !== undefined) {
+      const self = def.params[pos++];
+      if (self) {
+        bindName(env, self.name, implicitThis);
+        bound.add(self.name);
+      }
+    }
     for (const a of args) {
       if (argKeyword(a) != null) continue;
       const p = def.params[pos++];
@@ -3702,11 +3820,16 @@ function loadLibrarySource(env: Env, source: string, fallbackTitle?: string): vo
 }
 
 function finalizeLibrary(env: Env, title: string): void {
-  const exports: Record<string, unknown> = {};
-  for (const [k, v] of env.pendingExports) exports[k] = v;
   const existing = env.libraries.lookup({ name: title });
   const mod = existing ?? new LibraryModule(title);
-  for (const [k, v] of Object.entries(exports)) mod.exports.set(k, v);
+  for (const [k, v] of env.pendingExports) {
+    if (isUdfDef(v)) mod.exportFn(k, v);
+    else if (v instanceof UdtType) {
+      v.isExported = true;
+      mod.exportType(k, v);
+    } else if (v instanceof EnumType) mod.exportEnum(k, v);
+    else mod.setExport(k, v);
+  }
   env.libraries.register(mod);
   env.pendingExports.clear();
 }

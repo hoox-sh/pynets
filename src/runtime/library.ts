@@ -160,12 +160,15 @@ function toExportMap(exports?: Map<string, unknown> | Record<string, unknown>): 
   return new Map(Object.entries(exports));
 }
 
+export type LibraryExportKind = "const" | "fn" | "type" | "enum" | "method";
+
 /** A loaded library: title/path identity plus exported callables and values. */
 export class LibraryModule {
   title: string;
   namespace: string | null;
   version: number | null;
   exports: Map<string, unknown>;
+  kinds: Map<string, LibraryExportKind>;
   private readonly resolveStubs: boolean;
 
   constructor(title: string, init?: LibraryModuleInit & { resolveStubs?: boolean }) {
@@ -173,6 +176,7 @@ export class LibraryModule {
     this.namespace = init?.namespace ?? null;
     this.version = init?.version ?? null;
     this.exports = toExportMap(init?.exports);
+    this.kinds = new Map();
     this.resolveStubs = init?.resolveStubs === true;
   }
 
@@ -187,6 +191,42 @@ export class LibraryModule {
   has(name: string): boolean {
     if (this.exports.has(name)) return true;
     return this.resolveStubs && Object.hasOwn(STUB_KNOWN_EXPORTS, name);
+  }
+
+  /** Put `value` into `exports` and tag as a const. */
+  setExport(name: string, value: unknown): void {
+    this.putExport(name, value, "const");
+  }
+
+  exportType(name: string, value: unknown): void {
+    this.putExport(name, value, "type");
+  }
+
+  exportEnum(name: string, value: unknown): void {
+    this.putExport(name, value, "enum");
+  }
+
+  exportFn(name: string, value: unknown): void {
+    this.putExport(name, value, "fn");
+  }
+
+  kindOf(name: string): string | undefined {
+    const tagged = this.kinds.get(name);
+    if (tagged !== undefined) return tagged;
+    if (this.resolveStubs && Object.hasOwn(STUB_KNOWN_EXPORTS, name)) return "fn";
+    return undefined;
+  }
+
+  /** Shallow copy of stored exports (does not include unresolved stub polyfills). */
+  allExports(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of this.exports) out[key] = value;
+    return out;
+  }
+
+  private putExport(name: string, value: unknown, kind: LibraryExportKind): void {
+    this.exports.set(name, value);
+    this.kinds.set(name, kind);
   }
 }
 

@@ -130,11 +130,16 @@ export class DrawingBook {
     return this.push("polyline", bar, { cap: this.maxPolylines });
   }
 
-  linefillNew(bar: number, id1?: number, id2?: number): number {
+  linefillNew(bar: number, extraOrId1?: Record<string, unknown> | number, id2?: number): number {
     const extra: Record<string, unknown> = {};
-    if (isFiniteNumber(id1)) extra.id1 = id1;
-    if (isFiniteNumber(id2)) extra.id2 = id2;
-    return this.push("linefill", bar, { extra });
+    const patch = asExtra(extraOrId1);
+    if (patch != null) {
+      Object.assign(extra, patch);
+    } else {
+      if (isFiniteNumber(extraOrId1)) extra.id1 = extraOrId1;
+      if (isFiniteNumber(id2)) extra.id2 = id2;
+    }
+    return this.push("linefill", bar, { extra: Object.keys(extra).length ? extra : undefined });
   }
 
   alert(bar: number, message: string): void {
@@ -188,6 +193,15 @@ export class DrawingBook {
     ev.extra = { ...(ev.extra ?? {}), ...patch };
   }
 
+  boxSetCorners(id: number, left: number, top: number, right: number, bottom: number): void {
+    const extra = this.extraOf(id, "box");
+    if (!extra) return;
+    setNum(extra, "left", left);
+    setNum(extra, "top", top);
+    setNum(extra, "right", right);
+    setNum(extra, "bottom", bottom);
+  }
+
   lineSetColor(id: number, color: unknown): void {
     const extra = this.extraOf(id, "line");
     if (!extra) return;
@@ -226,6 +240,42 @@ export class DrawingBook {
 
   lineGetY2(id: number): number | null {
     return this.lineGetNum(id, "y2");
+  }
+
+  getX1(id: number): number | null {
+    return this.extraNum(id, "x1");
+  }
+
+  getY1(id: number): number | null {
+    return this.extraNum(id, "y1");
+  }
+
+  getX2(id: number): number | null {
+    return this.extraNum(id, "x2");
+  }
+
+  getY2(id: number): number | null {
+    return this.extraNum(id, "y2");
+  }
+
+  labelGetX(id: number): number | null {
+    const ev = this.byId.get(id);
+    if (!ev || ev.kind !== "label") return null;
+    return this.extraNum(id, "x");
+  }
+
+  labelGetY(id: number): number | null {
+    const ev = this.byId.get(id);
+    if (!ev || ev.kind !== "label") return null;
+    return this.extraNum(id, "y");
+  }
+
+  labelGetText(id: number): string | null {
+    const ev = this.byId.get(id);
+    if (!ev || ev.kind !== "label") return null;
+    if (ev.text !== undefined) return ev.text;
+    const t = ev.extra?.text;
+    return t == null ? null : String(t);
   }
 
   lineGetPrice(id: number, x: unknown): number | null {
@@ -314,6 +364,34 @@ export class DrawingBook {
     setAny(extra, "color", color);
   }
 
+  /** Compact non-deleted items for RuntimeResult.drawings. */
+  exportForApi(): Array<{
+    kind: DrawingKind;
+    bar: number;
+    text?: string;
+    extra?: Record<string, unknown>;
+  }> {
+    const out: Array<{
+      kind: DrawingKind;
+      bar: number;
+      text?: string;
+      extra?: Record<string, unknown>;
+    }> = [];
+    for (const ev of this.items) {
+      if (ev.deleted) continue;
+      const rec: {
+        kind: DrawingKind;
+        bar: number;
+        text?: string;
+        extra?: Record<string, unknown>;
+      } = { kind: ev.kind, bar: ev.bar };
+      if (ev.text !== undefined) rec.text = ev.text;
+      if (ev.extra !== undefined) rec.extra = { ...ev.extra };
+      out.push(rec);
+    }
+    return out;
+  }
+
   lineDelete(id: number): void {
     this.markDeleted(id);
   }
@@ -353,6 +431,13 @@ export class DrawingBook {
   private lineGetNum(id: number, key: "x1" | "y1" | "x2" | "y2"): number | null {
     const ev = this.byId.get(id);
     if (!ev || ev.kind !== "line") return null;
+    const v = ev.extra?.[key];
+    return isFiniteNumber(v) ? v : null;
+  }
+
+  private extraNum(id: number, key: string): number | null {
+    const ev = this.byId.get(id);
+    if (!ev) return null;
     const v = ev.extra?.[key];
     return isFiniteNumber(v) ? v : null;
   }

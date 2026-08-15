@@ -88,6 +88,31 @@ export interface BarOhlc {
   close?: number;
 }
 
+/** Snapshot of book-level performance scalars (for RuntimeResult). */
+export interface StrategySummary {
+  netprofit: number;
+  netprofitPercent: number;
+  openprofit: number;
+  equity: number;
+  wintrades: number;
+  losstrades: number;
+  eventrades: number;
+  closedtrades: number;
+  opentrades: number;
+  grossprofit: number;
+  grossloss: number;
+  avgTrade: number;
+  avgWinningTrade: number;
+  avgLosingTrade: number;
+  percentProfitable: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  maxDrawdownPercent: number;
+  maxRunup: number;
+  maxRunupPercent: number;
+  initialCapital: number;
+}
+
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
@@ -203,14 +228,21 @@ export class StrategyBook {
   private fillsDay: number | null = null;
   private dayFilledOrders = 0;
   private equityPeak: number;
+  private equityTrough: number;
   private maxDrawdownAbs = 0;
-  private maxDrawdownPercent = 0;
+  private maxDdPercent = 0;
+  private maxRunupAbs = 0;
+  private maxRuPercent = 0;
+  private maxHeldAll = 0;
+  private maxHeldLong = 0;
+  private maxHeldShort = 0;
 
   constructor(settings?: BrokerSettings) {
     this.commission = finiteOr(settings?.commission, 0);
     this.slippage = finiteOr(settings?.slippage, 0);
     this.pyramiding = normalizePyramiding(settings?.pyramiding);
     this.equityPeak = this.initialCapital;
+    this.equityTrough = this.initialCapital;
   }
 
   /** Mark-to-market equity: initial + realized − commission + open PnL. */
@@ -222,7 +254,9 @@ export class StrategyBook {
     const paid = isFiniteNumber(this.commissionPaid) ? this.commissionPaid : 0;
     const open =
       q === 0 || !isFiniteNumber(avg) || !isFiniteNumber(mark) ? 0 : q * (mark - avg);
-    return this.initialCapital + realized - paid + open;
+    const eq = this.initialCapital + realized - paid + open;
+    this.trackEquityCurve(eq);
+    return eq;
   }
 
   closedTrade(i: number): Trade | null {
@@ -299,6 +333,124 @@ export class StrategyBook {
 
   avgLosingTrade(): number {
     return this.losstrades === 0 ? 0 : this.grossloss / this.losstrades;
+  }
+
+  /** Realized net profit (closed-trade price PnL). */
+  netprofit(): number {
+    return isFiniteNumber(this.realizedPnl) ? this.realizedPnl : 0;
+  }
+
+  /** `100 * netprofit / initialCapital`; 0 if capital ≤ 0. */
+  netprofitPercent(_mark?: number): number {
+    return this.pctOfInitial(this.netprofit());
+  }
+
+  /** Signed open PnL at `mark`; 0 if flat or mark is non-finite. */
+  openprofit(mark: number): number {
+    this.ensureSanePosition();
+    const q = this.position.qty;
+    const avg = this.position.avgPrice;
+    if (q === 0 || !isFiniteNumber(avg) || !isFiniteNumber(mark)) return 0;
+    return q * (mark - avg);
+  }
+
+  /** `100 * openprofit / initialCapital`; 0 if capital ≤ 0. */
+  openprofitPercent(mark: number): number {
+    return this.pctOfInitial(this.openprofit(mark));
+  }
+
+  grossprofitPercent(): number {
+    return this.pctOfInitial(this.grossprofit);
+  }
+
+  grosslossPercent(): number {
+    return this.pctOfInitial(this.grossloss);
+  }
+
+  avgTradePercent(): number {
+    return this.pctOfInitial(this.avgTrade());
+  }
+
+  avgWinningTradePercent(): number {
+    return this.pctOfInitial(this.avgWinningTrade());
+  }
+
+  avgLosingTradePercent(): number {
+    return this.pctOfInitial(this.avgLosingTrade());
+  }
+
+  /** Book-level peak-to-trough equity drop (positive magnitude). */
+  maxDrawdown(): number {
+    return this.maxDrawdownAbs;
+  }
+
+  maxDrawdownPercent(): number {
+    return this.maxDdPercent;
+  }
+
+  /** Book-level trough-to-peak equity rise. */
+  maxRunup(): number {
+    return this.maxRunupAbs;
+  }
+
+  maxRunupPercent(): number {
+    return this.maxRuPercent;
+  }
+
+  /** `100 * wintrades / closedtrades`; 0 if none closed. */
+  percentProfitable(): number {
+    const n = this.closedTrades.length;
+    return n === 0 ? 0 : (100 * this.wintrades) / n;
+  }
+
+  /**
+   * `grossprofit / grossloss`. 0 if both 0; 999.99 if profit and no loss
+   * (Python backtest caps Inf).
+   */
+  profitFactor(): number {
+    const gp = this.grossprofit;
+    const gl = this.grossloss;
+    if (!isFiniteNumber(gp) || !isFiniteNumber(gl)) return 0;
+    if (gl > 0) return gp / gl;
+    return gp > 0 ? 999.99 : 0;
+  }
+
+  maxContractsHeldAll(): number {
+    return this.maxHeldAll;
+  }
+
+  maxContractsHeldLong(): number {
+    return this.maxHeldLong;
+  }
+
+  maxContractsHeldShort(): number {
+    return this.maxHeldShort;
+  }
+
+  summary(mark: number): StrategySummary {
+    return {
+      netprofit: this.netprofit(),
+      netprofitPercent: this.netprofitPercent(mark),
+      openprofit: this.openprofit(mark),
+      equity: this.equity(mark),
+      wintrades: this.wintrades,
+      losstrades: this.losstrades,
+      eventrades: this.eventrades,
+      closedtrades: this.closedtrades,
+      opentrades: this.opentrades,
+      grossprofit: this.grossprofit,
+      grossloss: this.grossloss,
+      avgTrade: this.avgTrade(),
+      avgWinningTrade: this.avgWinningTrade(),
+      avgLosingTrade: this.avgLosingTrade(),
+      percentProfitable: this.percentProfitable(),
+      profitFactor: this.profitFactor(),
+      maxDrawdown: this.maxDrawdown(),
+      maxDrawdownPercent: this.maxDrawdownPercent(),
+      maxRunup: this.maxRunup(),
+      maxRunupPercent: this.maxRunupPercent(),
+      initialCapital: this.initialCapital,
+    };
   }
 
   /** Update per-open-trade max_runup / max_drawdown vs mark (high/low if finite, else close). */
@@ -679,6 +831,7 @@ export class StrategyBook {
       return;
     }
     const dir: StrategyDirection = this.position.qty > 0 ? "long" : "short";
+    this.notePositionSize();
     const comment = opts?.comment != null ? String(opts.comment) : undefined;
     const entryTime = isFiniteNumber(opts?.time) ? opts.time : undefined;
     if (oldAbs === 0 || this.openTrades.length === 0) {
@@ -826,7 +979,7 @@ export class StrategyBook {
     }
     if (
       this.max_drawdown_risk_percent != null &&
-      this.maxDrawdownPercent >= this.max_drawdown_risk_percent
+      this.maxDdPercent >= this.max_drawdown_risk_percent
     ) {
       this.entries_blocked = true;
       return false;
@@ -864,14 +1017,40 @@ export class StrategyBook {
   }
 
   private updateEquityExtremes(mark: number): void {
-    const eq = this.equity(mark);
+    this.equity(mark);
+  }
+
+  /** Peak/trough and max drawdown / runup from an equity sample (Python `_track_equity_curve`). */
+  private trackEquityCurve(eq: number): void {
     if (!isFiniteNumber(eq)) return;
     if (eq > this.equityPeak) this.equityPeak = eq;
+    if (eq < this.equityTrough) this.equityTrough = eq;
     const dd = this.equityPeak - eq;
     if (dd > this.maxDrawdownAbs) {
       this.maxDrawdownAbs = dd;
-      if (this.equityPeak > 0) this.maxDrawdownPercent = (100 * dd) / this.equityPeak;
+      if (this.equityPeak > 0) this.maxDdPercent = (100 * dd) / this.equityPeak;
     }
+    const ru = eq - this.equityTrough;
+    if (ru > this.maxRunupAbs) {
+      this.maxRunupAbs = ru;
+      if (this.equityTrough > 0) this.maxRuPercent = (100 * ru) / this.equityTrough;
+    }
+  }
+
+  /** `100 * amount / initialCapital`; 0 if capital ≤ 0 (Python `_pct_of_initial`). */
+  private pctOfInitial(amount: number): number {
+    const cap = this.initialCapital;
+    if (!isFiniteNumber(cap) || cap <= 0 || !isFiniteNumber(amount)) return 0;
+    return (100 * amount) / cap;
+  }
+
+  /** Update max contracts held after a fill (Python `note_position_size`). */
+  private notePositionSize(): void {
+    const size = Math.abs(this.position.qty);
+    if (!isFiniteNumber(size) || size === 0) return;
+    if (size > this.maxHeldAll) this.maxHeldAll = size;
+    if (this.position.qty > 0 && size > this.maxHeldLong) this.maxHeldLong = size;
+    if (this.position.qty < 0 && size > this.maxHeldShort) this.maxHeldShort = size;
   }
 
   private rollFillDay(ts: number): void {

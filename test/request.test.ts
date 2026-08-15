@@ -4,14 +4,20 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  bucketIndex,
+  isHigherTimeframe,
+  isLowerTimeframe,
   isRequestBuiltin,
   lastRequestSeed,
   resolveCurrencyRate,
   resolveForeignNa,
   resolveRequest,
   resolveSecurity,
+  resolveSecurityLowerTf,
   resolveSeed,
+  shouldForwardFill,
   timeframeMinutes,
+  timeframeRank,
 } from "../src/runtime/request.ts";
 
 describe("resolveSecurity same-symbol passthrough", () => {
@@ -133,6 +139,107 @@ describe("timeframeMinutes", () => {
     expect(timeframeMinutes(undefined)).toBeNull();
     expect(timeframeMinutes("")).toBeNull();
     expect(timeframeMinutes("weird")).toBeNull();
+  });
+
+  test("timeframeRank is minutes or null", () => {
+    expect(timeframeRank("15")).toBe(15);
+    expect(timeframeRank("1D")).toBe(1440);
+    expect(timeframeRank("weird")).toBeNull();
+  });
+});
+
+describe("isHigherTimeframe / isLowerTimeframe", () => {
+  test("higher when req minutes > host", () => {
+    expect(isHigherTimeframe("60", "15")).toBe(true);
+    expect(isHigherTimeframe("1D", "60")).toBe(true);
+    expect(isHigherTimeframe("1W", "1h")).toBe(true);
+    expect(isHigherTimeframe("15", "60")).toBe(false);
+    expect(isHigherTimeframe("15", "15")).toBe(false);
+  });
+
+  test("lower when req minutes < host", () => {
+    expect(isLowerTimeframe("15", "60")).toBe(true);
+    expect(isLowerTimeframe("1", "1D")).toBe(true);
+    expect(isLowerTimeframe("60", "15")).toBe(false);
+    expect(isLowerTimeframe("D", "D")).toBe(false);
+  });
+
+  test("unknown or empty is neither", () => {
+    expect(isHigherTimeframe(null, "15")).toBe(false);
+    expect(isHigherTimeframe("weird", "15")).toBe(false);
+    expect(isLowerTimeframe("", "D")).toBe(false);
+    expect(isLowerTimeframe("15", null)).toBe(false);
+    expect(isLowerTimeframe(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("resolveSecurityLowerTf", () => {
+  test("foreign is null", () => {
+    expect(
+      resolveSecurityLowerTf("AAPL", "D", { symbol: "MSFT", timeframe: "5" }, 42),
+    ).toBeNull();
+    expect(
+      resolveSecurityLowerTf("AAPL", "60", { symbol: "MSFT", timeframe: "60" }, 9),
+    ).toBeNull();
+  });
+
+  test("finer TF same symbol is null (no invented intra-bar array)", () => {
+    expect(
+      resolveSecurityLowerTf("AAPL", "60", { symbol: "AAPL", timeframe: "15" }, 9),
+    ).toBeNull();
+    expect(
+      resolveSecurityLowerTf("AAPL", "D", { symbol: "AAPL", timeframe: "60" }, 9),
+    ).toBeNull();
+    expect(
+      resolveSecurityLowerTf("AAPL", "1W", { symbol: "", timeframe: "1" }, 9),
+    ).toBeNull();
+  });
+
+  test("same TF same symbol is the value", () => {
+    expect(
+      resolveSecurityLowerTf("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, 42),
+    ).toBe(42);
+    expect(
+      resolveSecurityLowerTf("AAPL", "15", { symbol: "AAPL", timeframe: "15" }, 7),
+    ).toBe(7);
+  });
+});
+
+describe("bucketIndex / shouldForwardFill", () => {
+  test("bucketIndex floors time by tf width", () => {
+    const width15 = 15 * 60 * 1000;
+    expect(bucketIndex(0, 15)).toBe(0);
+    expect(bucketIndex(width15 - 1, 15)).toBe(0);
+    expect(bucketIndex(width15, 15)).toBe(1);
+    expect(bucketIndex(width15 * 3 + 1, 15)).toBe(3);
+    expect(bucketIndex(1_700_000_000_000, 60)).toBe(
+      Math.floor(1_700_000_000_000 / (60 * 60 * 1000)),
+    );
+  });
+
+  test("bucketIndex non-finite is null", () => {
+    expect(bucketIndex(Number.NaN, 15)).toBeNull();
+    expect(bucketIndex(Number.POSITIVE_INFINITY, 15)).toBeNull();
+    expect(bucketIndex(1000, Number.NaN)).toBeNull();
+    expect(bucketIndex(1000, 0)).toBeNull();
+  });
+
+  test("shouldForwardFill when bucket changes", () => {
+    expect(shouldForwardFill(0, 1)).toBe(true);
+    expect(shouldForwardFill(4, 5)).toBe(true);
+    expect(shouldForwardFill(1, 1)).toBe(false);
+    expect(shouldForwardFill(null, 1)).toBe(false);
+    expect(shouldForwardFill(1, null)).toBe(false);
+    expect(shouldForwardFill(null, null)).toBe(false);
+  });
+
+  test("bucketIndex / shouldForwardFill are deterministic", () => {
+    const a = bucketIndex(1_700_000_000_000, 60);
+    const b = bucketIndex(1_700_000_000_000, 60);
+    const c = bucketIndex(1_700_000_000_000 + 60 * 60 * 1000, 60);
+    expect(a).toBe(b);
+    expect(shouldForwardFill(a, b)).toBe(false);
+    expect(shouldForwardFill(a, c)).toBe(true);
   });
 });
 

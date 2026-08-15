@@ -6,7 +6,8 @@
  * same-symbol simple OHLCV passthrough, including HTF last-close;
  * foreign / missing fundamentals → na. HTF *value* passthrough;
  * no invented foreign data. Forward-fill of the last completed HTF bar
- * is the host's job.
+ * is the host's job (`bucketIndex` / `shouldForwardFill`).
+ * Lower-TF request without a feed is na — no invented intra-bar array.
  * Interpret should call this from `evalCall`; this module is host-agnostic.
  */
 
@@ -153,6 +154,64 @@ export function resolveSecurity(
   return value;
 }
 
+/** Minutes rank of a TF token; unknown / empty / na → null. */
+export function timeframeRank(tf: string | null | undefined): number | null {
+  return timeframeMinutes(tf);
+}
+
+/** True when both TFs are known and *req* minutes > *host* minutes. */
+export function isHigherTimeframe(
+  req: string | null | undefined,
+  host: string | null | undefined,
+): boolean {
+  const reqMin = timeframeMinutes(req);
+  const hostMin = timeframeMinutes(host);
+  return reqMin != null && hostMin != null && reqMin > hostMin;
+}
+
+/** True when both TFs are known and *req* minutes < *host* minutes. */
+export function isLowerTimeframe(
+  req: string | null | undefined,
+  host: string | null | undefined,
+): boolean {
+  const reqMin = timeframeMinutes(req);
+  const hostMin = timeframeMinutes(host);
+  return reqMin != null && hostMin != null && reqMin < hostMin;
+}
+
+/**
+ * `request.security_lower_tf` without a lower-TF feed is na.
+ * Same-symbol + finer request TF → null (no invented intra-bar array).
+ * Foreign → null. Same TF (or not-finer) → `resolveSecurity` scalar.
+ */
+export function resolveSecurityLowerTf(
+  hostSymbol: string,
+  hostTimeframe: string | null,
+  args: SecurityArgs,
+  sameSymbolValue: Cell,
+): Cell {
+  const a = args ?? {};
+  if (!sameSymbol(a.symbol, hostSymbol ?? "")) return null;
+  if (isLowerTimeframe(a.timeframe, hostTimeframe)) return null;
+  return resolveSecurity(hostSymbol, hostTimeframe, a, sameSymbolValue);
+}
+
+/** HTF bucket: floor(timeMs / (tfMinutes * 60 * 1000)); non-finite → null. */
+export function bucketIndex(barTimeMs: number, tfMinutes: number): number | null {
+  if (!Number.isFinite(barTimeMs) || !Number.isFinite(tfMinutes) || tfMinutes <= 0) {
+    return null;
+  }
+  return Math.floor(barTimeMs / (tfMinutes * 60 * 1000));
+}
+
+/** True when the HTF bucket changed (new HTF bar started). */
+export function shouldForwardFill(
+  prevBucket: number | null,
+  curBucket: number | null,
+): boolean {
+  return prevBucket != null && curBucket != null && prevBucket !== curBucket;
+}
+
 /**
  * Empty / missing request symbol is the chart. Compare case-insensitively after
  * stripping an exchange prefix (`NASDAQ:AAPL` ≡ `AAPL`).
@@ -202,16 +261,21 @@ export function lastRequestSeed(): number | null {
 
 /**
  * Dispatch a `request.*` name. Security keeps `resolveSecurity` semantics;
- * currency is 1.0 only for identical codes; everything else is na.
+ * lower-TF without a feed is na; currency is 1.0 only for identical codes;
+ * everything else is na.
  */
 export function resolveRequest(
   fname: string,
   host: RequestHost,
   args: RequestArgs = {},
 ): Cell | unknown {
-  if (fname === "request.security" || fname === "request.security_lower_tf") {
+  if (fname === "request.security") {
     const { sec, value } = securityFromArgs(args);
     return resolveSecurity(host.symbol, host.timeframe ?? null, sec, value);
+  }
+  if (fname === "request.security_lower_tf") {
+    const { sec, value } = securityFromArgs(args);
+    return resolveSecurityLowerTf(host.symbol, host.timeframe ?? null, sec, value);
   }
   if (fname === "request.currency_rate") {
     const [from, to] = currencyFromArgs(args);
