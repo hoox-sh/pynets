@@ -10,7 +10,7 @@ Same public names as Python [`pynescript`](https://github.com/hoox-sh/pyne): `pa
 Python `pynescript.runtime` is the **source of truth**. When semantics disagree, Python wins. This is not a TradingView platform certification.
 
 ```ts
-import { parse, unparse, Runtime } from "@hoox/pynets";
+import { parse, unparse, Runtime } from "@hoox-sh/pynets";
 
 const src = `//@version=5
 indicator("sma")
@@ -29,7 +29,7 @@ const out = new Runtime("AAPL").run(src, [
 Install with Bun (published TypeScript source — no bundle needed):
 
 ```bash
-bun add @hoox/pynets
+bun add @hoox-sh/pynets
 bunx pynets -- help
 ```
 
@@ -37,16 +37,16 @@ Node and browsers use the Bun-built ESM in `dist/` (`bun run build`; `npm pack` 
 
 ```bash
 # Node 20+
-npm install @hoox/pynets
+npm install @hoox-sh/pynets
 ```
 
 ```js
-import { parse, Runtime } from "@hoox/pynets";
+import { parse, Runtime } from "@hoox-sh/pynets";
 ```
 
 ```html
 <script type="module">
-  import { Runtime } from "https://esm.sh/@hoox/pynets";
+  import { Runtime } from "https://esm.sh/@hoox-sh/pynets";
 </script>
 ```
 
@@ -89,7 +89,7 @@ Family map — library vs edge host, same SoT:
 
 [pyne-worker](https://github.com/hoox-sh/pyne-worker) is the edge evaluate host of the **Python** engine. PyneTS is the TypeScript library you import and the CLI you run on a laptop. They share the PYNE contract; this repo is not a Worker.
 
-This repository is the standalone `@hoox/pynets` checkout. PYNE consumes it **only** as the `pynets/` git submodule — never copy sources back into `hoox-sh/pyne`.
+This repository is the standalone `@hoox-sh/pynets` checkout. PYNE consumes it **only** as the `pynets/` git submodule — never copy sources back into `hoox-sh/pyne`.
 
 ---
 
@@ -140,7 +140,7 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 ## Run scripts
 
 ```ts
-import { Runtime } from "@hoox/pynets";
+import { Runtime } from "@hoox-sh/pynets";
 
 const rt = new Runtime("AAPL", {
   timeframe: "5",
@@ -173,7 +173,7 @@ stream.end();
 Hosts feed OHLCV. PyneTS will not invent a foreign market.
 
 ```ts
-import { MemoryProvider, StaticMapProvider, JsonBarProvider } from "@hoox/pynets";
+import { MemoryProvider, StaticMapProvider, JsonBarProvider } from "@hoox-sh/pynets";
 
 await rt.runProvider(source, new MemoryProvider(bars), { limit: 500 });
 
@@ -267,7 +267,7 @@ import {
   PineArray, PineMap, PineMatrix,
   MemoryProvider, StaticMapProvider, JsonBarProvider,
   LibraryRegistry,
-} from "@hoox/pynets";
+} from "@hoox-sh/pynets";
 ```
 
 `src/index.ts` is the stable barrel. Generated ANTLR, parser internals, and CLI helpers are not re-exported.

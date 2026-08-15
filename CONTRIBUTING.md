@@ -45,7 +45,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing interpret builtins or the grammar.
 
 ## Publishing
 
-npm `@hoox/pynets` is published from version tags (`v0.1.0`) by
+npm `@hoox-sh/pynets` is published from version tags (`v0.1.0`) by
 [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
 Maintainers: bump `package.json` + `CHANGELOG.md`, tag, push.
 

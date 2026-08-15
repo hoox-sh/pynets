@@ -5,7 +5,7 @@ Public names match Python: `parse`, `unparse`, `Runtime.run`.
 
 **Python `pynescript.runtime` is the source of truth.** When semantics disagree, Python wins. Do not invent TradingView platform behaviour that Python does not implement.
 
-This repo is the standalone `@hoox/pynets` checkout. PYNE consumes it **only** as the `pynets/` git submodule — never copy sources into `hoox-sh/pyne`.
+This repo is the standalone `@hoox-sh/pynets` checkout. PYNE consumes it **only** as the `pynets/` git submodule — never copy sources into `hoox-sh/pyne`.
 
 ## Commands
 
@@ -29,7 +29,7 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 - **Do not fork the grammar.** Edit `.g4` only in PYNE (`src/pynescript/ast/grammar/antlr4/resource/`), then regen here.
 - **AST field names stay ASDL** (`kind`, `lineno`, `col_offset`, …).
 - **Interpret only.** No Numba/compile port, no Worker packaging, no ASDL codegen (README non-goals).
-- **`bun` only locally** — never npm/yarn/pnpm lockfiles. The npm registry is used only to publish `@hoox/pynets` (see `.github/workflows/publish.yml`).
+- **`bun` only locally** — never npm/yarn/pnpm lockfiles. The npm registry is used only to publish `@hoox-sh/pynets` (see `.github/workflows/publish.yml`).
 - **`na` is `null`.** Non-finite in/out is `na`. Per-call-site TA state (Python incremental kernels).
 - **`request.security` foreign / HTF without data → `na`.** Do not invent chart series as foreign data.
 - Copyright header + `SPDX-License-Identifier: AGPL-3.0-or-later` on new source files.

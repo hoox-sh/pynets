@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@hoox/pynets",
+      "name": "@hoox-sh/pynets",
       "dependencies": {
         "antlr4": "4.13.2",
       },

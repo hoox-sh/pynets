@@ -534,7 +534,7 @@ function infoPayload(ui: Rich): {
 } {
   return {
     name: "pynets",
-    package: "@hoox/pynets",
+    package: "@hoox-sh/pynets",
     version: VERSION,
     runtime: "bun",
     bun: typeof Bun !== "undefined" ? Bun.version : null,
@@ -555,7 +555,7 @@ function info(ui: Rich, asJson: boolean): void {
   ui.table(
     ["key", "value"],
     [
-      ["package", "@hoox/pynets"],
+      ["package", "@hoox-sh/pynets"],
       ["version", VERSION],
       ["runtime", `bun ${payload.bun ?? "?"}`],
       ["engine", "interpret"],

@@ -20,6 +20,6 @@ We will acknowledge receipt when possible and coordinate disclosure.
 
 ## Scope
 
-This repository is the TypeScript / Bun library `@hoox/pynets` (parse, unparse,
+This repository is the TypeScript / Bun library `@hoox-sh/pynets` (parse, unparse,
 interpret). Sister projects (PYNE / pynescript, edge hosts, charting UI) have
 their own policies.

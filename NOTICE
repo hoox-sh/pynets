@@ -21,7 +21,7 @@ package.json: AGPL-3.0-or-later
 
 Relationship to PYNE
 --------------------
-PyneTS (`@hoox/pynets`) is the TypeScript / Bun counterpart of
+PyneTS (`@hoox-sh/pynets`) is the TypeScript / Bun counterpart of
 **PYNE / pynescript**. Python `pynescript.runtime` is the source of
 truth: when semantics disagree, Python wins.
 

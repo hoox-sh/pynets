@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-08-15
 
-First public `@hoox/pynets` release. TypeScript / Bun port of PYNE interpret.
+First public `@hoox-sh/pynets` release. TypeScript / Bun port of PYNE interpret.
 
 ### Added
 

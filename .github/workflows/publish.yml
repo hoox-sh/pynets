@@ -1,4 +1,4 @@
-# Publish @hoox/pynets to the npm registry on version tags (v*).
+# Publish @hoox-sh/pynets to the npm registry on version tags (v*).
 #
 # Auth (either works):
 #   1. Trusted Publishing (OIDC, preferred)
@@ -9,7 +9,7 @@
 #        Environment: npm
 #        Leave NPM_TOKEN unset so the job uses OIDC.
 #   2. Granular access token
-#        npmjs.com → Access Tokens → Granular (read/write for @hoox/pynets)
+#        npmjs.com → Access Tokens → Granular (read/write for @hoox-sh/pynets)
 #        gh secret set NPM_TOKEN -R hoox-sh/pynets
 #
 # Usage:
@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-          scope: "@hoox"
+          scope: "@hoox-sh"
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -79,8 +79,8 @@ jobs:
       - name: Upload tarball
         uses: actions/upload-artifact@v4
         with:
-          name: hoox-pynets-pack
-          path: hoox-pynets-*.tgz
+          name: hoox-sh-pynets-pack
+          path: hoox-sh-pynets-*.tgz
           if-no-files-found: error
           retention-days: 5
 
@@ -94,7 +94,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@hoox/pynets
+      url: https://www.npmjs.com/package/@hoox-sh/pynets
     permissions:
       id-token: write
       contents: read
@@ -109,7 +109,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-          scope: "@hoox"
+          scope: "@hoox-sh"
 
       - name: Install
         run: bun install --frozen-lockfile
