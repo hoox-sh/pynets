@@ -25,6 +25,7 @@ import type {
   ForTo,
   FunctionDef,
   If,
+  Import,
   Name,
   Param,
   ReAssign,
@@ -218,6 +219,11 @@ function emitCall(node: Call): string {
   return `${emitExpr(node.func)}(${asArgs(node.args).map(emitArg).join(", ")})`;
 }
 
+function emitImport(node: Import): string {
+  const path = `import ${node.namespace}/${node.name}/${node.version}`;
+  return node.alias ? `${path} as ${node.alias}` : path;
+}
+
 function emitStmt(node: stmt): string {
   if (node == null || typeof node !== "object") return "";
   if (node.kind === "Expr") return emitExpr(node.value);
@@ -226,6 +232,7 @@ function emitStmt(node: stmt): string {
   if (node.kind === "FunctionDef") return emitFunctionDef(node);
   if (node.kind === "TypeDef") return emitTypeDef(node);
   if (node.kind === "EnumDef") return emitEnumDef(node);
+  if (node.kind === "Import") return emitImport(node);
   if (node.kind === "Break") return "break";
   if (node.kind === "Continue") return "continue";
   return "";
@@ -346,6 +353,7 @@ export function unparse(node: AST): string {
   if (node.kind === "Switch") return emitSwitch(node as Switch);
   if (node.kind === "Case") return emitCase(node as Case);
   if (node.kind === "BoolOp") return emitBoolOp(node as BoolOp);
+  if (node.kind === "Import") return emitImport(node as Import);
   if (node.kind === "Break") return "break";
   if (node.kind === "Continue") return "continue";
   return "";

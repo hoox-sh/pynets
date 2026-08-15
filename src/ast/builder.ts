@@ -42,6 +42,7 @@ import {
   type Field_definitionsContext,
   type If_structureContext,
   type If_tailContext,
+  type Import_statementContext,
   type Indented_local_blockContext,
   type Inequality_expressionContext,
   type Less_than_equal_trailing_pairContext,
@@ -134,6 +135,7 @@ import {
   forTo,
   functionDef,
   ifExpr,
+  importStmt,
   name,
   param,
   reAssign,
@@ -945,6 +947,18 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitContinue_statement = (ctx: Continue_statementContext): unknown => {
     const node = continueStmt();
+    loc(node, ctx);
+    return node;
+  };
+
+  visitImport_statement = (ctx: Import_statementContext): unknown => {
+    const namespace = String(this.visit(ctx.name(0)) ?? "");
+    const libName = String(this.visit(ctx.name(1)) ?? "");
+    const versionRaw = this.visit(ctx.literal_number());
+    const version = typeof versionRaw === "number" && Number.isFinite(versionRaw) ? Math.trunc(versionRaw) : 1;
+    const aliasCtx = ctx.AS() ? ctx.name(2) : undefined;
+    const alias = aliasCtx ? String(this.visit(aliasCtx) ?? "") : null;
+    const node = importStmt(namespace, libName, version, alias || null);
     loc(node, ctx);
     return node;
   };

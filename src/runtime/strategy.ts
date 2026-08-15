@@ -39,6 +39,9 @@ export interface Fill {
   price: number;
 }
 
+export type OcaType = "none" | "cancel" | "reduce";
+export type AllowEntryIn = "all" | "long" | "short";
+
 export interface PendingOrder {
   id: string;
   direction: StrategyDirection;
@@ -46,6 +49,8 @@ export interface PendingOrder {
   limit: number | null;
   stop: number | null;
   bar: number;
+  oca_name?: string | null;
+  oca_type?: OcaType;
 }
 
 export interface PlaceEntryOpts {
@@ -55,6 +60,8 @@ export interface PlaceEntryOpts {
   price?: number;
   comment?: string;
   time?: number;
+  oca_name?: string | null;
+  oca_type?: string | null;
 }
 
 /** One open or closed strategy trade (qty is absolute). */
@@ -133,6 +140,22 @@ function mapDirection(direction: unknown): StrategyDirection {
   return "long";
 }
 
+/** Calendar-day bucket: ms epoch, seconds epoch, or raw (Python `_day_bucket`). */
+function dayBucket(ts: number): number {
+  const t = Math.trunc(ts);
+  if (t > 10_000_000_000) return Math.trunc(t / 86_400_000);
+  if (t > 10_000_000) return Math.trunc(t / 86_400);
+  return t;
+}
+
+/** `strategy.oca.cancel` / `oca.cancel` / `cancel` → cancel (else reduce / none). */
+function normalizeOcaType(raw: unknown): OcaType {
+  const s = String(raw ?? "none").trim().toLowerCase();
+  if (s === "cancel" || s === "oca.cancel" || s === "strategy.oca.cancel") return "cancel";
+  if (s === "reduce" || s === "oca.reduce" || s === "strategy.oca.reduce") return "reduce";
+  return "none";
+}
+
 export class StrategyBook {
   readonly events: StrategyEvent[] = [];
   readonly position: Position = { qty: 0, avgPrice: null };
@@ -151,6 +174,18 @@ export class StrategyBook {
   grossloss = 0;
   initialCapital = 1_000_000;
 
+  /** strategy.risk.allow_entry_in — `all` | `long` | `short`. */
+  allow_entry_in: AllowEntryIn = "all";
+  max_position_size_percent?: number;
+  max_drawdown_risk?: number;
+  max_drawdown_risk_percent?: number;
+  max_cons_loss_days?: number;
+  /** Intraday loss halt as % of initial capital; `Infinity` = unset. */
+  max_intraday_loss = Number.POSITIVE_INFINITY;
+  max_intraday_filled_orders?: number;
+  entries_blocked = false;
+  consecutive_loss_days = 0;
+
   get opentrades(): number {
     return this.openTrades.length;
   }
@@ -163,11 +198,19 @@ export class StrategyBook {
   private slippage: number;
   private pyramiding: number | undefined;
   private sameDirAdds = 0;
+  private lastTradeDay: number | null = null;
+  private dayPnl = 0;
+  private fillsDay: number | null = null;
+  private dayFilledOrders = 0;
+  private equityPeak: number;
+  private maxDrawdownAbs = 0;
+  private maxDrawdownPercent = 0;
 
   constructor(settings?: BrokerSettings) {
     this.commission = finiteOr(settings?.commission, 0);
     this.slippage = finiteOr(settings?.slippage, 0);
     this.pyramiding = normalizePyramiding(settings?.pyramiding);
+    this.equityPeak = this.initialCapital;
   }
 
   /** Mark-to-market equity: initial + realized − commission + open PnL. */
@@ -288,6 +331,84 @@ export class StrategyBook {
     }
   }
 
+  /** `strategy.risk.allow_entry_in(value)` — `all` | `long` | `short`. */
+  riskAllowEntryIn(value: unknown = "all"): void {
+    const s = String(value ?? "all").replace(/strategy\./gi, "").trim().toLowerCase();
+    this.allow_entry_in = s === "long" || s === "short" || s === "all" ? s : "all";
+  }
+
+  /** `strategy.risk.max_position_size(percent)` — cap entry notional vs equity. */
+  riskMaxPositionSize(percent: unknown): void {
+    if (percent == null || !isFiniteNumber(percent) || percent <= 0) return;
+    this.max_position_size_percent = percent;
+  }
+
+  /**
+   * `strategy.risk.max_drawdown(value, type)` — absolute or % of peak equity.
+   * Percent types: `percent` / `percentage` / `percent_of_equity` / `%`.
+   */
+  riskMaxDrawdown(value: unknown, type: unknown = "absolute"): void {
+    if (value == null || !isFiniteNumber(value) || value < 0) return;
+    const rt = String(type ?? "absolute").replace(/strategy\./gi, "").trim().toLowerCase();
+    if (rt === "percent" || rt === "percentage" || rt === "percent_of_equity" || rt === "%") {
+      this.max_drawdown_risk_percent = value;
+    } else {
+      this.max_drawdown_risk = value;
+    }
+  }
+
+  /** `strategy.risk.max_cons_loss_days(days)` — halt after N finalized loss days. */
+  riskMaxConsLossDays(days: unknown): void {
+    if (days == null || !isFiniteNumber(days)) return;
+    const d = Math.trunc(days);
+    if (d < 0) return;
+    this.max_cons_loss_days = d;
+  }
+
+  /** `strategy.risk.max_intraday_loss(percent)` — halt on day loss % of capital. */
+  riskMaxIntradayLoss(percent: unknown): void {
+    if (percent == null || !isFiniteNumber(percent) || percent < 0) return;
+    this.max_intraday_loss = percent;
+  }
+
+  /** `strategy.risk.max_intraday_filled_orders(max)` — cap fills per day bucket. */
+  riskMaxIntradayFilledOrders(max: unknown): void {
+    if (max == null || !isFiniteNumber(max)) return;
+    const n = Math.trunc(max);
+    if (n < 0) return;
+    this.max_intraday_filled_orders = n;
+  }
+
+  /**
+   * Track consecutive calendar-day losses (Python `note_closed_trade_day`).
+   * A day's PnL is finalized when a close lands on a later day bucket.
+   */
+  noteClosedTradeDay(exitTime: number, profit: number): void {
+    if (!isFiniteNumber(exitTime) || !isFiniteNumber(profit)) return;
+    const day = dayBucket(exitTime);
+    if (this.lastTradeDay == null || day !== this.lastTradeDay) {
+      if (this.lastTradeDay != null) {
+        if (this.dayPnl < 0) this.consecutive_loss_days += 1;
+        else if (this.dayPnl > 0) this.consecutive_loss_days = 0;
+      }
+      this.lastTradeDay = day;
+      this.dayPnl = 0;
+    }
+    this.dayPnl += profit;
+    if (this.max_cons_loss_days != null && this.consecutive_loss_days >= this.max_cons_loss_days) {
+      this.entries_blocked = true;
+    }
+    if (
+      Number.isFinite(this.max_intraday_loss) &&
+      this.max_intraday_loss < Number.POSITIVE_INFINITY &&
+      this.initialCapital > 0 &&
+      this.dayPnl < 0
+    ) {
+      const lossPct = 100 * -this.dayPnl / this.initialCapital;
+      if (lossPct >= this.max_intraday_loss) this.entries_blocked = true;
+    }
+  }
+
   entry(
     bar: number,
     id: string,
@@ -367,8 +488,13 @@ export class StrategyBook {
     const limit = optLevel(opts?.limit);
     const stop = optLevel(opts?.stop);
     if (limit == null && stop == null) {
-      if (isFiniteNumber(opts?.price)) this.fillEntry(bar, id, direction, qty, opts.price, opts);
-      else this.entry(bar, id, direction, qty);
+      if (isFiniteNumber(opts?.price)) {
+        const dir = mapDirection(direction);
+        const t = isFiniteNumber(opts?.time) ? opts.time : bar;
+        this.updateEquityExtremes(opts.price);
+        if (!this.riskAllowsEntry(dir, t)) return;
+        this.fillEntry(bar, id, direction, qty, opts.price, opts);
+      } else this.entry(bar, id, direction, qty);
       return;
     }
     const dir = mapDirection(direction);
@@ -377,7 +503,12 @@ export class StrategyBook {
     const oid = String(id ?? "");
     this.entry(b, oid, dir, isFiniteNumber(absQty) ? absQty : qty);
     if (!isFiniteNumber(absQty) || absQty === 0) return;
-    this.upsertPending({ id: oid, direction: dir, qty: absQty, limit, stop, bar: b });
+    const pending: PendingOrder = { id: oid, direction: dir, qty: absQty, limit, stop, bar: b };
+    const ocaName = opts?.oca_name == null || opts.oca_name === "" ? undefined : String(opts.oca_name);
+    const ocaType = normalizeOcaType(opts?.oca_type);
+    if (ocaName !== undefined) pending.oca_name = ocaName;
+    if (ocaType !== "none") pending.oca_type = ocaType;
+    this.upsertPending(pending);
   }
 
   /** Alias of {@link placeEntry} (`strategy.order`). */
@@ -421,11 +552,13 @@ export class StrategyBook {
       this.dropPending(order.id);
       const applied = this.applyEntryFill(b, order.id, order.direction, order.qty, px, false);
       if (applied) {
+        const q = Math.abs(this.fills.at(-1)?.qty ?? order.qty);
+        this.ocaAfterFill(order, q, b);
         this.events.push({
           type: "fill",
           id: order.id,
           direction: order.direction,
-          qty: order.qty,
+          qty: q,
           bar: b,
         });
         filled.push(order.id);
@@ -447,13 +580,13 @@ export class StrategyBook {
   }
 
   /** Flatten at `price` and record a close event. */
-  fillClose(bar: number, id: string, price: number): void {
+  fillClose(bar: number, id: string, price: number, opts?: Pick<PlaceEntryOpts, "time">): void {
     this.ensureSanePosition();
     const b = isFiniteNumber(bar) ? bar : 0;
     const oid = String(id ?? "");
     if (this.position.qty !== 0) {
       if (!isFiniteNumber(price)) return;
-      this.flattenAt(b, oid, price);
+      this.flattenAt(b, oid, price, opts?.time);
     }
     this.close(b, oid);
   }
@@ -472,12 +605,17 @@ export class StrategyBook {
     const absQty = Math.abs(qty);
     if (!isFiniteNumber(absQty) || absQty === 0) return false;
     const dir = mapDirection(direction);
-    const signed = dir === "long" ? absQty : -absQty;
     const b = isFiniteNumber(bar) ? bar : 0;
     const oid = String(id ?? "");
+    const t = isFiniteNumber(opts?.time) ? opts.time : b;
+    this.updateEquityExtremes(price);
+    if (!this.riskAllowsEntry(dir, t)) return false;
+    const capped = this.capQtyByMaxPosition(absQty, price);
+    if (!isFiniteNumber(capped) || capped <= 0) return false;
+    const signed = dir === "long" ? capped : -capped;
 
     if (this.position.qty !== 0 && Math.sign(this.position.qty) !== Math.sign(signed)) {
-      if (!this.flattenAt(b, oid, price)) return false;
+      if (!this.flattenAt(b, oid, price, opts?.time)) return false;
       this.close(b, oid);
     } else if (
       this.position.qty !== 0 &&
@@ -491,7 +629,9 @@ export class StrategyBook {
     if (this.position.qty !== 0) this.sameDirAdds++;
     else this.sameDirAdds = 0;
     this.addPosition(b, oid, signed, price, opts);
-    if (emitEntry) this.entry(b, oid, dir, absQty);
+    this.noteFilledOrder(t);
+    this.updateEquityExtremes(price);
+    if (emitEntry) this.entry(b, oid, dir, capped);
     return true;
   }
 
@@ -566,7 +706,7 @@ export class StrategyBook {
    * Flatten the open position at `price`. Returns false when there is nothing
    * to close or the fill cannot be recorded without corrupting state.
    */
-  private flattenAt(bar: number, id: string, price: number): boolean {
+  private flattenAt(bar: number, id: string, price: number, exitTime?: number): boolean {
     const q = this.position.qty;
     if (q === 0 || !isFiniteNumber(q) || !isFiniteNumber(price)) return false;
     const side = q > 0 ? "sell" : "buy";
@@ -577,11 +717,14 @@ export class StrategyBook {
     const basis = isFiniteNumber(avg) ? avg : px;
     const pnl = q * (px - basis);
     if (isFiniteNumber(pnl)) this.realizedPnl += pnl;
-    this.closeOpenTrades(bar, id, px, absQ, q > 0 ? "long" : "short", basis);
+    const t = isFiniteNumber(exitTime) ? exitTime : bar;
+    this.closeOpenTrades(bar, id, px, absQ, q > 0 ? "long" : "short", basis, t);
     this.position.qty = 0;
     this.position.avgPrice = null;
     this.sameDirAdds = 0;
     this.closedCount += 1;
+    this.noteFilledOrder(t);
+    this.updateEquityExtremes(px);
     return true;
   }
 
@@ -603,6 +746,7 @@ export class StrategyBook {
     absQ: number,
     direction: StrategyDirection,
     basis: number,
+    exitTime?: number,
   ): void {
     if (this.openTrades.length === 0 && absQ > 0) {
       this.openTrades.push({
@@ -637,6 +781,7 @@ export class StrategyBook {
       if (ot.max_drawdown !== undefined) closed.max_drawdown = ot.max_drawdown;
       this.closedTrades.push(closed);
       this.noteClosedProfit(profit);
+      this.noteClosedTradeDay(isFiniteNumber(exitTime) ? exitTime : bar, profit);
     }
     this.openTrades.length = 0;
   }
@@ -668,6 +813,97 @@ export class StrategyBook {
   private pickTrade(list: Trade[], i: unknown): Trade | null {
     if (!isFiniteNumber(i) || !Number.isInteger(i) || i < 0 || i >= list.length) return null;
     return list[i] ?? null;
+  }
+
+  private riskAllowsEntry(direction: StrategyDirection, time: number): boolean {
+    const allow = (this.allow_entry_in || "all").toLowerCase().replace(/strategy\./g, "");
+    if (allow === "long" && direction !== "long") return false;
+    if (allow === "short" && direction !== "short") return false;
+    if (this.entries_blocked) return false;
+    if (this.max_drawdown_risk != null && this.maxDrawdownAbs >= this.max_drawdown_risk) {
+      this.entries_blocked = true;
+      return false;
+    }
+    if (
+      this.max_drawdown_risk_percent != null &&
+      this.maxDrawdownPercent >= this.max_drawdown_risk_percent
+    ) {
+      this.entries_blocked = true;
+      return false;
+    }
+    if (this.max_cons_loss_days != null && this.consecutive_loss_days >= this.max_cons_loss_days) {
+      this.entries_blocked = true;
+      return false;
+    }
+    if (
+      Number.isFinite(this.max_intraday_loss) &&
+      this.max_intraday_loss < Number.POSITIVE_INFINITY &&
+      this.initialCapital > 0 &&
+      this.dayPnl < 0
+    ) {
+      const lossPct = 100 * -this.dayPnl / this.initialCapital;
+      if (lossPct >= this.max_intraday_loss) {
+        this.entries_blocked = true;
+        return false;
+      }
+    }
+    if (this.max_intraday_filled_orders != null) {
+      this.rollFillDay(time);
+      if (this.dayFilledOrders >= this.max_intraday_filled_orders) return false;
+    }
+    return true;
+  }
+
+  private capQtyByMaxPosition(qty: number, fillPrice: number): number {
+    const pct = this.max_position_size_percent;
+    if (pct == null || pct <= 0 || !isFiniteNumber(fillPrice) || fillPrice <= 0) return qty;
+    const eq = this.equity(fillPrice);
+    const maxQty = (eq * (pct / 100)) / fillPrice;
+    if (!isFiniteNumber(maxQty) || maxQty < 0) return 0;
+    return Math.min(qty, maxQty);
+  }
+
+  private updateEquityExtremes(mark: number): void {
+    const eq = this.equity(mark);
+    if (!isFiniteNumber(eq)) return;
+    if (eq > this.equityPeak) this.equityPeak = eq;
+    const dd = this.equityPeak - eq;
+    if (dd > this.maxDrawdownAbs) {
+      this.maxDrawdownAbs = dd;
+      if (this.equityPeak > 0) this.maxDrawdownPercent = (100 * dd) / this.equityPeak;
+    }
+  }
+
+  private rollFillDay(ts: number): void {
+    const day = dayBucket(isFiniteNumber(ts) ? ts : 0);
+    if (this.fillsDay == null || day !== this.fillsDay) {
+      this.fillsDay = day;
+      this.dayFilledOrders = 0;
+    }
+  }
+
+  private noteFilledOrder(ts: number): void {
+    this.rollFillDay(ts);
+    this.dayFilledOrders += 1;
+  }
+
+  private ocaAfterFill(filled: PendingOrder, fillQty: number, bar: number): void {
+    const name = filled.oca_name;
+    const otype = filled.oca_type ?? "none";
+    if (!name || otype === "none") return;
+    for (const other of this.pending.slice()) {
+      if (other.id === filled.id || other.oca_name !== name) continue;
+      if (otype === "cancel") {
+        this.dropPending(other.id);
+        this.events.push({ type: "cancel", id: other.id, bar });
+      } else if (otype === "reduce") {
+        other.qty = Math.max(0, other.qty - fillQty);
+        if (other.qty <= 1e-12) {
+          this.dropPending(other.id);
+          this.events.push({ type: "cancel", id: other.id, bar });
+        }
+      }
+    }
   }
 
   /** Long/buy pays +slip; short/sell receives −slip. Records actual fill price. */

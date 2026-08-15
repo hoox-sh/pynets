@@ -23,6 +23,7 @@ import type {
   FunctionDef,
   TypeDef,
   EnumDef,
+  Import,
   Param,
   ReAssign,
   Script,
@@ -96,7 +97,14 @@ import {
   mathToDegrees,
   mathToRadians,
 } from "./math.ts";
-import { utcPartsFromMs } from "./time.ts";
+import { utcPartsFromMs, timestamp, timeTradingDay, weekOfYear } from "./time.ts";
+import {
+  LibraryModule,
+  LibraryRegistry,
+  STUB_KNOWN_EXPORTS,
+  createStubModule,
+  type StubKwargs,
+} from "./library.ts";
 import { isRequestBuiltin, resolveRequest, resolveSecurity } from "./request.ts";
 import { NA, PineSeries, type Cell } from "./series.ts";
 import {
@@ -143,6 +151,7 @@ export interface RuntimeOptions {
   inputs?: InputOverrides;
   broker?: BrokerSettings;
   timeframe?: string | null;
+  libraries?: LibraryRegistry;
 }
 
 export interface RuntimeFill {
@@ -187,6 +196,8 @@ type Value =
   | TickerId
   | UdtType
   | UdtInstance
+  | LibraryModule
+  | UdfDef
   | EnumType
   | EnumMember;
 
@@ -223,6 +234,7 @@ interface BoolOpNode {
 }
 
 interface UdfDef {
+  __udf: true;
   params: Param[];
   body: stmt[];
 }
@@ -257,12 +269,15 @@ interface Env {
   lastBarTime: number;
   logs: LogBook;
   barTimes: number[];
+  libraries: LibraryRegistry;
+  pendingExports: Map<string, Value>;
 }
 
 export class Runtime {
   readonly inputs: InputOverrides;
   readonly broker: BrokerSettings;
   readonly timeframe: string | null;
+  readonly libraries: LibraryRegistry;
 
   constructor(
     public readonly symbol = "AAPL",
@@ -271,6 +286,12 @@ export class Runtime {
     this.inputs = options?.inputs ?? {};
     this.broker = options?.broker ?? {};
     this.timeframe = options?.timeframe ?? null;
+    this.libraries = options?.libraries ?? new LibraryRegistry();
+  }
+
+  /** Store Pine source for `import namespace/name/version`. */
+  registerLibrarySource(namespace: string, name: string, version: number, source: string): void {
+    this.libraries.registerSource(namespace, name, version, source);
   }
 
   run(
@@ -301,6 +322,7 @@ export class Runtime {
         inputs: mergeInputs(this.inputs, extra),
         broker: extraOpts?.broker ?? this.broker,
         timeframe: extraOpts?.timeframe ?? this.timeframe,
+        libraries: extraOpts?.libraries ?? this.libraries,
       });
     } catch (err) {
       return {
@@ -394,7 +416,13 @@ export function interpret(source: string, ohlcv: OHLCVBar[]): { plots: Array<num
 export function interpretTree(
   tree: AST,
   ohlcv: OHLCVBar[],
-  host?: { symbol?: string; inputs?: InputOverrides; broker?: BrokerSettings; timeframe?: string | null },
+  host?: {
+    symbol?: string;
+    inputs?: InputOverrides;
+    broker?: BrokerSettings;
+    timeframe?: string | null;
+    libraries?: LibraryRegistry;
+  },
 ): RuntimeResult {
   const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
   const body = scriptNode?.body ?? [];
@@ -427,6 +455,8 @@ export function interpretTree(
     lastBarTime: ohlcv.length === 0 ? 0 : (ohlcv[ohlcv.length - 1]!.time ?? (ohlcv.length - 1) * 60_000),
     logs: new LogBook(),
     barTimes: ohlcv.map((b, i) => b.time ?? i * 60_000),
+    libraries: host?.libraries ?? new LibraryRegistry(),
+    pendingExports: new Map(),
   };
 
   const n = ohlcv.length;
@@ -454,12 +484,18 @@ export function interpretTree(
             if (decl.kind === "strategy") {
               script_type = "strategy";
               applyStrategyDecl(stmt, env);
+            } else if (decl.kind === "library") {
+              script_type = "library";
+              applyDrawingDecl(stmt, env);
             } else {
               applyDrawingDecl(stmt, env);
             }
             continue;
           }
           execStmt(stmt, env);
+        }
+        if (i === 0 && script_type === "library" && script_name) {
+          finalizeLibrary(env, script_name);
         }
       } catch (err) {
         if (err === LOOP_BREAK || err === LOOP_CONTINUE) continue;
@@ -817,6 +853,7 @@ function evalAssign(stmt: Assign, env: Env): Value {
   const value = evalExpr(stmt.value, env);
   bindName(env, id, value);
   if (isVarMode(stmt)) inited.add(id);
+  if (stmt.export) env.pendingExports.set(id, value);
   return value;
 }
 
@@ -892,6 +929,10 @@ function execStmt(
   }
   if (stmt.kind === "EnumDef") {
     registerEnumDef(stmt as EnumDef, env);
+    return NA;
+  }
+  if (stmt.kind === "Import") {
+    execImport(stmt as Import, env);
     return NA;
   }
   if (stmt.kind === "Assign") {
@@ -1271,6 +1312,13 @@ function evalAttribute(node: Attribute, env: Env): Value {
   if (obj instanceof EnumType) {
     return obj.members.get(node.attr) ?? NA;
   }
+  if (obj instanceof LibraryModule) {
+    const exp = obj.get(node.attr);
+    if (exp === undefined) return NA;
+    if (isUdfDef(exp)) return exp;
+    if (typeof exp === "function") return NA;
+    return exp as Value;
+  }
   return NA;
 }
 
@@ -1315,12 +1363,6 @@ function evalTaAttr(attr: string, env: Env): Value | undefined {
     return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
   }
   return undefined;
-}
-
-function timeframeMultiplier(period: string | null): number {
-  if (period == null || period === "") return 1;
-  const m = period.match(/^(\d+)/);
-  return m ? Number(m[1]) : 1;
 }
 
 function evalDirection(node: expr | undefined, env: Env): string {
@@ -1392,6 +1434,12 @@ function cmp(left: Value, op: string, right: Value): boolean | null {
 }
 
 function evalCall(node: Call, env: Env): Value {
+  if (node.func.kind === "Attribute") {
+    const obj = evalExpr(node.func.value, env);
+    if (obj instanceof LibraryModule) {
+      return evalLibraryMemberCall(obj, node.func.attr, node, env);
+    }
+  }
   const fname = callName(node);
   const site = siteKey(node, env);
   if (fname === "ta.sma" || fname === "sma") {
@@ -1475,6 +1523,8 @@ function evalCall(node: Call, env: Env): Value {
     else env.logs.error(env.barIndex, msg);
     return NA;
   }
+  const timeVal = evalTimeCall(fname, node, env);
+  if (timeVal !== undefined) return timeVal;
   if (fname === "timeframe.in_seconds") {
     const p = evalAsString(callArg(node.args, 0, ["timeframe", "period"]), env) ?? env.timeframe;
     return timeframeInSeconds(p);
@@ -1534,14 +1584,18 @@ function evalCall(node: Call, env: Env): Value {
       limit,
       stop,
       price: mark == null || !Number.isFinite(mark) ? undefined : mark,
+      time: num(env.ctx.time) ?? undefined,
+      oca_name: evalAsString(callArg(node.args, -1, ["oca_name"]), env),
+      oca_type: evalAsString(callArg(node.args, -1, ["oca_type"]), env),
     });
     return NA;
   }
   if (fname === "strategy.close") {
     const id = evalId(callArg(node.args, 0, ["id"]));
     const mark = num(env.ctx.close);
-    if (env.book.position.qty !== 0 && mark != null) env.book.fillClose(env.barIndex, id, mark);
-    else env.book.close(env.barIndex, id);
+    if (env.book.position.qty !== 0 && mark != null) {
+      env.book.fillClose(env.barIndex, id, mark, { time: num(env.ctx.time) ?? undefined });
+    } else env.book.close(env.barIndex, id);
     return NA;
   }
   if (fname === "strategy.exit") {
@@ -1569,9 +1623,14 @@ function evalCall(node: Call, env: Env): Value {
       limit: unwrap(evalExpr(callArg(node.args, -1, ["limit"]), env)),
       stop: unwrap(evalExpr(callArg(node.args, -1, ["stop"]), env)),
       price: num(env.ctx.close) ?? undefined,
+      time: num(env.ctx.time) ?? undefined,
+      oca_name: evalAsString(callArg(node.args, -1, ["oca_name"]), env),
+      oca_type: evalAsString(callArg(node.args, -1, ["oca_type"]), env),
     });
     return NA;
   }
+  const riskVal = evalStrategyRiskCall(fname, node, env);
+  if (riskVal !== undefined) return riskVal;
   const tradeVal = evalStrategyTradeCall(fname, node, env);
   if (tradeVal !== undefined) return tradeVal;
   if (fname != null && fname.endsWith(".new")) {
@@ -1733,7 +1792,7 @@ function formatRunError(err: unknown): string {
 }
 
 function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOverrides {
-  return !("inputs" in extra) && !("broker" in extra) && !("timeframe" in extra);
+  return !("inputs" in extra) && !("broker" in extra) && !("timeframe" in extra) && !("libraries" in extra);
 }
 
 function mergeInputs(
@@ -1817,6 +1876,41 @@ function evalAsString(node: expr | undefined, env: Env): string | null {
   if (node.kind === "Constant" && typeof node.value === "string") return node.value;
   const v = evalExpr(node, env);
   return typeof v === "string" ? v : null;
+}
+
+function evalStrategyRiskCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname == null || !fname.startsWith("strategy.risk.")) return undefined;
+  const book = env.book;
+  if (fname === "strategy.risk.allow_entry_in") {
+    const raw = evalExpr(callArg(node.args, 0, ["value"]), env);
+    book.riskAllowEntryIn(typeof raw === "string" ? raw : unwrap(raw));
+    return NA;
+  }
+  if (fname === "strategy.risk.max_position_size") {
+    book.riskMaxPositionSize(unwrap(evalExpr(callArg(node.args, 0, ["percent", "value"]), env)));
+    return NA;
+  }
+  if (fname === "strategy.risk.max_drawdown") {
+    const value = unwrap(evalExpr(callArg(node.args, 0, ["value"]), env));
+    const typeRaw = evalExpr(callArg(node.args, 1, ["type"]), env);
+    book.riskMaxDrawdown(value, typeof typeRaw === "string" ? typeRaw : unwrap(typeRaw));
+    return NA;
+  }
+  if (fname === "strategy.risk.max_cons_loss_days") {
+    book.riskMaxConsLossDays(unwrap(evalExpr(callArg(node.args, 0, ["days", "value"]), env)));
+    return NA;
+  }
+  if (fname === "strategy.risk.max_intraday_loss") {
+    book.riskMaxIntradayLoss(unwrap(evalExpr(callArg(node.args, 0, ["percent", "value"]), env)));
+    return NA;
+  }
+  if (fname === "strategy.risk.max_intraday_filled_orders") {
+    book.riskMaxIntradayFilledOrders(
+      unwrap(evalExpr(callArg(node.args, 0, ["max", "max_orders", "value"]), env)),
+    );
+    return NA;
+  }
+  return undefined;
 }
 
 function evalStrategyTradeCall(fname: string | null, node: Call, env: Env): Value | undefined {
@@ -2684,7 +2778,106 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
     const initial = unwrap(evalExpr(callArg(node.args, 1, ["initial_value"]), env));
     return new PineArray(size, initial);
   }
+  if (fname === "array.from") {
+    const arr = new PineArray();
+    for (const a of asArgs(node.args)) arr.push(unwrap(evalExpr(a.value, env)));
+    return arr;
+  }
+  if (fname === "array.lastindexof") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.lastIndexOf(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.concat") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asArray(evalExpr(callArg(node.args, 1, ["other", "id2"]), env));
+    return arr && other ? arr.concat(other) : NA;
+  }
+  if (fname === "array.abs") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.abs() : NA;
+  }
+  if (fname === "array.every") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr && arr.every() ? 1 : 0;
+  }
+  if (fname === "array.some") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr && arr.some() ? 1 : 0;
+  }
+  if (fname === "array.median") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.median() : NA;
+  }
+  if (fname === "array.range") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.range() : NA;
+  }
+  if (fname === "array.mode") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.mode() : NA;
+  }
+  if (fname === "array.binary_search") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.binarySearch(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.binary_search_leftmost") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.binarySearchLeftmost(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.binary_search_rightmost") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.binarySearchRightmost(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.stdev") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const biased = biasedArg(node, env);
+    return arr ? arr.stdev(biased) : NA;
+  }
+  if (fname === "array.variance") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.variance(biasedArg(node, env)) : NA;
+  }
+  if (fname === "array.covariance") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const other = asArray(evalExpr(callArg(node.args, 1, ["id2", "other"]), env));
+    return arr && other ? arr.covariance(other, biasedArg(node, env, 2)) : NA;
+  }
+  if (fname === "array.percentile_linear_interpolation") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const p = unwrap(evalExpr(callArg(node.args, 1, ["percentage", "percent"]), env));
+    return arr && p != null ? arr.percentileLinearInterpolation(p) : NA;
+  }
+  if (fname === "array.percentile_nearest_rank") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const p = unwrap(evalExpr(callArg(node.args, 1, ["percentage", "percent"]), env));
+    return arr && p != null ? arr.percentileNearestRank(p) : NA;
+  }
+  if (fname === "array.percentrank") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.percentrank(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+  }
+  if (fname === "array.standardize") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return arr ? arr.standardize() : NA;
+  }
+  if (fname === "array.sort_indices") {
+    const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const orderRaw = evalExpr(callArg(node.args, 1, ["order"]), env);
+    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
+    if (!arr) return NA;
+    const idx = arr.sortIndices(order);
+    if (idx == null) return NA;
+    const out = new PineArray();
+    for (const i of idx) out.push(i);
+    return out;
+  }
   return undefined;
+}
+
+function biasedArg(node: Call, env: Env, pos = 1): boolean {
+  const raw = unwrap(evalExpr(callArg(node.args, pos, ["biased"]), env));
+  if (raw == null) return true;
+  return raw !== 0;
 }
 
 function asMap(value: Value): PineMap | null {
@@ -2847,6 +3040,22 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
   if (name === "matrix.inv") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     return m ? m.inv() : NA;
+  }
+  if (name === "matrix.pinv") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.pinv() : NA;
+  }
+  if (name === "matrix.eigenvalues") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    const vals = m?.eigenvalues();
+    if (vals == null) return NA;
+    const arr = new PineArray();
+    for (const v of vals) arr.push(v);
+    return arr;
+  }
+  if (name === "matrix.eigenvectors") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    return m ? m.eigenvectors() : NA;
   }
   if (name === "matrix.pow") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
@@ -3251,7 +3460,9 @@ function asStmts(body: stmt | stmt[] | null | undefined): stmt[] {
 
 function registerUdf(node: FunctionDef, env: Env): void {
   if (env.barIndex !== 0) return;
-  env.udfs.set(node.name, { params: asParams(node.args), body: asStmts(node.body) });
+  const def: UdfDef = { __udf: true, params: asParams(node.args), body: asStmts(node.body) };
+  env.udfs.set(node.name, def);
+  if (node.export) env.pendingExports.set(node.name, def);
 }
 
 function registerTypeDef(node: TypeDef, env: Env): void {
@@ -3266,7 +3477,9 @@ function registerTypeDef(node: TypeDef, env: Env): void {
       default: a.value == null ? null : evalExpr(a.value, env),
     });
   }
-  bindName(env, node.name, udtTypeFromAssigns(node.name, fields));
+  const t = udtTypeFromAssigns(node.name, fields);
+  bindName(env, node.name, t);
+  if (node.export) env.pendingExports.set(node.name, t);
 }
 
 function registerEnumDef(node: EnumDef, env: Env): void {
@@ -3280,7 +3493,9 @@ function registerEnumDef(node: EnumDef, env: Env): void {
       names.push(((s as { value: { id: string } }).value).id);
     }
   }
-  bindName(env, node.name, enumTypeFromNames(node.name, names));
+  const e = enumTypeFromNames(node.name, names);
+  bindName(env, node.name, e);
+  if (node.export) env.pendingExports.set(node.name, e);
 }
 
 function pushUdfFrame(env: Env, site: string): void {
@@ -3334,4 +3549,164 @@ function evalUdf(def: UdfDef, node: Call, env: Env): Value {
   } finally {
     env.frames.pop();
   }
+}
+
+function isUdfDef(value: unknown): value is UdfDef {
+  return typeof value === "object" && value !== null && (value as UdfDef).__udf === true;
+}
+
+function evalTimeCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname === "timestamp") {
+    const args = asArgs(node.args).map((a) => {
+      const v = evalExpr(a.value, env);
+      return typeof v === "string" ? v : unwrap(v);
+    });
+    return timestamp(...args);
+  }
+  const part =
+    fname === "year" ||
+    fname === "month" ||
+    fname === "dayofmonth" ||
+    fname === "dayofweek" ||
+    fname === "hour" ||
+    fname === "minute" ||
+    fname === "second"
+      ? fname
+      : null;
+  if (part != null) {
+    const ms = calendarMs(node, env);
+    if (ms == null) return NA;
+    const parts = utcPartsFromMs(ms);
+    return parts[part];
+  }
+  if (fname === "weekofyear") {
+    const ms = calendarMs(node, env);
+    return ms == null ? NA : weekOfYear(ms);
+  }
+  if (fname === "time_tradingday") {
+    const ms = calendarMs(node, env);
+    return ms == null ? NA : timeTradingDay(ms);
+  }
+  return undefined;
+}
+
+function calendarMs(node: Call, env: Env): number | null {
+  const arg = callArg(node.args, 0, ["time", "timestamp"]);
+  if (arg == null) return num(env.ctx.time);
+  return unwrap(evalExpr(arg, env));
+}
+
+function evalLibraryMemberCall(mod: LibraryModule, attr: string, node: Call, env: Env): Value {
+  const exp = mod.get(attr);
+  if (exp === undefined) {
+    const stub = STUB_KNOWN_EXPORTS[attr];
+    if (stub) return callStubExport(stub, node, env);
+    return NA;
+  }
+  if (isUdfDef(exp)) return evalUdf(exp, node, env);
+  if (typeof exp === "function") return callStubExport(exp as (...args: unknown[]) => unknown, node, env);
+  return exp as Value;
+}
+
+function callStubExport(fn: (...args: unknown[]) => unknown, node: Call, env: Env): Value {
+  const args: unknown[] = [];
+  const kwargs: StubKwargs = {};
+  for (const a of asArgs(node.args)) {
+    const kw = argKeyword(a);
+    const v = evalExpr(a.value, env);
+    const raw = typeof v === "string" ? v : unwrap(v);
+    if (kw) kwargs[kw] = raw;
+    else args.push(raw);
+  }
+  const result = Object.keys(kwargs).length > 0 ? fn(args, kwargs) : fn(...args);
+  if (result == null) return NA;
+  if (typeof result === "number" && Number.isFinite(result)) return result;
+  if (typeof result === "string") return result;
+  if (Array.isArray(result) && result.every((x) => typeof x === "number" && Number.isFinite(x))) {
+    return tupleOf(result.map((x) => x as number));
+  }
+  return NA;
+}
+
+function execImport(node: Import, env: Env): void {
+  if (env.barIndex !== 0) return;
+  const alias = node.alias || node.name;
+  let mod = env.libraries.lookup({
+    namespace: node.namespace,
+    name: node.name,
+    version: node.version,
+  });
+  if (mod == null) {
+    const source = env.libraries.getSource(node.namespace, node.name, node.version);
+    if (source != null) {
+      loadLibrarySource(env, source, node.name);
+      mod = env.libraries.lookup({
+        namespace: node.namespace,
+        name: node.name,
+        version: node.version,
+      });
+      if (mod == null) {
+        mod = env.libraries.lookup({ name: node.name });
+        if (mod != null) {
+          mod.namespace = node.namespace;
+          mod.version = node.version;
+          env.libraries.register(mod);
+        }
+      }
+    }
+  }
+  if (mod == null) {
+    const stub = createStubModule(node.name);
+    stub.namespace = node.namespace;
+    stub.version = node.version;
+    bindName(env, alias, stub);
+    return;
+  }
+  if (mod.namespace == null) mod.namespace = node.namespace;
+  if (mod.version == null) mod.version = node.version;
+  bindName(env, alias, mod);
+}
+
+function loadLibrarySource(env: Env, source: string, fallbackTitle?: string): void {
+  let tree: AST;
+  try {
+    tree = parse(source);
+  } catch {
+    return;
+  }
+  if (tree.kind !== "Script") return;
+  const script = tree as Script;
+  const saved = new Map(env.pendingExports);
+  env.pendingExports.clear();
+  let title: string | null = null;
+  for (const stmt of script.body) {
+    const decl = captureDecl(stmt);
+    if (decl) {
+      if (decl.kind === "library" && decl.name) title = decl.name;
+      continue;
+    }
+    const kind = stmt.kind;
+    if (
+      kind === "FunctionDef" ||
+      kind === "TypeDef" ||
+      kind === "EnumDef" ||
+      kind === "Import" ||
+      kind === "Assign"
+    ) {
+      execStmt(stmt, env);
+    }
+  }
+  const libTitle = title ?? fallbackTitle;
+  if (libTitle) finalizeLibrary(env, libTitle);
+  env.pendingExports = saved;
+}
+
+function finalizeLibrary(env: Env, title: string): void {
+  const exports: Record<string, unknown> = {};
+  for (const [k, v] of env.pendingExports) exports[k] = v;
+  const existing = env.libraries.lookup({ name: title });
+  const mod = existing ?? new LibraryModule(title);
+  for (const [k, v] of Object.entries(exports)) mod.exports.set(k, v);
+  env.libraries.register(mod);
+  env.pendingExports.clear();
 }

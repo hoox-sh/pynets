@@ -36,6 +36,7 @@ export type ASTKind =
   | "Or"
   | "Break"
   | "Continue"
+  | "Import"
   | "Load"
   | "Store"
   | "Eq"
@@ -106,7 +107,15 @@ export interface VarIp extends AST {
 
 export type decl_mode = Var | VarIp;
 
-export type stmt = Expr | Assign | ReAssign | FunctionDef | TypeDef | EnumDef | Break | Continue;
+export interface Import extends AST {
+  kind: "Import";
+  namespace: string;
+  name: string;
+  version: number;
+  alias: string | null;
+}
+
+export type stmt = Expr | Assign | ReAssign | FunctionDef | TypeDef | EnumDef | Import | Break | Continue;
 
 export interface FunctionDef extends AST {
   kind: "FunctionDef";
@@ -549,4 +558,13 @@ export function breakStmt(): Break {
 
 export function continueStmt(): Continue {
   return { kind: "Continue" };
+}
+
+export function importStmt(
+  namespace: string,
+  name: string,
+  version: number,
+  alias: string | null = null,
+): Import {
+  return { kind: "Import", namespace, name, version, alias };
 }

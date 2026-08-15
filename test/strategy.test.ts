@@ -442,3 +442,82 @@ describe("StrategyBook trade ledger", () => {
     expect(book.avgLosingTrade()).toBe(10);
   });
 });
+
+describe("StrategyBook risk + OCA", () => {
+  test("allow_entry_in long blocks short fillEntry", () => {
+    const book = new StrategyBook();
+    book.riskAllowEntryIn("long");
+    book.fillEntry(0, "S", "short", 1, 100);
+    expect(book.position.qty).toBe(0);
+    expect(book.position.avgPrice).toBeNull();
+    expect(book.fills).toHaveLength(0);
+    expect(book.events).toHaveLength(0);
+    book.fillEntry(1, "L", "long", 1, 100);
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+  });
+
+  test("max_position_size caps qty to 10% of equity", () => {
+    const book = new StrategyBook();
+    expect(book.initialCapital).toBe(1_000_000);
+    book.riskMaxPositionSize(10);
+    book.fillEntry(0, "L", "long", 50_000, 100);
+    // 10% of 1e6 = 100_000 notional / 100 = 1000
+    expect(book.position.qty).toBeCloseTo(1000);
+    expect(book.fills[0]?.qty).toBeCloseTo(1000);
+  });
+
+  test("max_drawdown absolute blocks after losing close", () => {
+    const book = new StrategyBook();
+    book.riskMaxDrawdown(50, "absolute");
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.fillClose(1, "L", 40); // −60 ≥ 50
+    expect(book.position.qty).toBe(0);
+    book.fillEntry(2, "L2", "long", 1, 100);
+    expect(book.position.qty).toBe(0);
+    expect(book.fills).toHaveLength(2);
+    expect(book.entries_blocked).toBe(true);
+  });
+
+  test("max_cons_loss_days blocks after two losing days", () => {
+    const book = new StrategyBook();
+    book.riskMaxConsLossDays(2);
+    const d1 = 1_700_000_000;
+    const d2 = d1 + 86_400;
+    const d3 = d1 + 2 * 86_400;
+    // Day PnL is finalized on the next day's close (Python note_closed_trade_day).
+    book.fillEntry(0, "L1", "long", 1, 100, { time: d1 });
+    book.fillClose(1, "L1", 90, { time: d1 });
+    book.fillEntry(2, "L2", "long", 1, 100, { time: d2 });
+    book.fillClose(3, "L2", 90, { time: d2 });
+    book.fillEntry(4, "L3", "long", 1, 100, { time: d3 });
+    book.fillClose(5, "L3", 90, { time: d3 });
+    expect(book.consecutive_loss_days).toBeGreaterThanOrEqual(2);
+    expect(book.entries_blocked).toBe(true);
+    book.fillEntry(6, "L4", "long", 1, 100, { time: d3 + 86_400 });
+    expect(book.position.qty).toBe(0);
+  });
+
+  test("OCA cancel drops sibling after fill", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "A", "long", 1, { limit: 100, oca_name: "G", oca_type: "cancel" });
+    book.placeEntry(0, "B", "long", 1, { limit: 100, oca_name: "G", oca_type: "strategy.oca.cancel" });
+    expect(book.pending).toHaveLength(2);
+    expect(book.processPending(1, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["A"]);
+    expect(book.pending).toHaveLength(0);
+    expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
+    expect(book.fills).toEqual([{ bar: 1, id: "A", side: "buy", qty: 1, price: 100 }]);
+    expect(book.events.some((e) => e.type === "cancel" && e.id === "B")).toBe(true);
+  });
+
+  test("OCA reduce reduces sibling qty after fill", () => {
+    const book = new StrategyBook();
+    book.placeEntry(0, "A", "long", 1, { limit: 100, oca_name: "G", oca_type: "reduce" });
+    book.placeEntry(0, "B", "long", 3, { limit: 90, oca_name: "G", oca_type: "strategy.oca.reduce" });
+    expect(book.processPending(1, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["A"]);
+    expect(book.pending).toHaveLength(1);
+    expect(book.pending[0]?.id).toBe("B");
+    expect(book.pending[0]?.qty).toBe(2);
+    expect(book.position.qty).toBe(1);
+    expect(book.fills).toHaveLength(1);
+  });
+});

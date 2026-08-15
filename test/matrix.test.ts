@@ -729,3 +729,137 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
     expect(new PineMatrix(2, 3, 0).isAntidiagonal()).toBe(false);
   });
 });
+
+function expectCloseCell(got: number | null, want: number, atol = 1e-8): void {
+  expect(got).not.toBeNull();
+  expect(Math.abs(got! - want)).toBeLessThan(atol);
+}
+
+function expectApaEqualsA(a: PineMatrix, pin: PineMatrix, atol = 1e-8): void {
+  const ap = a.mult(pin);
+  expect(ap).not.toBeNull();
+  const apa = ap!.mult(a);
+  expect(apa).not.toBeNull();
+  expect(apa!.rows()).toBe(a.rows());
+  expect(apa!.columns()).toBe(a.columns());
+  for (let i = 0; i < a.rows(); i++) {
+    for (let j = 0; j < a.columns(); j++) {
+      expectCloseCell(apa!.get(i, j), a.get(i, j) as number, atol);
+    }
+  }
+}
+
+describe("PineMatrix pinv / eigenvalues / eigenvectors", () => {
+  test("eye(3).pinv() ≈ I", () => {
+    const i = fill([
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ]);
+    const p = i.pinv();
+    expect(p).not.toBeNull();
+    expect(p!.rows()).toBe(3);
+    expect(p!.columns()).toBe(3);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        expectCloseCell(p!.get(r, c), r === c ? 1 : 0);
+      }
+    }
+  });
+
+  test("rectangular pinv is 2×3 and A @ pinv @ A ≈ A", () => {
+    const a = fill([
+      [1, 2],
+      [3, 4],
+      [5, 6],
+    ]);
+    const p = a.pinv();
+    expect(p).not.toBeNull();
+    expect(p!.rows()).toBe(2);
+    expect(p!.columns()).toBe(3);
+    expectApaEqualsA(a, p!);
+  });
+
+  test("rank-deficient 2×2 pinv is finite and A @ pinv @ A ≈ A", () => {
+    const a = fill([
+      [1, 2],
+      [2, 4],
+    ]);
+    const p = a.pinv();
+    expect(p).not.toBeNull();
+    expect(p!.rows()).toBe(2);
+    expect(p!.columns()).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        const v = p!.get(i, j);
+        expect(v).not.toBeNull();
+        expect(Number.isFinite(v as number)).toBe(true);
+      }
+    }
+    expectApaEqualsA(a, p!);
+  });
+
+  test("non-finite cell → pinv() is null", () => {
+    const m = fill([
+      [1, 2],
+      [3, 4],
+    ]);
+    m.set(0, 1, null);
+    expect(m.pinv()).toBeNull();
+    m.set(0, 1, Number.NaN);
+    expect(m.pinv()).toBeNull();
+    m.set(0, 1, Infinity);
+    expect(m.pinv()).toBeNull();
+  });
+
+  test("diagonal 2×2 eigenvalues are {2,3}", () => {
+    const m = fill([
+      [2, 0],
+      [0, 3],
+    ]);
+    const vals = m.eigenvalues();
+    expect(vals).not.toBeNull();
+    expect(vals!.length).toBe(2);
+    const got = vals!.slice().sort((x, y) => x - y);
+    expectCloseCell(got[0]!, 2);
+    expectCloseCell(got[1]!, 3);
+  });
+
+  test("symmetric 2×2 eigenvalues {3,-1} and Av ≈ λv", () => {
+    const m = fill([
+      [1, 2],
+      [2, 1],
+    ]);
+    const vals = m.eigenvalues();
+    expect(vals).not.toBeNull();
+    expect(vals!.length).toBe(2);
+    const got = vals!.slice().sort((x, y) => x - y);
+    expectCloseCell(got[0]!, -1);
+    expectCloseCell(got[1]!, 3);
+    const vecs = m.eigenvectors();
+    expect(vecs).not.toBeNull();
+    expect(vecs!.rows()).toBe(2);
+    expect(vecs!.columns()).toBe(2);
+    const av = m.mult(vecs!);
+    expect(av).not.toBeNull();
+    for (let j = 0; j < 2; j++) {
+      const lam = vals![j]!;
+      for (let i = 0; i < 2; i++) {
+        const vij = vecs!.get(i, j);
+        expect(vij).not.toBeNull();
+        expectCloseCell(av!.get(i, j), lam * (vij as number), 1e-7);
+      }
+    }
+  });
+
+  test("non-square eigenvalues/eigenvectors → null", () => {
+    const rect = fill([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    expect(rect.eigenvalues()).toBeNull();
+    expect(rect.eigenvectors()).toBeNull();
+    expect(new PineMatrix(3, 1, 1).eigenvalues()).toBeNull();
+    expect(new PineMatrix(3, 1, 1).eigenvectors()).toBeNull();
+  });
+});

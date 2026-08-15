@@ -36,6 +36,315 @@ function padOrTrunc(values: Cell[] | undefined, n: number): Cell[] {
   return out;
 }
 
+function cloneGrid(src: number[][]): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < src.length; i++) out.push(src[i]!.slice());
+  return out;
+}
+
+function eigen2x2(a: number, b: number, c: number, d: number): [number, number] {
+  const tr = a + d;
+  const det = a * d - b * c;
+  const disc = tr * tr - 4 * det;
+  if (disc >= 0) {
+    const s = Math.sqrt(disc);
+    return [(tr + s) / 2, (tr - s) / 2];
+  }
+  const re = tr / 2;
+  return [re, re];
+}
+
+function wilkinsonShift(a: number, b: number, c: number, d: number): number {
+  if ((a - d) * (a - d) + 4 * b * c < 0) return d;
+  const [l1, l2] = eigen2x2(a, b, c, d);
+  return Math.abs(l1 - d) < Math.abs(l2 - d) ? l1 : l2;
+}
+
+/** One-sided Jacobi SVD: A (m×n) = U (m×n) Σ Vᵀ (n×n). */
+function jacobiSvd(A: number[][]): { u: number[][]; s: number[]; v: number[][] } | null {
+  const m = A.length;
+  const n = A[0]!.length;
+  const w = cloneGrid(A);
+  const v: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < n; j++) row.push(i === j ? 1 : 0);
+    v.push(row);
+  }
+  for (let sweep = 0; sweep < 50; sweep++) {
+    let rotated = false;
+    for (let p = 0; p < n - 1; p++) {
+      for (let q = p + 1; q < n; q++) {
+        let alpha = 0;
+        let beta = 0;
+        let gamma = 0;
+        for (let i = 0; i < m; i++) {
+          const ap = w[i]![p]!;
+          const aq = w[i]![q]!;
+          alpha += ap * ap;
+          beta += aq * aq;
+          gamma += ap * aq;
+        }
+        if (!Number.isFinite(alpha) || !Number.isFinite(beta) || !Number.isFinite(gamma)) {
+          return null;
+        }
+        const thresh = 1e-15 * Math.sqrt(Math.max(alpha * beta, 0));
+        if (Math.abs(gamma) <= thresh) continue;
+        rotated = true;
+        const zeta = (beta - alpha) / (2 * gamma);
+        const t = (zeta >= 0 ? 1 : -1) / (Math.abs(zeta) + Math.hypot(1, zeta));
+        const cs = 1 / Math.sqrt(1 + t * t);
+        const sn = cs * t;
+        for (let i = 0; i < m; i++) {
+          const ap = w[i]![p]!;
+          const aq = w[i]![q]!;
+          w[i]![p] = cs * ap - sn * aq;
+          w[i]![q] = sn * ap + cs * aq;
+        }
+        for (let i = 0; i < n; i++) {
+          const vp = v[i]![p]!;
+          const vq = v[i]![q]!;
+          v[i]![p] = cs * vp - sn * vq;
+          v[i]![q] = sn * vp + cs * vq;
+        }
+      }
+    }
+    if (!rotated) break;
+  }
+  const s: number[] = [];
+  const u: number[][] = [];
+  for (let i = 0; i < m; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < n; j++) row.push(0);
+    u.push(row);
+  }
+  for (let j = 0; j < n; j++) {
+    let nrm = 0;
+    for (let i = 0; i < m; i++) nrm += w[i]![j]! * w[i]![j]!;
+    nrm = Math.sqrt(nrm);
+    if (!Number.isFinite(nrm)) return null;
+    s.push(nrm);
+    if (nrm > 0) {
+      for (let i = 0; i < m; i++) u[i]![j] = w[i]![j]! / nrm;
+    }
+  }
+  return { u, s, v };
+}
+
+/** In-place Householder reduction to upper Hessenberg. */
+function toHessenberg(H: number[][]): void {
+  const n = H.length;
+  for (let k = 0; k < n - 2; k++) {
+    let tail = 0;
+    for (let i = k + 2; i < n; i++) tail += H[i]![k]! * H[i]![k]!;
+    if (tail < 1e-30) continue;
+    let norm = tail + H[k + 1]![k]! * H[k + 1]![k]!;
+    norm = Math.sqrt(norm);
+    if (norm < 1e-30) continue;
+    const x0 = H[k + 1]![k]!;
+    const sigma = (x0 >= 0 ? 1 : -1) * norm;
+    const hv: number[] = [x0 + sigma];
+    for (let i = k + 2; i < n; i++) hv.push(H[i]![k]!);
+    let vnorm = 0;
+    for (const t of hv) vnorm += t * t;
+    vnorm = Math.sqrt(vnorm);
+    if (vnorm < 1e-30) continue;
+    for (let i = 0; i < hv.length; i++) hv[i]! /= vnorm;
+    for (let j = k; j < n; j++) {
+      let dot = 0;
+      for (let i = 0; i < hv.length; i++) dot += hv[i]! * H[k + 1 + i]![j]!;
+      dot *= 2;
+      for (let i = 0; i < hv.length; i++) H[k + 1 + i]![j]! -= dot * hv[i]!;
+    }
+    for (let i = 0; i < n; i++) {
+      let dot = 0;
+      for (let j = 0; j < hv.length; j++) dot += H[i]![k + 1 + j]! * hv[j]!;
+      dot *= 2;
+      for (let j = 0; j < hv.length; j++) H[i]![k + 1 + j]! -= dot * hv[j]!;
+    }
+    H[k + 1]![k] = -sigma;
+    for (let i = k + 2; i < n; i++) H[i]![k] = 0;
+  }
+}
+
+/** Explicit shifted QR sweep on the leading m×m block. */
+function qrSweep(H: number[][], m: number, mu: number): void {
+  const cs: { c: number; s: number }[] = [];
+  for (let i = 0; i < m; i++) H[i]![i]! -= mu;
+  for (let k = 0; k < m - 1; k++) {
+    const a = H[k]![k]!;
+    const b = H[k + 1]![k]!;
+    const r = Math.hypot(a, b);
+    const c = r > 0 ? a / r : 1;
+    const s = r > 0 ? b / r : 0;
+    cs.push({ c, s });
+    for (let j = k; j < m; j++) {
+      const t0 = c * H[k]![j]! + s * H[k + 1]![j]!;
+      const t1 = -s * H[k]![j]! + c * H[k + 1]![j]!;
+      H[k]![j] = t0;
+      H[k + 1]![j] = t1;
+    }
+  }
+  for (let k = 0; k < m - 1; k++) {
+    const { c, s } = cs[k]!;
+    for (let i = 0; i <= k + 1 && i < m; i++) {
+      const t0 = c * H[i]![k]! + s * H[i]![k + 1]!;
+      const t1 = -s * H[i]![k]! + c * H[i]![k + 1]!;
+      H[i]![k] = t0;
+      H[i]![k + 1] = t1;
+    }
+  }
+  for (let i = 0; i < m; i++) H[i]![i]! += mu;
+}
+
+/** Real parts of eigenvalues via Hessenberg + Wilkinson QR. */
+function realEigenvalues(A: number[][]): number[] | null {
+  const n = A.length;
+  if (n === 0) return [];
+  if (n === 1) {
+    const v = A[0]![0]!;
+    return Number.isFinite(v) ? [v] : null;
+  }
+  if (n === 2) {
+    const vals = eigen2x2(A[0]![0]!, A[0]![1]!, A[1]![0]!, A[1]![1]!);
+    if (!Number.isFinite(vals[0]) || !Number.isFinite(vals[1])) return null;
+    return [vals[0], vals[1]];
+  }
+  const H = cloneGrid(A);
+  toHessenberg(H);
+  const evals: number[] = [];
+  let m = n;
+  const maxIter = 40 * n * n;
+  let iter = 0;
+  while (m > 0) {
+    if (++iter > maxIter) return null;
+    if (m === 1) {
+      const v = H[0]![0]!;
+      if (!Number.isFinite(v)) return null;
+      evals.push(v);
+      break;
+    }
+    if (m === 2) {
+      const vals = eigen2x2(H[0]![0]!, H[0]![1]!, H[1]![0]!, H[1]![1]!);
+      if (!Number.isFinite(vals[0]) || !Number.isFinite(vals[1])) return null;
+      evals.push(vals[0], vals[1]);
+      break;
+    }
+    const scale = Math.abs(H[m - 1]![m - 1]!) + Math.abs(H[m - 2]![m - 2]!);
+    if (Math.abs(H[m - 1]![m - 2]!) <= 1e-14 * Math.max(1, scale)) {
+      const v = H[m - 1]![m - 1]!;
+      if (!Number.isFinite(v)) return null;
+      evals.push(v);
+      m--;
+      continue;
+    }
+    const scale2 = Math.abs(H[m - 2]![m - 2]!) + Math.abs(H[m - 3]![m - 3]!);
+    if (Math.abs(H[m - 2]![m - 3]!) <= 1e-14 * Math.max(1, scale2)) {
+      const vals = eigen2x2(
+        H[m - 2]![m - 2]!,
+        H[m - 2]![m - 1]!,
+        H[m - 1]![m - 2]!,
+        H[m - 1]![m - 1]!,
+      );
+      if (!Number.isFinite(vals[0]) || !Number.isFinite(vals[1])) return null;
+      evals.push(vals[0], vals[1]);
+      m -= 2;
+      continue;
+    }
+    let mu = wilkinsonShift(
+      H[m - 2]![m - 2]!,
+      H[m - 2]![m - 1]!,
+      H[m - 1]![m - 2]!,
+      H[m - 1]![m - 1]!,
+    );
+    if (iter % 10 === 0) {
+      mu += Math.abs(H[m - 1]![m - 2]!) + Math.abs(H[m - 2]![m - 3]!);
+    }
+    if (!Number.isFinite(mu)) return null;
+    qrSweep(H, m, mu);
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j < i - 1; j++) H[i]![j] = 0;
+    }
+  }
+  return evals;
+}
+
+/** Unit nullspace vector of a square matrix, or `null` if none / non-finite. */
+function nullspaceUnit(M: number[][]): number[] | null {
+  const n = M.length;
+  if (n === 0) return [];
+  const a = cloneGrid(M);
+  let scale = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const v = a[i]![j]!;
+      if (!Number.isFinite(v)) return null;
+      if (Math.abs(v) > scale) scale = Math.abs(v);
+    }
+  }
+  const eps = Math.max(1e-14, 1e-12 * scale);
+  const pivotColOfRow: number[] = new Array(n).fill(-1);
+  const colIsPivot: boolean[] = new Array(n).fill(false);
+  let rank = 0;
+  for (let c = 0; c < n && rank < n; c++) {
+    let piv = rank;
+    let best = Math.abs(a[rank]![c]!);
+    for (let i = rank + 1; i < n; i++) {
+      const mag = Math.abs(a[i]![c]!);
+      if (mag > best) {
+        best = mag;
+        piv = i;
+      }
+    }
+    if (best < eps) continue;
+    if (piv !== rank) {
+      const tmp = a[rank]!;
+      a[rank] = a[piv]!;
+      a[piv] = tmp;
+    }
+    const diag = a[rank]![c]!;
+    for (let j = c; j < n; j++) a[rank]![j]! /= diag;
+    for (let i = 0; i < n; i++) {
+      if (i === rank) continue;
+      const f = a[i]![c]!;
+      if (f === 0) continue;
+      for (let j = c; j < n; j++) a[i]![j]! -= f * a[rank]![j]!;
+    }
+    pivotColOfRow[rank] = c;
+    colIsPivot[c] = true;
+    rank++;
+  }
+  let free = -1;
+  for (let c = 0; c < n; c++) {
+    if (!colIsPivot[c]) {
+      free = c;
+      break;
+    }
+  }
+  if (free < 0) return null;
+  const vec: number[] = new Array(n).fill(0);
+  vec[free] = 1;
+  for (let r = n - 1; r >= 0; r--) {
+    const c = pivotColOfRow[r]!;
+    if (c < 0) continue;
+    let s = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === c) continue;
+      s += a[r]![j]! * vec[j]!;
+    }
+    vec[c] = -s;
+  }
+  let nrm = 0;
+  for (const x of vec) {
+    if (!Number.isFinite(x)) return null;
+    nrm += x * x;
+  }
+  nrm = Math.sqrt(nrm);
+  if (!(nrm > eps)) return null;
+  for (let i = 0; i < n; i++) vec[i]! /= nrm;
+  return vec;
+}
+
 export class PineMatrix {
   private readonly cells: Cell[][] = [];
   private nRows: number;
@@ -733,6 +1042,74 @@ export class PineMatrix {
       r++;
     }
     return r;
+  }
+
+  /** Moore–Penrose pseudoinverse via one-sided Jacobi SVD. Empty-shape → transpose-empty; non-finite → `na`. */
+  pinv(): PineMatrix | null {
+    if (this.nRows === 0 || this.nCols === 0) return new PineMatrix(this.nCols, this.nRows);
+    const src = this.asFiniteGrid();
+    if (src === null) return null;
+    const svd = jacobiSvd(src);
+    if (svd === null) return null;
+    const { u, s, v } = svd;
+    const m = this.nRows;
+    const n = this.nCols;
+    let maxS = 0;
+    for (const si of s) {
+      if (!Number.isFinite(si)) return null;
+      if (si > maxS) maxS = si;
+    }
+    const cutoff = 1e-12 * maxS * Math.max(m, n);
+    const sinv: number[] = [];
+    for (const si of s) sinv.push(si > cutoff ? 1 / si : 0);
+    const out = new PineMatrix(n, m, 0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < m; j++) {
+        let acc = 0;
+        for (let k = 0; k < n; k++) acc += v[i]![k]! * sinv[k]! * u[j]![k]!;
+        if (!Number.isFinite(acc)) return null;
+        out.set(i, j, acc);
+      }
+    }
+    return out;
+  }
+
+  /** Real parts of eigenvalues. Non-square / non-finite → `na`; 0×0 → `[]`. */
+  eigenvalues(): number[] | null {
+    if (this.nRows !== this.nCols) return null;
+    if (this.nRows === 0) return [];
+    const src = this.asFiniteGrid();
+    if (src === null) return null;
+    return realEigenvalues(src);
+  }
+
+  /** Eigenvectors as unit columns. Non-square / non-finite / zero column → `na`. */
+  eigenvectors(): PineMatrix | null {
+    if (this.nRows !== this.nCols) return null;
+    if (this.nRows === 0) return new PineMatrix(0, 0);
+    const src = this.asFiniteGrid();
+    if (src === null) return null;
+    const vals = realEigenvalues(src);
+    if (vals === null) return null;
+    const n = this.nRows;
+    const out = new PineMatrix(n, n, 0);
+    for (let j = 0; j < n; j++) {
+      const lam = vals[j]!;
+      const shifted: number[][] = [];
+      for (let i = 0; i < n; i++) {
+        const row = src[i]!.slice();
+        row[i]! -= lam;
+        shifted.push(row);
+      }
+      const vec = nullspaceUnit(shifted);
+      if (vec === null) return null;
+      for (let i = 0; i < n; i++) {
+        const v = vec[i]!;
+        if (!Number.isFinite(v)) return null;
+        out.set(i, j, v);
+      }
+    }
+    return out;
   }
 
   private static eye(n: number): PineMatrix {
