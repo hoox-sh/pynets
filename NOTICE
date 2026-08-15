@@ -36,8 +36,7 @@ submodule.
 Related
 -------
   PYNE (pynescript): AGPL-3.0-or-later  https://github.com/hoox-sh/pyne
-  pyne-worker:       AGPL-3.0-or-later
-  pine-worker:       AGPL-3.0-or-later
+  pyne-worker:       AGPL-3.0-or-later  https://github.com/hoox-sh/pyne-worker
   AXIS:              AGPL-3.0-only
   HOOX monorepo:     Apache-2.0 (code) / CC-BY-4.0 (docs)
 

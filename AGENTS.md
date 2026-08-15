@@ -26,7 +26,7 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 
 - **Do not hand-edit** `src/generated/*`. Regen with `bun run generate`.
 - **Do not fork the grammar.** Edit `.g4` only in PYNE (`src/pynescript/ast/grammar/antlr4/resource/`), then regen here.
-- **AST field names stay ASDL** (`kind`, `lineno`, `col_offset`, …) — not pine-worker Zod (`Identifier` / `Literal`).
+- **AST field names stay ASDL** (`kind`, `lineno`, `col_offset`, …).
 - **Interpret only.** No Numba/compile port, no Worker packaging, no ASDL codegen (README non-goals).
 - **`bun` only locally** — never npm/yarn/pnpm lockfiles. The npm registry is used only to publish `@hoox/pynets` (see `.github/workflows/publish.yml`).
 - **`na` is `null`.** Non-finite in/out is `na`. Per-call-site TA state (Python incremental kernels).
@@ -61,8 +61,7 @@ Use `/pynets-parity` when adding or fixing builtins. Use `/pynets-generate` when
 | Repo | Path | Role |
 |---|---|---|
 | PYNE (SoT) | `/home/jango/Git/pynescript` | Python parser + Runtime |
-| pine-worker | `/home/jango/Git/pine-worker` | forked TS Worker — **not** a dependency |
-| pyne-worker | `/home/jango/Git/pyne-worker` | Python edge host |
+| pyne-worker | `/home/jango/Git/pyne-worker` | Python Cloudflare Worker — `POST /run` on `pynescript.runtime` |
 | hoox | `/home/jango/Git/hoox` | mesh monorepo |
 
 ## Verify
