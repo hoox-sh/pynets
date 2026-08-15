@@ -39,7 +39,7 @@ describe("interpret tuple", () => {
     },
   );
 
-  test.skipIf(!keltnerParses)("run keltner 40 bars: mid/up/lo", () => {
+  test.skipIf(!KELTNER_SRC || !keltnerParses)("run keltner 40 bars: mid/up/lo", () => {
     const out = new Runtime("TEST").run(KELTNER_SRC, bars(40));
     expect(out.error).toBeUndefined();
     expect(out.series.mid).toBeDefined();

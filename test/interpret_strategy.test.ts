@@ -55,7 +55,7 @@ function runHasFills(src: string): boolean {
 }
 
 describe("interpret strategy", () => {
-  test.skipIf(!parseOk(SRC))("strategy_entry.pine 5 bars", () => {
+  test.skipIf(!SRC || !parseOk(SRC))("strategy_entry.pine 5 bars", () => {
     const out = new Runtime("TEST").run(SRC, bars(5));
     expect(out.error).toBeUndefined();
     expect(out.plots).toHaveLength(5);
@@ -65,7 +65,7 @@ describe("interpret strategy", () => {
     }
   });
 
-  test.skipIf(!runHasFills(SRC))("strategy_entry.pine records a fill when broker is wired", () => {
+  test.skipIf(!SRC || !runHasFills(SRC))("strategy_entry.pine records a fill when broker is wired", () => {
     const out = new Runtime("TEST").run(SRC, bars(5));
     expect(out.error).toBeUndefined();
     const fills = collectFillish(out);
