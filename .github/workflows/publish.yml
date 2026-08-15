@@ -1,0 +1,136 @@
+# Publish @hoox/pynets to the npm registry on version tags (v*).
+#
+# Auth (either works):
+#   1. Trusted Publishing (OIDC, preferred)
+#        npmjs.com → Access → Trusted Publishers → GitHub Actions
+#        Organization/user: hoox-sh
+#        Repository: pynets
+#        Workflow: publish.yml
+#        Environment: npm
+#        Leave NPM_TOKEN unset so the job uses OIDC.
+#   2. Granular access token
+#        npmjs.com → Access Tokens → Granular (read/write for @hoox/pynets)
+#        gh secret set NPM_TOKEN -R hoox-sh/pynets
+#
+# Usage:
+#   bump package.json + CHANGELOG.md
+#   git tag v0.1.0 && git push origin v0.1.0
+#   # or: Actions → Publish → Run workflow (dry_run=false to upload)
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pack only (skip npm upload)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Test and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@hoox"
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+        env:
+          NO_COLOR: "1"
+
+      - name: Pack dry-run
+        run: npm pack --dry-run
+
+      - name: Pack tarball
+        run: npm pack
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoox-pynets-pack
+          path: hoox-pynets-*.tgz
+          if-no-files-found: error
+          retention-days: 5
+
+  publish-npm:
+    name: Upload to npm
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@hoox/pynets
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@hoox"
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Resolve publish auth
+        id: auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+            echo "Using NPM_TOKEN secret."
+          else
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "No NPM_TOKEN — using Trusted Publishing (OIDC)."
+          fi
+
+      - name: Publish (token)
+        if: steps.auth.outputs.mode == 'token'
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (OIDC)
+        if: steps.auth.outputs.mode == 'oidc'
+        run: npm publish --access public --provenance

@@ -2,6 +2,11 @@ node_modules/
 .tools/
 dist/
 *.log
+*.tgz
+coverage/
+.env
+.env.*
+!.env.example
 .DS_Store
 .private/
 .grok/

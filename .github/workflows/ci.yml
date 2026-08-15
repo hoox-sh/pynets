@@ -37,3 +37,10 @@ jobs:
         timeout-minutes: 10
         env:
           NO_COLOR: "1"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Pack dry-run
+        run: npm pack --dry-run

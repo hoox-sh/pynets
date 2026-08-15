@@ -1,7 +1,6 @@
 {
   "name": "@hoox/pynets",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "author": "jango_blockchained",
@@ -25,19 +24,38 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hoox-sh/pynets.git"
+    "url": "git+https://github.com/hoox-sh/pynets.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   },
   "bin": {
     "pynets": "./src/cli.ts"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
   },
   "scripts": {
     "generate": "bun run scripts/generate-antlr.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "pynets": "bun run src/cli.ts"
+    "pynets": "bun run src/cli.ts",
+    "pack:check": "npm pack --dry-run"
   },
   "dependencies": {
     "antlr4": "4.13.2"

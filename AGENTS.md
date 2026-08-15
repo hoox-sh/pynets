@@ -28,7 +28,7 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 - **Do not fork the grammar.** Edit `.g4` only in PYNE (`src/pynescript/ast/grammar/antlr4/resource/`), then regen here.
 - **AST field names stay ASDL** (`kind`, `lineno`, `col_offset`, …) — not pine-worker Zod (`Identifier` / `Literal`).
 - **Interpret only.** No Numba/compile port, no Worker packaging, no ASDL codegen (README non-goals).
-- **`bun` only** — never npm/yarn/pnpm.
+- **`bun` only locally** — never npm/yarn/pnpm lockfiles. The npm registry is used only to publish `@hoox/pynets` (see `.github/workflows/publish.yml`).
 - **`na` is `null`.** Non-finite in/out is `na`. Per-call-site TA state (Python incremental kernels).
 - **`request.security` foreign / HTF without data → `na`.** Do not invent chart series as foreign data.
 - Copyright header + `SPDX-License-Identifier: AGPL-3.0-or-later` on new source files.
@@ -43,6 +43,7 @@ Local PYNE SoT: `/home/jango/Git/pynescript` (package `pynescript`).
 | `src/runtime/` | interpret host + ta / strategy / collections |
 | `src/cli.ts` | TTY CLI (`check` / `format` / `run` / `dump` / `info`) |
 | `test/` | bun tests; first-party fixtures live in PYNE |
+| `.github/` | CI + npm publish on `v*` tags |
 
 ## Parity workflow
 

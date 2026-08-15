@@ -6,6 +6,20 @@ Python `pynescript.runtime` remains the **source of truth**. When semantics disa
 
 This repository is the standalone `@hoox/pynets` checkout. In PYNE it is consumed **only** as the [`pynets/`](https://github.com/hoox-sh/pyne) git submodule — do not copy sources back into `hoox-sh/pyne`.
 
+## Install
+
+Bun-first (published TypeScript source):
+
+```bash
+bun add @hoox/pynets
+```
+
+The CLI needs Bun on `PATH`:
+
+```bash
+bunx pynets -- help
+```
+
 ## Why this exists
 
 `pine-worker` is a Cloudflare Worker with a forked grammar and a Zod AST. PyneTS is the library-shaped port:
@@ -73,7 +87,7 @@ Put `--rich` / `--plain` **after** the command so `bun run` does not swallow the
 
 ## Development
 
-Agent brief: [`AGENTS.md`](AGENTS.md).
+Agent brief: [`AGENTS.md`](AGENTS.md). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ```bash
 git clone https://github.com/hoox-sh/pynets.git
@@ -120,9 +134,9 @@ After a plain `git clone` of PYNE:
 git submodule update --init --recursive
 ```
 
-## Non-goals (still open)
+## Non-goals
 
-Numba / compile, remaining `ta.*`, Worker packaging, ASDL codegen.
+Numba / compile, Worker packaging, ASDL codegen. Interpret is the only backend.
 
 ## License
 

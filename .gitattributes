@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+src/generated/** linguist-generated=true
+*.interp linguist-generated=true
+*.tokens linguist-generated=true
+bun.lock linguist-generated=true
