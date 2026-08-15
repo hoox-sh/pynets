@@ -146,6 +146,7 @@ export function newEmitCtx(): EmitCtx {
     udtTypes: new Map(),
     usesDrawings: false,
     enumTypes: new Map(),
+    udtMethodNames: new Set(),
   };
 }
 
@@ -359,6 +360,10 @@ function emitName(state: State, node: Name): string {
   const id = node.id;
   const loop = state.loopVars.get(id);
   if (loop != null) return loop;
+  // Method receiver formal is `this_` (emit_udf reserved suffix).
+  if (id === "this") return "this_";
+  // barstate is a namespace (barstate.isfirst); never a bare name.
+  if (id === "barstate") return "null";
   if (id === "true" || id === "True") return "true";
   if (id === "false" || id === "False") return "false";
   if (state.ctx.currentSeriesParams.has(id)) return `${safeIdent(id)}[__bar_idx]`;
@@ -369,7 +374,7 @@ function emitName(state: State, node: Name): string {
   if (CHART_LOCALS.has(id)) return id;
   if (state.ctx.userFuncs.has(id)) return id;
   if (state.ctx.enumTypes.has(id)) return JSON.stringify(id);
-  return id;
+  return safeIdent(id);
 }
 
 function emitConstant(node: Constant): string {
@@ -493,7 +498,64 @@ const ATTR_NAMESPACES = new Set([
   "table",
 ]);
 
+function emitBarstate(attr: string): string {
+  switch (attr) {
+    case "isfirst":
+      return "(__bar_idx === 0)";
+    case "islast":
+      return "(__bar_idx === last_bar_index)";
+    case "ishistory":
+      return "(__bar_idx < last_bar_index)";
+    // Compile has no live/historical tick split — last bar is "realtime".
+    case "isrealtime":
+      return "(__bar_idx === last_bar_index)";
+    case "isnew":
+      return "true";
+    case "isconfirmed":
+      return "true";
+    default:
+      return "false";
+  }
+}
+
+function emitTimeframe(attr: string): string {
+  switch (attr) {
+    case "period":
+      return `(__h.timeframe || "1")`;
+    case "multiplier":
+      return "1";
+    case "isintraday":
+      return "true";
+    case "isdaily":
+    case "isweekly":
+    case "ismonthly":
+      return "false";
+    default:
+      return "null";
+  }
+}
+
+function emitSyminfo(attr: string): string {
+  switch (attr) {
+    case "ticker":
+    case "tickerid":
+    case "root":
+      return `"SYMBOL"`;
+    default:
+      return "null";
+  }
+}
+
 function emitAttribute(state: State, node: Attribute): string {
+  if (node.value.kind === "Name" && node.value.id === "barstate") {
+    return emitBarstate(node.attr);
+  }
+  if (node.value.kind === "Name" && node.value.id === "timeframe") {
+    return emitTimeframe(node.attr);
+  }
+  if (node.value.kind === "Name" && node.value.id === "syminfo") {
+    return emitSyminfo(node.attr);
+  }
   if (node.value.kind === "Name" && node.value.id === "color") {
     return `__h.colorByName(${JSON.stringify(node.attr)})`;
   }
@@ -564,6 +626,12 @@ function emitTypeDef(state: State, node: TypeDef): string {
   const fields: string[] = [];
   const defaults: Record<string, string> = {};
   for (const s of node.body ?? []) {
+    if (s.kind === "FunctionDef") {
+      state.ctx.udtMethodNames.add(s.name);
+      emitFunctionDef(state.ctx, s, (st) => emitStmt(state, st));
+      if (state.ctx.currentFunc != null) state.ctx.currentFunc = null;
+      continue;
+    }
     if (s.kind !== "Assign") continue;
     if (s.target.kind !== "Name") continue;
     const fname = s.target.id;

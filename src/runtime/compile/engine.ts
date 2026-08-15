@@ -62,12 +62,10 @@ type CompiledExecuteFn = (
 
 export function compileEligible(source: string): CompileEligibility {
   const src = source ?? "";
-  // Python: re.search(r"(?m)^\s*import\s+\S+", src)
+  // Python auto-mode also rejects `request.`; compile_script still emits
+  // request.security (same-symbol passthrough / else na). Match compile_script.
   if (/^\s*import\s+\S+/m.test(src)) {
     return { ok: false, reason: "import statements not supported in compile path" };
-  }
-  if (src.includes("request.")) {
-    return { ok: false, reason: "request.* not supported in compile path" };
   }
   return { ok: true };
 }

@@ -111,14 +111,13 @@ plot(close)
     expect(elig.reason ?? "").toMatch(/import/i);
   });
 
-  test("rejects source containing request.security", () => {
+  test("accepts source containing request.security", () => {
     const src = `//@version=5
 indicator("sec")
 plot(request.security("X", "1D", close))
 `;
     const elig = compileEligible(src);
-    expect(elig.ok).toBe(false);
-    expect(elig.reason ?? "").toMatch(/request/i);
+    expect(elig.ok).toBe(true);
   });
 });
 

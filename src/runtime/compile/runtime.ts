@@ -40,8 +40,21 @@ import {
   mathToDegrees,
   mathToRadians,
 } from "../math.ts";
-import { strTostring } from "../str.ts";
+import {
+  strContains,
+  strEndsWith,
+  strLength,
+  strLower,
+  strReplace,
+  strStartsWith,
+  strSubstring,
+  strToNumber,
+  strTostring,
+  strTrim,
+  strUpper,
+} from "../str.ts";
 import { TaEngine } from "../ta.ts";
+import { utcPartsFromMs, type UtcParts } from "../time.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
 import { createCompileDraw } from "./draw.ts";
 import {
@@ -130,7 +143,37 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     toradians: mathToRadians,
     iff,
     fixnan: mathFixnan,
+    year: calendarYear,
+    month: calendarMonth,
+    dayofmonth: calendarDayofmonth,
+    hour: calendarHour,
+    minute: calendarMinute,
+    second: calendarSecond,
+    dayofweek: calendarDayofweek,
+    strLength,
+    strContains,
+    strStartsWith,
+    strEndsWith,
+    strLower,
+    strUpper,
+    strReplace,
+    strSubstring,
+    strToNumber,
+    strTrim,
     tostring: strTostring,
+    str: {
+      length: strLength,
+      contains: strContains,
+      starts_with: strStartsWith,
+      ends_with: strEndsWith,
+      lower: strLower,
+      upper: strUpper,
+      replace: strReplace,
+      substring: strSubstring,
+      tonumber: strToNumber,
+      trim: strTrim,
+      tostring: strTostring,
+    },
     hold,
     array: compileArray,
     map: compileMap,
@@ -180,4 +223,38 @@ function iff(cond: unknown, thenV: unknown, elseV: unknown): unknown {
 function NA_FN(v?: unknown): number | null {
   if (arguments.length === 0) return null;
   return isNaCell(v) ? 1 : 0;
+}
+
+/** Unix-ms → UTC calendar part. na / non-finite time → null. */
+function utcPart(t: unknown, key: keyof UtcParts): number | null {
+  if (typeof t !== "number" || !Number.isFinite(t)) return null;
+  return utcPartsFromMs(t)[key];
+}
+
+function calendarYear(t: unknown): number | null {
+  return utcPart(t, "year");
+}
+
+function calendarMonth(t: unknown): number | null {
+  return utcPart(t, "month");
+}
+
+function calendarDayofmonth(t: unknown): number | null {
+  return utcPart(t, "dayofmonth");
+}
+
+function calendarHour(t: unknown): number | null {
+  return utcPart(t, "hour");
+}
+
+function calendarMinute(t: unknown): number | null {
+  return utcPart(t, "minute");
+}
+
+function calendarSecond(t: unknown): number | null {
+  return utcPart(t, "second");
+}
+
+function calendarDayofweek(t: unknown): number | null {
+  return utcPart(t, "dayofweek");
 }

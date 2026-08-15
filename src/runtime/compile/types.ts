@@ -75,6 +75,8 @@ export interface EmitCtx {
   usesDrawings: boolean;
   /** enum name → member names. */
   enumTypes: Map<string, string[]>;
+  /** Method names collected from TypeDef FunctionDefs. */
+  udtMethodNames: Set<string>;
 }
 
 export interface EmitFns {

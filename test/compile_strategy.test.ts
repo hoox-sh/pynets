@@ -162,16 +162,16 @@ describe("compile vs interpret strategy", () => {
     expect(importElig.reason ?? "").toMatch(/import/i);
 
     const requestElig = compileEligible(REQUEST_SRC);
-    expect(requestElig.ok).toBe(false);
-    expect(requestElig.reason ?? "").toMatch(/request/i);
+    expect(requestElig.ok).toBe(true);
 
     expect(() => compileToResult(IMPORT_SRC, BARS)).toThrow(/import/i);
-    expect(() => compileToResult(REQUEST_SRC, BARS)).toThrow(/request/i);
 
     const importRun = new Runtime("TEST", { mode: "compile" }).run(IMPORT_SRC, BARS);
     expect(importRun.error ?? "").toMatch(/import/i);
     const requestRun = new Runtime("TEST", { mode: "compile" }).run(REQUEST_SRC, BARS);
-    expect(requestRun.error ?? "").toMatch(/request/i);
+    expect(requestRun.error).toBeUndefined();
+    expect(requestRun.mode).toBe("compile");
+    expect(requestRun.plots.every((v) => v == null)).toBe(true);
   });
 
   test("Runtime mode=compile on strategy script has no error", () => {

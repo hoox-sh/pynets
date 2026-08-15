@@ -205,6 +205,8 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   if (drawn != null) return drawn;
   const udt = emitUdt(ctx, rawName, methodSrc, args);
   if (udt != null) return udt;
+  const udtMethod = emitUdtMethod(ctx, rawName, methodSrc, args, visit);
+  if (udtMethod != null) return udtMethod;
 
   if (methodSrc != null) {
     args.pos.unshift(visit(methodSrc));
@@ -241,9 +243,38 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     return emitUserFuncCall(ctx, name, packUserFuncArgs(ctx, name, args));
   }
 
+  if (name === "year" || name === "month" || name === "dayofmonth" || name === "hour" || name === "minute" || name === "second" || name === "dayofweek") {
+    const t = pick(args, 0, ["time"], "time");
+    return `__h.${name}(${t})`;
+  }
   if (name === "str_tostring" || name === "tostring") {
     const x = pick(args, 0, ["value", "source", "x"], "null");
     return `String(${x} ?? "")`;
+  }
+  if (name.startsWith("str_")) {
+    const meth = name.slice(4);
+    const alias: Record<string, string> = {
+      length: "length",
+      contains: "contains",
+      startswith: "starts_with",
+      ends_with: "ends_with",
+      endswith: "ends_with",
+      lower: "lower",
+      upper: "upper",
+      replace: "replace",
+      substring: "substring",
+      tonumber: "tonumber",
+      trim: "trim",
+    };
+    const key = alias[meth];
+    if (key) {
+      const a0 = pick(args, 0, ["source", "string", "value"], "null");
+      const a1 = args.pos[1] ?? args.kw.substring ?? args.kw.str ?? args.kw.replacement ?? "undefined";
+      if (meth === "length" || meth === "lower" || meth === "upper" || meth === "tonumber" || meth === "trim") {
+        return `__h.str.${key}(${a0})`;
+      }
+      return `__h.str.${key}(${a0}, ${a1})`;
+    }
   }
 
   const color = emitColor(name, args);
@@ -261,6 +292,9 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   if (mp != null) return mp;
   const mx = emitMatrix(name, args);
   if (mx != null) return mx;
+
+  const req = emitRequest(name, args);
+  if (req != null) return req;
 
   return "null";
 }
@@ -637,6 +671,90 @@ function emitUdt(ctx: EmitCtx, name: string, methodSrc: expr | null, args: CallA
     parts.push(`${k}: ${v}`);
   }
   return `__h.udtNew(${JSON.stringify(id)}, {${parts.join(", ")}})`;
+}
+
+const SECURITY_FUNCS = new Set([
+  "security",
+  "request_security",
+  "request_security_lower_tf",
+  "request_seed",
+]);
+
+const SIMPLE_CHART_EXPR = new Set([
+  "close",
+  "open",
+  "high",
+  "low",
+  "volume",
+  "time",
+  "hl2",
+  "hlc3",
+  "ohlc4",
+]);
+
+const SIMPLE_CHART_ARR = /^(?:open|high|low|close|vol|volume|time|hl2|hlc3|ohlc4)_arr\[__bar_idx\]$/;
+
+/** `p.plus(1)` → method UDF with instance first. TA methods stay TA. */
+function emitUdtMethod(
+  ctx: EmitCtx,
+  name: string,
+  methodSrc: expr | null,
+  args: CallArgs,
+  visit: VisitFn,
+): string | null {
+  if (methodSrc == null || methodSrc.kind !== "Name") return null;
+  if (!ctx.udtMethodNames.has(name) && !ctx.userFuncs.has(name)) return null;
+  if (TA_METHODS.has(name)) return null;
+  return emitUserFuncCall(ctx, name, [visit(methodSrc), ...args.pos]);
+}
+
+/** Same-symbol OHLCV passthrough only. Foreign / complex expr → `null`. */
+function emitRequest(name: string, args: CallArgs): string | null {
+  if (SECURITY_FUNCS.has(name)) {
+    const symbol = pick(args, 0, ["symbol", "ticker"], "null");
+    const expression = pick(args, 2, ["expression", "expr"], "close");
+    if (isSimpleSecurityExpr(expression) && isChartSecuritySymbol(symbol)) return expression;
+    return "null";
+  }
+  if (name.startsWith("request_")) return "null";
+  return null;
+}
+
+function isSimpleSecurityExpr(expr: string): boolean {
+  const e = expr.trim();
+  if (!e) return false;
+  if (SIMPLE_CHART_EXPR.has(e)) return true;
+  return SIMPLE_CHART_ARR.test(e);
+}
+
+function unquoteJsString(s: string): string {
+  if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+    if (s.startsWith('"')) {
+      try {
+        return JSON.parse(s) as string;
+      } catch {
+        return s.slice(1, -1);
+      }
+    }
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function isChartSecuritySymbol(sym: string): boolean {
+  const s = sym.trim();
+  if (!s || s === "null" || s === "na" || s === "undefined" || s === "None" || s === "np.nan") {
+    return true;
+  }
+  const inner = unquoteJsString(s).trim();
+  if (!inner || inner === "na" || inner === "null" || inner === "SYMBOL") return true;
+  if (s === "SYMBOL" || s === "tickerid" || s === "ticker") return true;
+  if (s === "syminfo_ticker" || s === "syminfo_tickerid") return true;
+  const low = s.toLowerCase();
+  if (low.includes("syminfo") && (s.includes("ticker") || s.includes("tickerid") || s.includes("root") || s.includes("prefix"))) {
+    return true;
+  }
+  return false;
 }
 
 function constString(node: expr | undefined): string | null {
