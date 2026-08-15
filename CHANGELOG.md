@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Node / browser ESM bundles** (`bun run build` → `dist/index.js`, `dist/browser.js`, `dist/index.d.ts`). Bun still imports `src/index.ts`. `prepack` builds before `npm pack`.
-
 ## [0.1.0] - 2026-08-15
 
 First public `@hoox/pynets` release. TypeScript / Bun port of PYNE interpret.
@@ -25,8 +21,10 @@ First public `@hoox/pynets` release. TypeScript / Bun port of PYNE interpret.
 - Calendar: `timestamp`, `weekofyear`, `time_tradingday`, UTC parts
 - Bar adapters: `MemoryProvider`, `StaticMapProvider`, `JsonBarProvider`
 - CLI: `check` / `format` / `run` / `dump` / `info`
+- Node / browser ESM bundles (`bun run build` → `dist/`)
 
 ### Notes
 
 - Python `pynescript.runtime` remains the source of truth
-- Package is Bun-first (published TypeScript source)
+- Bun imports TypeScript source; Node and browsers use the bundle
+- Interpret only (no compile / Numba)
