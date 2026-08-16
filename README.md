@@ -9,6 +9,8 @@ TypeScript / Bun library for **Pine Script**: parse, unparse, and interpret.
 Same public names as Python [`pynescript`](https://github.com/hoox-sh/pyne): `parse`, `unparse`, `Runtime.run`.
 Python `pynescript.runtime` is the **source of truth**. When semantics disagree, Python wins. This is not a TradingView platform certification.
 
+**Docs (hoox.sh):** [PyneTS](https://hoox.sh/pyne/docs/pynets) · [install](https://hoox.sh/pyne/docs/pynets/install) · [runtime](https://hoox.sh/pyne/docs/pynets/runtime) · [CLI](https://hoox.sh/pyne/docs/pynets/cli) · [JS compile](https://hoox.sh/pyne/docs/pynets/compile) · [parity](https://hoox.sh/pyne/docs/pynets/parity) · [ecosystem](https://hoox.sh/pyne/docs/reference/ecosystem)
+
 ```ts
 import { parse, unparse, Runtime } from "@hoox-sh/pynets";
 
@@ -81,15 +83,16 @@ Most TypeScript Pine ports rewrite the language. PyneTS does not. It is the libr
 
 Family map — library vs edge host, same SoT:
 
-| | [pynescript](https://github.com/hoox-sh/pyne) | [pyne-worker](https://github.com/hoox-sh/pyne-worker) | **PyneTS** |
-|---|---|---|---|
-| Role | SoT library | Production **Python** Cloudflare Worker | TS / Bun library + CLI |
-| Engine | interpret + Numba compile | Vendors `pynescript.runtime` | interpret + **JS compile** |
-| Grammar | `*.g4` | Same Python engine (not a fork) | **same `.g4`**, TS ANTLR target |
-| How you call it | `Runtime.run` | `POST /run` (`interpret` / `compile` / `auto`) | `Runtime.run` (`interpret` / `compile` / `auto`) |
-| Extra | LSP, Pro API | R2 OHLCV, 1m cron, alerts, trade-worker | Local TTY (`check` / `format` / `run` / `dump`) |
+| | [pynescript](https://github.com/hoox-sh/pyne) | [pyne-worker](https://github.com/hoox-sh/pyne-worker) | [pyne-agent-worker](https://github.com/hoox-sh/pyne-agent-worker) | **PyneTS** |
+|---|---|---|---|---|
+| Role | SoT library | Production **Python** Cloudflare Worker | NL **authoring** (Workers AI™) | TS / Bun library + CLI |
+| Engine | interpret + Numba compile | Vendors `pynescript.runtime` | Writes source; optional `/run` validate | interpret + **JS compile** |
+| Grammar | `*.g4` | Same Python engine (not a fork) | — | **same `.g4`**, TS ANTLR target |
+| How you call it | `Runtime.run` | `POST /run` | `POST /v1/chat` | `Runtime.run` (`interpret` / `compile` / `auto`) |
+| Extra | LSP, Pro API | R2 OHLCV, 1m cron, alerts, trade-worker | AXIS plugin | Local TTY (`check` / `format` / `run` / `dump`) |
+| Docs | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs) | [pyne-worker](https://hoox.sh/pyne/docs/pyne-worker) | [agent](https://hoox.sh/pyne/docs/agent) | [pynets](https://hoox.sh/pyne/docs/pynets) |
 
-[pyne-worker](https://github.com/hoox-sh/pyne-worker) is the edge evaluate host of the **Python** engine. PyneTS is the TypeScript library you import and the CLI you run on a laptop. They share the PYNE contract; this repo is not a Worker.
+[pyne-worker](https://github.com/hoox-sh/pyne-worker) is the edge evaluate host of the **Python** engine. [pyne-agent-worker](https://github.com/hoox-sh/pyne-agent-worker) writes scripts. PyneTS is the TypeScript library you import and the CLI you run on a laptop. They share the PYNE contract; this repo is not a Worker.
 
 This repository is the standalone `@hoox-sh/pynets` checkout. PYNE consumes it **only** as the `pynets/` git submodule — never copy sources back into `hoox-sh/pyne`.
 
