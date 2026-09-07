@@ -568,6 +568,11 @@ const ATTR_NAMESPACES = new Set([
 
 /** Dotted keys from Python `_MATH_CONSTANTS` (base.py). Unknown member → na. */
 const ATTR_CONSTANTS: Record<string, string | number | boolean> = {
+  // Math constants — Python SoT `_MATH_CONSTANTS` (evaluator/base.py).
+  "math.pi": Math.PI,
+  "math.e": Math.E,
+  "math.phi": (1 + Math.sqrt(5)) / 2,
+  "math.rphi": 2 / (1 + Math.sqrt(5)),
   "format.mintick": "mintick",
   "format.percent": "percent",
   "format.volume": "volume",
@@ -614,11 +619,15 @@ const ATTR_CONSTANTS: Record<string, string | number | boolean> = {
   "extend.left": "left",
   "extend.right": "right",
   "extend.both": "both",
-  "display.none": "none",
-  "display.all": "all",
-  "display.data_window": "data_window",
-  "display.price_scale": "price_scale",
-  "display.status_line": "status_line",
+  // Pine display.* is a bitfield: none=0 pane=1 data_window=2 price_scale=4
+  // status_line=8 all=15. Integers so `display.pane + display.data_window` works
+  // (Python SoT base.py / compiler.py — matches interpret backend).
+  "display.none": 0,
+  "display.pane": 1,
+  "display.all": 15,
+  "display.data_window": 2,
+  "display.price_scale": 4,
+  "display.status_line": 8,
   "position.top_left": "top_left",
   "position.top_center": "top_center",
   "position.top_right": "top_right",
@@ -653,6 +662,7 @@ const ATTR_CONSTANTS: Record<string, string | number | boolean> = {
 };
 
 const ATTR_CONST_NS = new Set([
+  "math",
   "order",
   "format",
   "text",
