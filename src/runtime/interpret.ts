@@ -935,6 +935,11 @@ function evalAssign(stmt: Assign, env: Env): Value {
 }
 
 function applyBinOp(kind: string, leftV: Value, rightV: Value): Value {
+  // Python _safe_op: any na operand propagates na, before the string-concat
+  // fast path — otherwise `"a" + na` would stringify to "ana" instead of na.
+  // Checked on the raw values: strings are valid Add operands (unwrap maps
+  // them to NA as non-cells).
+  if (leftV == null || rightV == null) return NA;
   if (kind === "Add" && (typeof leftV === "string" || typeof rightV === "string")) {
     return stringifyVal(leftV) + stringifyVal(rightV);
   }
@@ -1402,11 +1407,14 @@ const MATH_CONSTANTS: Record<string, Value> = {
   "extend.left": "left",
   "extend.right": "right",
   "extend.both": "both",
-  "display.none": "none",
-  "display.all": "all",
-  "display.data_window": "data_window",
-  "display.price_scale": "price_scale",
-  "display.status_line": "status_line",
+  // Pine display.* is a bitfield: none=0 pane=1 data_window=2 price_scale=4
+  // status_line=8 all=15. Integers so `display.pane + display.data_window` works.
+  "display.none": 0,
+  "display.pane": 1,
+  "display.all": 15,
+  "display.data_window": 2,
+  "display.price_scale": 4,
+  "display.status_line": 8,
   "position.top_left": "top_left",
   "position.top_center": "top_center",
   "position.top_right": "top_right",
@@ -3224,11 +3232,19 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.nvi" || fname === "nvi") {
     if (typeof ta.nvi !== "function") return NA;
-    return (ta.nvi as TaEngine["nvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+    const cArg = callArg(node.args, 0, ["source", "close"]);
+    const vArg = callArg(node.args, 1, ["volume"]);
+    const close = cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
+    const volume = vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
+    return (ta.nvi as TaEngine["nvi"]).call(env.ta, site, close, volume);
   }
   if (fname === "ta.pvi" || fname === "pvi") {
     if (typeof ta.pvi !== "function") return NA;
-    return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+    const cArg = callArg(node.args, 0, ["source", "close"]);
+    const vArg = callArg(node.args, 1, ["volume"]);
+    const close = cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
+    const volume = vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
+    return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, close, volume);
   }
   if (fname === "ta.iii" || fname === "iii") {
     if (typeof ta.iii !== "function") return NA;

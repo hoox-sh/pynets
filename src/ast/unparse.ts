@@ -5,6 +5,11 @@
  * Slice-1 unparser: expressions plus Assign / ReAssign / var / varip,
  * Tuple / Conditional / ForTo / ForIn / While / Switch / Case /
  * BoolOp / Break / Continue / TypeDef / EnumDef.
+ *
+ * Parenthesization is precedence-driven, ported from PYNE's
+ * pynescript.ast.unparser (Precedence ladder + per-child assignment): a child
+ * is wrapped only when the precedence its parent assigns exceeds the child's
+ * own binding level, so unparse output always reparses to the same tree.
  */
 import type {
   AST,
@@ -85,6 +90,93 @@ const BOOLOP: Record<string, string> = {
   Or: "or",
 };
 
+/**
+ * Operator binding levels for parenthesization — port of PYNE's
+ * `pynescript.ast.unparser.Precedence` ladder (higher binds tighter).
+ * A child is wrapped in parens when the precedence its parent assigns to it
+ * is strictly greater than the child's own binding level.
+ */
+const PREC = {
+  TEST: 1, // ternary '?', ':' — loosest
+  OR: 2,
+  AND: 3,
+  BITOR: 4,
+  BITXOR: 5,
+  BITAND: 6,
+  EQ: 7,
+  INEQ: 8, // Python Precedence.CMP alias
+  SHIFT: 9,
+  EXPR: 10,
+  ARITH: 11,
+  TERM: 12,
+  FACTOR: 13, // unary +,-,~,not (Python Precedence.NOT alias)
+  ATOM: 14, // names, literals, attr, calls — tightest
+} as const;
+
+function nextPrec(prec: number): number {
+  return Math.min(prec + 1, PREC.ATOM);
+}
+
+const BINOP_PREC: Record<string, number> = {
+  Add: PREC.ARITH,
+  Sub: PREC.ARITH,
+  Mult: PREC.TERM,
+  Div: PREC.TERM,
+  Mod: PREC.TERM,
+  BitAnd: PREC.BITAND,
+  BitOr: PREC.BITOR,
+  BitXor: PREC.BITXOR,
+  LShift: PREC.SHIFT,
+  RShift: PREC.SHIFT,
+};
+
+// Python assigns NOT = FACTOR (same level) for unary ops.
+const UNOP_PREC = PREC.FACTOR;
+
+const BOOLOP_PREC: Record<string, number> = {
+  And: PREC.AND,
+  Or: PREC.OR,
+};
+
+// Python Precedence.CMP — Compare children are checked against INEQ.
+const COMPARE_PREC = PREC.INEQ;
+
+/**
+ * Natural binding level of an expression node — the precedence the Python
+ * unparser's visitor checks against its parent-assigned level. Node kinds
+ * without an operator (atoms, Call, Attribute, …) never self-parenthesize in
+ * the SoT unparser, hence `undefined`.
+ */
+function ownPrec(node: expr): number | undefined {
+  switch (node.kind) {
+    case "BinOp":
+      return BINOP_PREC[node.op.kind];
+    case "UnaryOp":
+      return UNOP_PREC;
+    case "BoolOp":
+      return BOOLOP_PREC[node.op.kind];
+    case "Compare":
+      return COMPARE_PREC;
+    case "Conditional":
+      return PREC.TEST;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Emit a child expression, parenthesizing it when the parent-assigned
+ * precedence exceeds the child's own binding level. Mirrors Python's
+ * `NodeUnparser.require_parens` / `_needs_parens` rule: compare is strictly
+ * greater-than, so equal levels stay unparenthesized (left-associative
+ * chaining is encoded by the parent's per-slot precedence assignment).
+ */
+function emitChild(node: expr, required: number): string {
+  const src = emitExpr(node);
+  const prec = ownPrec(node);
+  return prec !== undefined && required > prec ? `(${src})` : src;
+}
+
 function quoteString(value: string): string {
   if (value.includes("\n") || value.includes("\r")) {
     if (!value.includes('"""')) return `"""${value}"""`;
@@ -102,13 +194,13 @@ function emitExpr(node: expr): string {
     case "Call":
       return emitCall(node);
     case "Attribute":
-      return `${emitExpr(node.value)}.${node.attr}`;
+      return `${emitChild(node.value, PREC.ATOM)}.${node.attr}`;
     case "Subscript":
       return `${emitExpr(node.value)}[${emitSlice(node.slice)}]`;
     case "BinOp":
-      return `${emitExpr(node.left)} ${OP[node.op.kind] ?? "?"} ${emitExpr(node.right)}`;
+      return emitBinOp(node);
     case "UnaryOp":
-      return `${UOP[node.op.kind] ?? ""}${emitExpr(node.operand)}`;
+      return emitUnaryOp(node);
     case "Compare":
       return emitCompare(node);
     case "If":
@@ -155,11 +247,27 @@ function emitSpecialize(node: Specialize): string {
 }
 
 function emitCompare(node: Compare): string {
-  let out = emitExpr(node.left);
+  // Python: all Compare children are checked against CMP.next() (= SHIFT) so
+  // chained comparisons and tighter-binding operands stay unparenthesized.
+  const required = nextPrec(COMPARE_PREC);
+  let out = emitChild(node.left, required);
   for (let i = 0; i < node.ops.length; i++) {
-    out += ` ${CMP[node.ops[i]!.kind] ?? "??"} ${emitExpr(node.comparators[i]!)}`;
+    out += ` ${CMP[node.ops[i]!.kind] ?? "??"} ${emitChild(node.comparators[i]!, required)}`;
   }
   return out;
+}
+
+function emitBinOp(node: BinOp): string {
+  // Python: left child keeps the operator's level, right child uses next()
+  // so `a - b - c` prints bare while `a - (b - c)` re-parenthesizes.
+  const prec = BINOP_PREC[node.op.kind] ?? PREC.TEST;
+  return `${emitChild(node.left, prec)} ${OP[node.op.kind] ?? "?"} ${emitChild(node.right, nextPrec(prec))}`;
+}
+
+function emitUnaryOp(node: UnaryOp): string {
+  // Python: the operand is checked at the unary operator's own level (FACTOR),
+  // so -(a + b) and not (a and b) wrap while -a * b and not not a do not.
+  return `${UOP[node.op.kind] ?? ""}${emitChild(node.operand, UNOP_PREC)}`;
 }
 
 function emitIf(node: If): string {
@@ -180,7 +288,9 @@ function emitSlice(slice: expr | null | undefined): string {
 }
 
 function emitConditional(node: Conditional): string {
-  return `${emitExpr(node.test)} ? ${emitExpr(node.body)} : ${emitExpr(node.orelse)}`;
+  // Python: test/body at TEST.next() (nested ternaries there wrap); orelse at
+  // TEST so `a ? b : c ? d : e` stays right-associative without parens.
+  return `${emitChild(node.test, PREC.OR)} ? ${emitChild(node.body, PREC.OR)} : ${emitChild(node.orelse, PREC.TEST)}`;
 }
 
 function emitForBody(body: stmt[]): string {
@@ -232,7 +342,16 @@ function emitSwitch(node: Switch): string {
 
 function emitBoolOp(node: BoolOp): string {
   const op = BOOLOP[node.op.kind] ?? "and";
-  return node.values.map(emitExpr).join(` ${op} `);
+  const base = BOOLOP_PREC[node.op.kind] ?? PREC.AND;
+  // Python raises the required level per value (op.next(), then tighter) so
+  // mixed nesting wraps the way the SoT unparser does.
+  let required = base;
+  return node.values
+    .map((v) => {
+      required = nextPrec(required);
+      return emitChild(v, required);
+    })
+    .join(` ${op} `);
 }
 
 function emitConstant(node: Constant): string {
@@ -256,7 +375,8 @@ function asArgs(args: Arg | Arg[] | null | undefined): Arg[] {
 }
 
 function emitCall(node: Call): string {
-  return `${emitExpr(node.func)}(${asArgs(node.args).map(emitArg).join(", ")})`;
+  // Python forces the callee to ATOM so e.g. a computed callee parenthesizes.
+  return `${emitChild(node.func, PREC.ATOM)}(${asArgs(node.args).map(emitArg).join(", ")})`;
 }
 
 function emitImport(node: Import): string {
@@ -382,20 +502,14 @@ export function unparse(node: AST): string {
   if (node.kind === "Arg") return emitArg(node as Arg);
   if (node.kind === "Attribute") {
     const a = node as Attribute;
-    return `${emitExpr(a.value)}.${a.attr}`;
+    return `${emitChild(a.value, PREC.ATOM)}.${a.attr}`;
   }
   if (node.kind === "Subscript") {
     const s = node as Subscript;
     return `${emitExpr(s.value)}[${emitSlice(s.slice)}]`;
   }
-  if (node.kind === "BinOp") {
-    const b = node as BinOp;
-    return `${emitExpr(b.left)} ${OP[b.op.kind] ?? "?"} ${emitExpr(b.right)}`;
-  }
-  if (node.kind === "UnaryOp") {
-    const u = node as UnaryOp;
-    return `${UOP[u.op.kind] ?? ""}${emitExpr(u.operand)}`;
-  }
+  if (node.kind === "BinOp") return emitBinOp(node as BinOp);
+  if (node.kind === "UnaryOp") return emitUnaryOp(node as UnaryOp);
   if (node.kind === "Compare") return emitCompare(node as Compare);
   if (node.kind === "If") return emitIf(node as If);
   if (node.kind === "Tuple") return emitTuple(node as Tuple);

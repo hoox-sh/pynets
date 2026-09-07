@@ -93,8 +93,22 @@ describe("interpret dotted namespace constants", () => {
     expect(plots(`indicator("t")\nplot(xloc.bar_index == "bar_index" ? 1 : 0)`)).toEqual([1, 1, 1]);
     expect(plots(`indicator("t")\nplot(yloc.price == "price" ? 1 : 0)`)).toEqual([1, 1, 1]);
     expect(plots(`indicator("t")\nplot(extend.both == "both" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(display.all == "all" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    // display.* is an integer bitfield per Python SoT (base.py): display.all === 15.
+    expect(plots(`indicator("t")\nplot(display.all == 15 ? 1 : 0)`)).toEqual([1, 1, 1]);
     expect(plots(`indicator("t")\nplot(position.top_right == "top_right" ? 1 : 0)`)).toEqual([1, 1, 1]);
+  });
+
+  test("display.* bitfield: pane + data_window === 3, all === 15", () => {
+    expect(plots(`indicator("t")\nplot(display.pane + display.data_window)`)).toEqual([3, 3, 3]);
+    expect(plots(`indicator("t")\nplot(display.none)`)).toEqual([0, 0, 0]);
+    expect(plots(`indicator("t")\nplot(display.pane)`)).toEqual([1, 1, 1]);
+    expect(plots(`indicator("t")\nplot(display.data_window)`)).toEqual([2, 2, 2]);
+    expect(plots(`indicator("t")\nplot(display.price_scale)`)).toEqual([4, 4, 4]);
+    expect(plots(`indicator("t")\nplot(display.status_line)`)).toEqual([8, 8, 8]);
+    expect(plots(`indicator("t")\nplot(display.all)`)).toEqual([15, 15, 15]);
+    expect(plots(`indicator("t")\nplot(display.pane | display.status_line == 9 ? 1 : 0)`)).toEqual([
+      1, 1, 1,
+    ]);
   });
 
   test("bid / ask are na", () => {
