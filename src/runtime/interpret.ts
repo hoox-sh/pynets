@@ -1876,8 +1876,12 @@ function evalCall(node: Call, env: Env): Value {
   const timeVal = evalTimeCall(fname, node, env);
   if (timeVal !== undefined) return timeVal;
   if (fname === "timeframe.in_seconds") {
+    // Python SoT (timeframe.py:189-190): None / "" map to "D" (daily 86400)
+    // before parsing — same default compile applies (runtime.ts
+    // timeframeInSecondsOrDaily). A configured chart timeframe ("5") keeps
+    // its own duration via the env fallback (pinned in interpret_wave6).
     const p = evalAsString(callArg(node.args, 0, ["timeframe", "period"]), env) ?? env.timeframe;
-    return timeframeInSeconds(p);
+    return timeframeInSeconds(p == null || p === "" ? "D" : p);
   }
   if (fname === "timeframe.from_seconds") {
     const s = unwrap(evalExpr(callArg(node.args, 0, ["seconds"]), env));
@@ -2714,6 +2718,19 @@ function periodLikeArg(node: Call, env: Env, index: number, names: string[]): nu
   return periodLikeCell(unwrap(evalExpr(callArg(node.args, index, names), env)));
 }
 
+/** Positional (non-kwarg) argument count — detects period-only/period-first forms. */
+function positionalCount(node: Call): number {
+  return asArgs(node.args).filter((a) => argKeyword(a) == null).length;
+}
+
+/** True when a keyword argument named one of *names* is present. */
+function hasKwarg(node: Call, names: string[]): boolean {
+  return asArgs(node.args).some((a) => {
+    const kw = argKeyword(a);
+    return kw != null && names.includes(kw);
+  });
+}
+
 function lenOrDefault(
   node: Call,
   env: Env,
@@ -2733,10 +2750,31 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   const ta = env.ta as TaAny;
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:222-233 via _expect_series
+      // allow_period_only): source defaults to the context high series and
+      // the length gates on _is_period_like → non-period-like → na period 0.
+      return (ta.highest as TaEngine["highest"]).call(
+        env.ta,
+        site,
+        num(env.ctx.high),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
     return (ta.highest as TaEngine["highest"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
   }
   if (fname === "ta.lowest" || fname === "lowest") {
     if (typeof ta.lowest !== "function") return NA;
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:235-246): source defaults to
+      // the context low series; length gated like ta.highest.
+      return (ta.lowest as TaEngine["lowest"]).call(
+        env.ta,
+        site,
+        num(env.ctx.low),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
     return (ta.lowest as TaEngine["lowest"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
   }
   if (fname === "ta.stdev" || fname === "stdev") {
@@ -2788,6 +2826,20 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.bb" || fname === "bb") {
     if (typeof ta.bb !== "function") return NA;
+    if (
+      positionalCount(node) === 2 &&
+      !hasKwarg(node, ["source", "series"]) &&
+      periodLikeArg(node, env, 0, ["source", "series", "length"]) != null
+    ) {
+      // Python period-first form (basic.py:394-401): (length, mult) with the
+      // series defaulting to the context close. Dispatch gates slot 0 on
+      // _is_period_like, so a series first slot stays on the 3-arg form.
+      const length = periodLikeArg(node, env, 0, ["source", "series", "length"])!;
+      const multRaw = unwrap(evalExpr(callArg(node.args, 1, ["mult", "multiplier"]), env));
+      const mult = typeof multRaw === "number" && Number.isFinite(multRaw) ? multRaw : Number.NaN;
+      const r = (ta.bb as TaEngine["bb"]).call(env.ta, site, num(env.ctx.close), length, mult);
+      return tupleOf([r.mid, r.up, r.lo]);
+    }
     const r = (ta.bb as TaEngine["bb"]).call(
       env.ta,
       site,
@@ -2821,6 +2873,29 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.vwma" || fname === "vwma") {
     if (typeof ta.vwma !== "function") return NA;
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["volume"])) {
+      // Python 1-arg period-only form (basic.py:80-88): close + volume from
+      // the chart context; length gates on _is_period_like → non-period-like
+      // → na period 0.
+      return (ta.vwma as TaEngine["vwma"]).call(
+        env.ta,
+        site,
+        num(env.ctx.close),
+        num(env.ctx.volume),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
+    if (positionalCount(node) >= 3 || hasKwarg(node, ["volume"])) {
+      // Python 3-arg community form (basic.py:89-100): (source, volume,
+      // length). A period-like middle slot swaps volume back to the context
+      // series (basic.py:93/97) — cells are last samples, mirroring
+      // _is_period_like's series-last-sample check.
+      const periodRaw = unwrap(evalExpr(callArg(node.args, 2, ["length", "period"]), env));
+      const period = typeof periodRaw === "number" && Number.isFinite(periodRaw) ? periodRaw : 0;
+      const volLike = periodLikeArg(node, env, 1, ["volume"]) != null;
+      const vol = volLike ? num(env.ctx.volume) : unwrap(evalExpr(callArg(node.args, 1, ["volume"]), env));
+      return (ta.vwma as TaEngine["vwma"]).call(env.ta, site, srcArg(node, env), vol, period);
+    }
     return (ta.vwma as TaEngine["vwma"]).call(
       env.ta,
       site,
@@ -2831,11 +2906,31 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.cci" || fname === "cci") {
     if (typeof ta.cci !== "function") return NA;
-    const h = num(env.ctx.high);
-    const l = num(env.ctx.low);
-    const c = srcArg(node, env);
-    const tp = h != null && l != null && c != null ? (h + l + c) / 3 : c;
-    return (ta.cci as TaEngine["cci"]).call(env.ta, site, tp, lenArg(node, env, 1));
+    if (positionalCount(node) >= 4) {
+      // Python legacy 4-arg form (oscillators.py:178-187): typical price of
+      // the given (high, low, close) series.
+      const h = unwrap(evalExpr(callArg(node.args, 0, ["high"]), env));
+      const l = unwrap(evalExpr(callArg(node.args, 1, ["low"]), env));
+      const c = unwrap(evalExpr(callArg(node.args, 2, ["close"]), env));
+      const tp = h != null && l != null && c != null ? (h + l + c) / 3 : c;
+      return (ta.cci as TaEngine["cci"]).call(env.ta, site, tp, lenArg(node, env, 3));
+    }
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
+      // Python 1-arg period-only form (oscillators.py:159-171): typical price
+      // from the context high/low/close (hlc3 fallback); length gates on
+      // _is_period_like → non-period-like → na period 0.
+      return (ta.cci as TaEngine["cci"]).call(
+        env.ta,
+        site,
+        hlc3(env),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
+    // Python 2-arg form (oscillators.py:172-177): CCI over the source itself
+    // (_cci(series, series, series, period) → tp = series). SoT correction:
+    // the previous blend of context high/low into the source matched no
+    // Python dispatch arm.
+    return (ta.cci as TaEngine["cci"]).call(env.ta, site, srcArg(node, env), lenArg(node, env, 1));
   }
   if (fname === "ta.wpr" || fname === "wpr") {
     if (typeof ta.willr !== "function") return NA;
@@ -2864,24 +2959,35 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   if (fname === "ta.stoch" || fname === "stoch") {
     if (typeof ta.stoch !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-    const highArg = callArg(node.args, 1, ["high"]);
-    if (highArg == null && positional.length <= 1) {
-      // Python 1-arg period-only form gates length via _is_period_like
-      // (oscillators.py ~58): non-period-like → ignored → na period 0.
+    if (!hasKwarg(node, ["high"]) && positional.length <= 2) {
+      let length: number;
+      if (positional.length === 2) {
+        // Python 2-arg community form (kLength, dPeriod) — both slots gate on
+        // _is_period_like (oscillators.py:73-78); dPeriod is ignored and %K
+        // is returned over the context close/high/low.
+        const k = periodLikeArg(node, env, 0, ["length"]);
+        const d = periodLikeArg(node, env, 1, ["d", "smooth"]);
+        length = k != null && d != null ? k : 0;
+      } else {
+        // Python 1-arg period-only form gates length via _is_period_like
+        // (oscillators.py ~58): non-period-like → ignored → na period 0.
+        length = periodLikeArg(node, env, 0, ["length"]) ?? 0;
+      }
       return (ta.stoch as TaEngine["stoch"]).call(
         env.ta,
         site,
         num(env.ctx.close),
         num(env.ctx.high),
         num(env.ctx.low),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+        length,
       );
     }
+    // reference Pine form: source, high, low, length
     return (ta.stoch as TaEngine["stoch"]).call(
       env.ta,
       site,
       srcArg(node, env),
-      unwrap(evalExpr(highArg, env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["high"]), env)),
       unwrap(evalExpr(callArg(node.args, 2, ["low"]), env)),
       lenArg(node, env, 3),
     );
@@ -2949,6 +3055,16 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.highestbars" || fname === "highestbars") {
     if (typeof ta.highestbars !== "function") return NA;
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:248-269): source defaults to
+      // the context high series; length gates on _is_period_like.
+      return (ta.highestbars as TaEngine["highestbars"]).call(
+        env.ta,
+        site,
+        num(env.ctx.high),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
     return (ta.highestbars as TaEngine["highestbars"]).call(
       env.ta,
       site,
@@ -2958,6 +3074,16 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.lowestbars" || fname === "lowestbars") {
     if (typeof ta.lowestbars !== "function") return NA;
+    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:271-291): source defaults to
+      // the context low series; length gates like ta.highestbars.
+      return (ta.lowestbars as TaEngine["lowestbars"]).call(
+        env.ta,
+        site,
+        num(env.ctx.low),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
+      );
+    }
     return (ta.lowestbars as TaEngine["lowestbars"]).call(
       env.ta,
       site,
@@ -3014,6 +3140,20 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.pivothigh" || fname === "pivothigh") {
     if (typeof ta.pivothigh !== "function") return NA;
+    if (
+      positionalCount(node) === 2 &&
+      !hasKwarg(node, ["source", "series"]) &&
+      periodLikeArg(node, env, 0, ["leftbars", "left"]) != null &&
+      periodLikeArg(node, env, 1, ["rightbars", "right"]) != null
+    ) {
+      // Python period-first form (basic.py:1007-1010): both slots gate on
+      // _is_period_like and the source defaults to the context high series.
+      // A non-period-like slot errors in Python; the repo gated-form
+      // convention treats it as absent → the call falls through to na.
+      const left = periodLikeArg(node, env, 0, ["leftbars", "left"])!;
+      const right = periodLikeArg(node, env, 1, ["rightbars", "right"])!;
+      return (ta.pivothigh as TaEngine["pivothigh"]).call(env.ta, site, num(env.ctx.high), left, right);
+    }
     return (ta.pivothigh as TaEngine["pivothigh"]).call(
       env.ta,
       site,
@@ -3024,6 +3164,18 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.pivotlow" || fname === "pivotlow") {
     if (typeof ta.pivotlow !== "function") return NA;
+    if (
+      positionalCount(node) === 2 &&
+      !hasKwarg(node, ["source", "series"]) &&
+      periodLikeArg(node, env, 0, ["leftbars", "left"]) != null &&
+      periodLikeArg(node, env, 1, ["rightbars", "right"]) != null
+    ) {
+      // Python period-first form (basic.py:1036-1039): source defaults to
+      // the context low series; slot gating mirrors ta.pivothigh.
+      const left = periodLikeArg(node, env, 0, ["leftbars", "left"])!;
+      const right = periodLikeArg(node, env, 1, ["rightbars", "right"])!;
+      return (ta.pivotlow as TaEngine["pivotlow"]).call(env.ta, site, num(env.ctx.low), left, right);
+    }
     return (ta.pivotlow as TaEngine["pivotlow"]).call(
       env.ta,
       site,
@@ -3100,6 +3252,35 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.adx" || fname === "adx") {
     if (typeof ta.adx !== "function") return NA;
+    if (positionalCount(node) >= 4) {
+      // Python legacy 4-arg form (common.py:718-726): (high, low, close,
+      // length) with explicit series.
+      return (ta.adx as TaEngine["adx"]).call(
+        env.ta,
+        site,
+        srcArg(node, env),
+        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
+        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
+        lenArg(node, env, 3),
+      );
+    }
+    if (positionalCount(node) === 2 && !hasKwarg(node, ["high", "low", "close"])) {
+      // Python 2-arg form (diLength, adxSmoothing) (common.py:709-717): both
+      // slots gate on _is_period_like and the ADX period is the SECOND slot —
+      // diLength is accepted but unused by the kernel dispatch. A
+      // non-period-like slot → treated as absent → default 14 (same
+      // convention as the 1-arg form below).
+      const di = periodLikeArg(node, env, 0, ["diLength", "length"]);
+      const smooth = periodLikeArg(node, env, 1, ["adxSmoothing", "adxlen"]);
+      return (ta.adx as TaEngine["adx"]).call(
+        env.ta,
+        site,
+        num(env.ctx.high),
+        num(env.ctx.low),
+        num(env.ctx.close),
+        di != null && smooth != null ? smooth : 14,
+      );
+    }
     // Python 1-arg period-only form gates length via _is_period_like
     // (common.py ~701): non-period-like → ignored → default 14 (as absent).
     return (ta.adx as TaEngine["adx"]).call(
