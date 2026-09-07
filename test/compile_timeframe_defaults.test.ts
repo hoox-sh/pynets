@@ -84,3 +84,38 @@ describe("compile timeframe.* static defaults (Python daily-chart table)", () =>
     expect(compiled.plots).toEqual(interpreted.plots);
   });
 });
+
+// Python SoT: pynescript/ast/evaluator/builtins/timeframe.py:177-218 —
+// `timeframe_in_seconds` maps None / "" to "D" before parsing (lines 189-190),
+// so the no-timeframe case is daily (86400); a configured tf like "5" is its
+// own duration (300, lines 201-202). Compile-only pins: interpret's
+// timeframe.in_seconds still returns na for the no-timeframe case and is
+// fixed in a follow-up turn, so backend-parity assertions are intentionally
+// omitted here for now.
+describe("compile timeframe.in_seconds (Python no-timeframe → daily)", () => {
+  const daily = [86_400, 86_400, 86_400, 86_400];
+
+  test("no-arg call returns daily 86400", () => {
+    const compiled = runCompile(`indicator("t")\nplot(timeframe.in_seconds())`);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual(daily);
+  });
+
+  test("explicit na arg defaults to daily 86400", () => {
+    const compiled = runCompile(`indicator("t")\nplot(timeframe.in_seconds(na))`);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual(daily);
+  });
+
+  test("empty-string arg defaults to daily 86400", () => {
+    const compiled = runCompile(`indicator("t")\nplot(timeframe.in_seconds(""))`);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual(daily);
+  });
+
+  test("configured timeframe keeps its own duration ('5' → 300)", () => {
+    const compiled = runCompile(`indicator("t")\nplot(timeframe.in_seconds("5"))`);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual([300, 300, 300, 300]);
+  });
+});

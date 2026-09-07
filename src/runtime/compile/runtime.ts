@@ -94,6 +94,11 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
   const ta = new TaEngine();
   const inputs = opts?.inputs;
   const book = new LogBook();
+  // Python `timeframe_in_seconds` defaults None / "" to "D" (daily, 86400)
+  // before parsing — builtins/timeframe.py:189-190. The shared helper in
+  // timeframe.ts maps na / empty → null, so compile wraps it here to match.
+  const timeframeInSecondsOrDaily = (p: string | null): number | null =>
+    timeframeInSeconds(p == null || p === "" ? "D" : p);
   return {
     na: NA_FN,
     nz,
@@ -174,7 +179,7 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     timestamp,
     weekOfYear,
     timeTradingDay,
-    timeframeInSeconds,
+    timeframeInSeconds: timeframeInSecondsOrDaily,
     strLength,
     strContains,
     strStartsWith,

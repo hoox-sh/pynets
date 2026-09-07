@@ -759,7 +759,9 @@ function emitChart(attr: string): string {
 // cross-checked with runtime/host.py Timeframe (same values). The compile host
 // has no timeframe context (`__h.timeframe` is undefined), so these are the
 // effective values; interpret derives them dynamically from env.timeframe and
-// diverges for period ("") / isdaily / isdwm when no timeframe is configured.
+// resolves to the same daily table when no timeframe is configured — every
+// timeframe.* member is backend-parity (commit 6977a42; pinned in
+// test/compile_timeframe_defaults.test.ts).
 function emitTimeframe(attr: string): string {
   switch (attr) {
     case "period":
