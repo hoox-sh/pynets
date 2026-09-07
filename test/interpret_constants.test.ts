@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { interpret, Runtime } from "../src/index.ts";
+import { MATH_CONSTANTS } from "../src/runtime/interpret.ts";
 
 const PYNE_ROOT = "/home/jango/Git/pynescript";
 
@@ -60,6 +61,17 @@ describe("interpret dotted namespace constants", () => {
     expect(plots(`indicator("t")\nplot(barmerge.gaps_off ? 1 : 0)`)).toEqual([0, 0, 0]);
     expect(plots(`indicator("t")\nplot(barmerge.lookahead_on ? 1 : 0)`)).toEqual([1, 1, 1]);
     expect(plots(`indicator("t")\nplot(barmerge.lookahead_off ? 1 : 0)`)).toEqual([0, 0, 0]);
+  });
+
+  test("barmerge.* constants are Python True/False booleans, not 1/0", () => {
+    expect(typeof MATH_CONSTANTS["barmerge.gaps_on"]).toBe("boolean");
+    expect(typeof MATH_CONSTANTS["barmerge.gaps_off"]).toBe("boolean");
+    expect(typeof MATH_CONSTANTS["barmerge.lookahead_on"]).toBe("boolean");
+    expect(typeof MATH_CONSTANTS["barmerge.lookahead_off"]).toBe("boolean");
+    expect(MATH_CONSTANTS["barmerge.gaps_on"]).toBe(true);
+    expect(MATH_CONSTANTS["barmerge.gaps_off"]).toBe(false);
+    expect(MATH_CONSTANTS["barmerge.lookahead_on"]).toBe(true);
+    expect(MATH_CONSTANTS["barmerge.lookahead_off"]).toBe(false);
   });
 
   test('plot(shape.circle == "circle" ? 1 : 0)', () => {

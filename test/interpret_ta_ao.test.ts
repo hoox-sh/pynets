@@ -114,3 +114,86 @@ plot(adown)`,
     expect(down.plots).toEqual([null, null, 0]);
   });
 });
+
+// Non-monotonic bars so ao/aroon outputs distinguish different lengths
+// (monotonic data pins aroon up at 100 / down at 0 for every length).
+function wigglyBars(n: number) {
+  return Array.from({ length: n }, (_, i) => {
+    const c = 100 + 10 * Math.sin(i * 1.7) + (i % 5);
+    return { open: c, high: c + 1, low: c - 1, close: c, volume: 1, time: i * 86_400_000 };
+  });
+}
+
+function plotsOf(body: string, ohlcv: ReturnType<typeof bars>): Array<number | null> {
+  const out = new Runtime("TEST").run(`indicator("t")\n${body}`, ohlcv);
+  expect(out.error).toBeUndefined();
+  return out.plots;
+}
+
+describe("interpret ta.ao / ta.aroon fractional length gate (Python _is_period_like)", () => {
+  test("ta.ao(7.5, 34) ignores fractional fast → default 5 (behaves as ta.ao())", () => {
+    const b = wigglyBars(80);
+    expect(plotsOf("plot(ta.ao(7.5, 34))", b)).toEqual(plotsOf("plot(ta.ao())", b));
+    expect(plotsOf("plot(ta.ao(7.5, 34))", b)).not.toEqual(plotsOf("plot(ta.ao(7, 34))", b));
+  });
+
+  test("ta.ao(7.0, 34.0) whole floats pass as 7/34", () => {
+    const b = wigglyBars(80);
+    expect(plotsOf("plot(ta.ao(7.0, 34.0))", b)).toEqual(plotsOf("plot(ta.ao(7, 34))", b));
+  });
+
+  test("ta.aroon(20.5) ignores fractional length → default 14 (behaves as ta.aroon())", () => {
+    const b = wigglyBars(60);
+    expect(plotsOf("[d, u] = ta.aroon(20.5)\nplot(u)", b)).toEqual(
+      plotsOf("[d, u] = ta.aroon()\nplot(u)", b),
+    );
+    expect(plotsOf("[d, u] = ta.aroon(20.5)\nplot(u)", b)).not.toEqual(
+      plotsOf("[d, u] = ta.aroon(20)\nplot(u)", b),
+    );
+  });
+});
+
+describe("interpret ta.ao / ta.aroon kwarg append fallback (Python legacy merge)", () => {
+  test("ta.ao(slow=10) appends kwarg positionally → fast=10", () => {
+    const b = wigglyBars(80);
+    expect(plotsOf("plot(ta.ao(slow=10))", b)).toEqual(plotsOf("plot(ta.ao(10))", b));
+    expect(plotsOf("plot(ta.ao(slow=10))", b)).not.toEqual(plotsOf("plot(ta.ao())", b));
+  });
+
+  test("ta.ao(len=8) binds fast=8 — kwarg names are ignored, order only", () => {
+    const b = wigglyBars(80);
+    expect(plotsOf("plot(ta.ao(len=8))", b)).toEqual(plotsOf("plot(ta.ao(8))", b));
+    expect(plotsOf("plot(ta.ao(len=8))", b)).not.toEqual(plotsOf("plot(ta.ao())", b));
+  });
+
+  test("ta.ao(2, slow=3) appends kwarg after positionals → ao(2, 3)", () => {
+    const b = wigglyBars(40);
+    expect(plotsOf("plot(ta.ao(2, slow=3))", b)).toEqual(plotsOf("plot(ta.ao(2, 3))", b));
+  });
+
+  test("ta.ao(slow=3, fast=2) binds in kwarg order → fast=3, slow=2", () => {
+    const b = wigglyBars(40);
+    expect(plotsOf("plot(ta.ao(slow=3, fast=2))", b)).toEqual(plotsOf("plot(ta.ao(3, 2))", b));
+    expect(plotsOf("plot(ta.ao(slow=3, fast=2))", b)).not.toEqual(plotsOf("plot(ta.ao(2, 3))", b));
+  });
+
+  test("ta.aroon(length=20) appends kwarg positionally → length=20", () => {
+    const b = wigglyBars(60);
+    expect(plotsOf("[d, u] = ta.aroon(length=20)\nplot(u)", b)).toEqual(
+      plotsOf("[d, u] = ta.aroon(20)\nplot(u)", b),
+    );
+    expect(plotsOf("[d, u] = ta.aroon(length=20)\nplot(u)", b)).not.toEqual(
+      plotsOf("[d, u] = ta.aroon()\nplot(u)", b),
+    );
+  });
+
+  test("ta.aroon(3, length=5) appends → length=3 (kwarg name does not bind)", () => {
+    const b = wigglyBars(60);
+    expect(plotsOf("[d, u] = ta.aroon(3, length=5)\nplot(u)", b)).toEqual(
+      plotsOf("[d, u] = ta.aroon(3)\nplot(u)", b),
+    );
+    expect(plotsOf("[d, u] = ta.aroon(3, length=5)\nplot(u)", b)).not.toEqual(
+      plotsOf("[d, u] = ta.aroon(5)\nplot(u)", b),
+    );
+  });
+});

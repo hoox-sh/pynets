@@ -197,8 +197,8 @@ describe("compile vs interpret dotted constant parity", () => {
   });
 
   test("barmerge.* match interpret", () => {
-    // Compile emits Python-SoT booleans (base.py: True/False); interpret emits
-    // 1/0 — identical when plotted / ternary-tested.
+    // Both backends emit Python-SoT booleans (base.py: True/False); identical
+    // when plotted / ternary-tested.
     expect(expectBackendParity(`indicator("t")\nplot(barmerge.gaps_on ? 1 : 0)`)).toEqual(ones);
     expect(expectBackendParity(`indicator("t")\nplot(barmerge.gaps_off ? 1 : 0)`)).toEqual(zeros);
     expect(expectBackendParity(`indicator("t")\nplot(barmerge.lookahead_on ? 1 : 0)`)).toEqual(ones);

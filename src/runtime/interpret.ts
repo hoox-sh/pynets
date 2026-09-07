@@ -226,6 +226,7 @@ type TupleVal = { __tuple: true; elts: Value[] };
 type ArrayVal = { __array: true; elts: Value[] };
 type Value =
   | Cell
+  | boolean // Python True/False (e.g. `barmerge.*`); coerces to 1/0 via unwrap/valuesEq
   | TupleVal
   | ArrayVal
   | Color
@@ -1353,10 +1354,12 @@ function evalForIn(node: ForIn, env: Env): Value {
 
 /**
  * Python `_MATH_CONSTANTS` static dotted keys (base.py).
- * Bools are 1/0 like other interpret flags (`session.ismarket`).
+ * `barmerge.*` are Python True/False booleans (ast/evaluator/base.py ~92),
+ * matching compile (emit.ts) — plotting coerces to 1/0 on both backends.
  * Dynamic series (`timeframe.*` flags, `syminfo.ticker`, `bid`/`ask`) stay in Name blocks.
  */
-const MATH_CONSTANTS: Record<string, Value> = {
+/* Exported for direct unit tests (typeof / parity assertions); not part of the package API. */
+export const MATH_CONSTANTS: Record<string, Value> = {
   "math.pi": Math.PI,
   "math.e": Math.E,
   "math.phi": (1 + Math.sqrt(5)) / 2,
@@ -1377,10 +1380,10 @@ const MATH_CONSTANTS: Record<string, Value> = {
   "size.huge": 20,
   "order.ascending": 1,
   "order.descending": -1,
-  "barmerge.gaps_on": 1,
-  "barmerge.gaps_off": 0,
-  "barmerge.lookahead_on": 1,
-  "barmerge.lookahead_off": 0,
+  "barmerge.gaps_on": true,
+  "barmerge.gaps_off": false,
+  "barmerge.lookahead_on": true,
+  "barmerge.lookahead_off": false,
   "shape.arrowup": "arrowup",
   "shape.arrowdown": "arrowdown",
   "shape.circle": "circle",
@@ -1712,6 +1715,9 @@ function isNaVal(value: Value): boolean {
 }
 
 function valuesEq(left: Value, right: Value): boolean {
+  // Python True/False compare as 1/0 (True == 1), e.g. `barmerge.gaps_on == 1`.
+  if (typeof left === "boolean") left = left ? 1 : 0;
+  if (typeof right === "boolean") right = right ? 1 : 0;
   if (isNaVal(left) && isNaVal(right)) return true;
   if (isNaVal(left) || isNaVal(right)) return false;
   if (left instanceof EnumMember) return left.equals(right);
@@ -2165,6 +2171,9 @@ function numArg(node: Call, env: Env, index: number, names: string[], fallback: 
 
 function unwrap(value: Value): Cell {
   if (value == null) return NA;
+  // Python True/False (e.g. `barmerge.*`) coerce to 1/0 like compile's `num()`
+  // (True == 1) — the interpret Value pipeline is number-centric.
+  if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : NA;
   // Objects (PineArray / Matrix / Color / tuples) are not cells — not na.
   return NA;
@@ -3316,22 +3325,34 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       lenOrDefault(node, env, 5, ["slow_period", "slow", "slowlen"], 0),
     );
   }
-  if (fname === "ta.ao") {
-    return env.ta.ao(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenOrDefault(node, env, 0, ["fast", "fastlen"], 5),
-      lenOrDefault(node, env, 1, ["slow", "slowlen"], 34),
-    );
-  }
-  if (fname === "ta.aroon") {
-    const r = env.ta.aroon(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenOrDefault(node, env, 0, ["length"], 14),
-    );
+  if (fname === "ta.ao" || fname === "ta.aroon") {
+    // Python parity (pynescript base.py / oscillators.py):
+    // "ao"/"aroon" are absent from _TA_KWARG_ORDERS and their handlers carry no
+    // _KWARG_ORDER, so kwargs fall through the legacy path of
+    // _merge_kwargs_into_args (base.py ~603): kwarg VALUES are appended
+    // positionally after the positional args, in kwarg iteration order —
+    // the names are ignored (ta.ao(slow=10) binds fast=10; ta.ao(len=8)
+    // binds fast=8; ta.aroon(3, length=5) binds length=3).
+    const list = asArgs(node.args);
+    const merged: Cell[] = [];
+    for (const a of list) {
+      if (argKeyword(a) == null) merged.push(unwrap(evalExpr(a.value, env)));
+    }
+    for (const a of list) {
+      if (argKeyword(a) != null) merged.push(unwrap(evalExpr(argValue(a), env)));
+    }
+    // Python handlers gate each length slot on _is_period_like (core.py ~3427):
+    // only whole numbers pass (7.0 → 7; 7.5 / bool / na / non-numbers fail).
+    // A non-period-like arg is IGNORED and the builtin default is used.
+    const periodLike = (v: Cell): number | null =>
+      typeof v === "number" && Number.isInteger(v) ? v : null;
+    if (fname === "ta.ao") {
+      const fast = merged.length >= 1 ? periodLike(merged[0]!) : null;
+      const slow = merged.length >= 2 ? periodLike(merged[1]!) : null;
+      return env.ta.ao(site, num(env.ctx.high), num(env.ctx.low), fast ?? 5, slow ?? 34);
+    }
+    const length = merged.length >= 1 ? periodLike(merged[0]!) : null;
+    const r = env.ta.aroon(site, num(env.ctx.high), num(env.ctx.low), length ?? 14);
     return tupleOf([r.down, r.up]);
   }
   if (fname === "ta.pivot_point_levels") {

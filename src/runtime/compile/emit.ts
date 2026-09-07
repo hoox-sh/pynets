@@ -754,19 +754,32 @@ function emitChart(attr: string): string {
   }
 }
 
+// Static defaults mirror the Python SoT flat table in
+// pynescript/ast/evaluator/base.py ("Chart timeframe defaults (daily)"),
+// cross-checked with runtime/host.py Timeframe (same values). The compile host
+// has no timeframe context (`__h.timeframe` is undefined), so these are the
+// effective values; interpret derives them dynamically from env.timeframe and
+// diverges for period ("") / isdaily / isdwm when no timeframe is configured.
 function emitTimeframe(attr: string): string {
   switch (attr) {
     case "period":
-      return `(__h.timeframe || "1")`;
+    case "main_period":
+      return `(__h.timeframe || "D")`;
     case "multiplier":
       return "1";
     case "isintraday":
-      return "true";
-    case "isdaily":
     case "isweekly":
     case "ismonthly":
+    case "isseconds":
+    case "isinseconds":
+    case "isminutes":
+    case "ishours":
       return "false";
+    case "isdaily":
+    case "isdwm":
+      return "true";
     default:
+      // Unknown member → na (documented behavior).
       return "null";
   }
 }
