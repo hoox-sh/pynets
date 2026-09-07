@@ -33,20 +33,17 @@ function expectBackendParity(source: string): Array<number | null> {
 }
 
 // Python SoT: pynescript/ast/evaluator/base.py "Chart timeframe defaults
-// (daily)" + runtime/host.py Timeframe. Compile's static table mirrors that
-// table (daily-chart assumption); interpret derives values from env.timeframe,
-// so parity only holds for members where the derived default agrees.
+// (daily)" + runtime/host.py Timeframe. Compile's static table and interpret's
+// no-timeframe fallback both mirror that table (daily-chart assumption), so
+// every member is pinned via backend parity in the default (no configured
+// timeframe) state.
 describe("compile timeframe.* static defaults (Python daily-chart table)", () => {
   const zeros = [0, 0, 0, 0];
   const ones = [1, 1, 1, 1];
   const of = (v: number): Array<number> => [v, v, v, v];
 
-  test("period defaults to 'D' (compile-only pin)", () => {
-    // Compile-only: interpret has no static period default (env.timeframe ?? ""
-    // with no configured timeframe), so the two backends diverge here by design.
-    const compiled = runCompile(`indicator("t")\nplot(timeframe.period == "D" ? 1 : 0)`);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.plots).toEqual(ones);
+  test("period defaults to 'D' and matches interpret", () => {
+    expect(expectBackendParity(`indicator("t")\nplot(timeframe.period == "D" ? 1 : 0)`)).toEqual(ones);
   });
 
   test("main_period defaults to 'D' and matches interpret", () => {
@@ -70,19 +67,12 @@ describe("compile timeframe.* static defaults (Python daily-chart table)", () =>
     expect(expectBackendParity(`indicator("t")\nplot(timeframe.ishours ? 1 : 0)`)).toEqual(zeros);
   });
 
-  // Compile-only pins: Python's static defaults say isdaily/isdwm are True
-  // (daily chart), but interpret derives them from env.timeframe (null → 0),
-  // so the backends intentionally diverge when no timeframe is configured.
-  test("isdaily defaults to true (compile-only pin)", () => {
-    const compiled = runCompile(`indicator("t")\nplot(timeframe.isdaily ? 1 : 0)`);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.plots).toEqual(ones);
+  test("isdaily defaults to true and matches interpret", () => {
+    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isdaily ? 1 : 0)`)).toEqual(ones);
   });
 
-  test("isdwm defaults to true (compile-only pin)", () => {
-    const compiled = runCompile(`indicator("t")\nplot(timeframe.isdwm ? 1 : 0)`);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.plots).toEqual(ones);
+  test("isdwm defaults to true and matches interpret", () => {
+    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isdwm ? 1 : 0)`)).toEqual(ones);
   });
 
   test("unknown timeframe member is na on both backends", () => {

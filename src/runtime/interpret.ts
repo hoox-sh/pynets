@@ -1528,19 +1528,26 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "main_tickerid") return env.symbol;
     }
     if (node.value.id === "timeframe") {
-      if (node.attr === "period") return env.timeframe ?? "";
-      if (node.attr === "main_period") return env.timeframe ?? "D";
-      if (node.attr === "multiplier") return tfMultiplier(env.timeframe);
-      if (node.attr === "isintraday") return timeframeIsIntraday(env.timeframe) ? 1 : 0;
-      if (node.attr === "isdaily") return timeframeIsDaily(env.timeframe) ? 1 : 0;
-      if (node.attr === "isweekly") return timeframeIsWeekly(env.timeframe) ? 1 : 0;
-      if (node.attr === "ismonthly") return timeframeIsMonthly(env.timeframe) ? 1 : 0;
+      // Python SoT: with no configured timeframe the evaluator's static
+      // "Chart timeframe defaults (daily)" table applies (base.py) and
+      // `_chart_period` / `_period_flags` resolve the chart to daily —
+      // period "D", isdaily/isdwm true, everything else false. Normalize
+      // null/empty to "D" so derivation lands on that table; a configured
+      // timeframe keeps the dynamic helpers unchanged.
+      const tf = env.timeframe == null || env.timeframe === "" ? "D" : env.timeframe;
+      if (node.attr === "period") return tf;
+      if (node.attr === "main_period") return tf;
+      if (node.attr === "multiplier") return tfMultiplier(tf);
+      if (node.attr === "isintraday") return timeframeIsIntraday(tf) ? 1 : 0;
+      if (node.attr === "isdaily") return timeframeIsDaily(tf) ? 1 : 0;
+      if (node.attr === "isweekly") return timeframeIsWeekly(tf) ? 1 : 0;
+      if (node.attr === "ismonthly") return timeframeIsMonthly(tf) ? 1 : 0;
       if (node.attr === "isseconds" || node.attr === "isinseconds") {
-        return timeframeIsSeconds(env.timeframe) ? 1 : 0;
+        return timeframeIsSeconds(tf) ? 1 : 0;
       }
-      if (node.attr === "isminutes") return timeframeIsMinutes(env.timeframe) ? 1 : 0;
-      if (node.attr === "ishours") return timeframeIsHours(env.timeframe) ? 1 : 0;
-      if (node.attr === "isdwm") return timeframeIsDwm(env.timeframe) ? 1 : 0;
+      if (node.attr === "isminutes") return timeframeIsMinutes(tf) ? 1 : 0;
+      if (node.attr === "ishours") return timeframeIsHours(tf) ? 1 : 0;
+      if (node.attr === "isdwm") return timeframeIsDwm(tf) ? 1 : 0;
     }
     if (node.value.id === "color") {
       const named = colorByName(node.attr);

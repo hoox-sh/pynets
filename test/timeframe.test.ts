@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
+import { Runtime } from "../src/index.ts";
 import {
   timeframeFromSeconds,
   timeframeInSeconds,
@@ -219,5 +220,68 @@ describe("timeframeMultiplier", () => {
   test("empty / na is 1", () => {
     expect(timeframeMultiplier(null)).toBe(1);
     expect(timeframeMultiplier("")).toBe(1);
+  });
+});
+
+// Runtime-level timeframe.* members with NO configured timeframe.
+// Python SoT: pynescript/ast/evaluator/base.py "Chart timeframe defaults
+// (daily)" + builtins/timeframe.py `_period_flags("D")` / `_chart_period()` —
+// the chart resolves to daily: period "D", main_period "D", multiplier 1,
+// isdaily/isdwm true, all other flags false.
+const BARS = [1, 2, 3, 4].map((close) => ({
+  open: close,
+  high: close,
+  low: close,
+  close,
+  volume: 1,
+}));
+
+function defaultTfPlots(src: string): Array<number | null> {
+  const out = new Runtime("TEST").run(`indicator("t")\n${src}`, BARS);
+  expect(out.error).toBeUndefined();
+  return out.plots;
+}
+
+describe("Runtime timeframe.* default state (no configured timeframe)", () => {
+  const ones = [1, 1, 1, 1];
+  const zeros = [0, 0, 0, 0];
+
+  test("period / main_period default to 'D' (not '')", () => {
+    expect(defaultTfPlots(`plot(timeframe.period == "D" ? 1 : 0)`)).toEqual(ones);
+    expect(defaultTfPlots(`plot(timeframe.period == "" ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.main_period == "D" ? 1 : 0)`)).toEqual(ones);
+  });
+
+  test("multiplier defaults to 1", () => {
+    expect(defaultTfPlots(`plot(timeframe.multiplier)`)).toEqual(ones);
+  });
+
+  test("isdaily / isdwm default to true", () => {
+    expect(defaultTfPlots(`plot(timeframe.isdaily ? 1 : 0)`)).toEqual(ones);
+    expect(defaultTfPlots(`plot(timeframe.isdwm ? 1 : 0)`)).toEqual(ones);
+  });
+
+  test("all other flags default to false", () => {
+    expect(defaultTfPlots(`plot(timeframe.isintraday ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.isweekly ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.ismonthly ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.isseconds ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.isinseconds ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.isminutes ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.ishours ? 1 : 0)`)).toEqual(zeros);
+  });
+
+  test("configured timeframe still derives dynamically", () => {
+    const minutes = new Runtime("TEST", { timeframe: "5" }).run(
+      `indicator("t")
+plot(timeframe.period == "5" ? 1 : 0)
+plot(timeframe.isminutes ? 1 : 0)
+plot(timeframe.isdwm ? 1 : 0)`,
+      BARS,
+    );
+    expect(minutes.error).toBeUndefined();
+    expect(minutes.series.plot).toEqual([1, 1, 1, 1]);
+    expect(minutes.series.plot_2).toEqual([1, 1, 1, 1]);
+    expect(minutes.series.plot_3).toEqual([0, 0, 0, 0]);
   });
 });
