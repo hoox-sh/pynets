@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { dump, parse, unparse } from "../src/index.ts";
+import type { Script } from "../src/ast/nodes.ts";
 
 const ASSIGN_SCRIPT = `indicator("t")
 x = close
@@ -70,5 +71,30 @@ describe("parse assign", () => {
       body: [{ kind: "ReAssign", value: { kind: "Switch" } }],
     });
     expect(dump(parse(unparse(tree)))).toBe(dumped);
+  });
+
+  test("bare name = is Assign; := and attribute = are ReAssign", () => {
+    const tree = parse(`//@version=5
+indicator("eq")
+x = 1
+x := 2
+strategy.initial_capital = 50000
+plot(x)
+`) as Script;
+    const stmts = tree.body.filter((s) => s.kind === "Assign" || s.kind === "ReAssign");
+    expect(
+      stmts.some((s) => s.kind === "Assign" && s.target.kind === "Name" && s.target.id === "x"),
+    ).toBe(true);
+    expect(
+      stmts.some((s) => s.kind === "ReAssign" && s.target.kind === "Name" && s.target.id === "x"),
+    ).toBe(true);
+    expect(
+      stmts.some(
+        (s) =>
+          s.kind === "ReAssign" &&
+          s.target.kind === "Attribute" &&
+          s.target.attr === "initial_capital",
+      ),
+    ).toBe(true);
   });
 });

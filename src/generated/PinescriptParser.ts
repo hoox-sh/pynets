@@ -1,4 +1,4 @@
-// Generated from /mnt/data/home/jango/Git/pynescript/src/pynescript/ast/grammar/antlr4/resource/PinescriptParser.g4 by ANTLR 4.13.2
+// Generated from /home/jango/Git/pynescript/src/pynescript/ast/grammar/antlr4/resource/PinescriptParser.g4 by ANTLR 4.13.2
 // noinspection ES6UnusedImports,JSUnusedGlobalSymbols,JSUnusedLocalSymbols
 
 import {
@@ -1011,48 +1011,81 @@ export default class PinescriptParser extends PinescriptParserBase {
 		this.enterRule(localctx, 32, PinescriptParser.RULE_function_declaration);
 		let _la: number;
 		try {
-			this.enterOuterAlt(localctx, 1);
-			{
-			this.state = 324;
+			this.state = 348;
 			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if (_la===11) {
-				{
-				this.state = 323;
-				this.match(PinescriptParser.EXPORT);
-				}
-			}
-
-			this.state = 327;
-			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 14, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 17, this._ctx) ) {
 			case 1:
+				this.enterOuterAlt(localctx, 1);
 				{
+				this.state = 324;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===11) {
+					{
+					this.state = 323;
+					this.match(PinescriptParser.EXPORT);
+					}
+				}
+
 				this.state = 326;
 				this.type_specification();
+				this.state = 327;
+				this.name();
+				this.state = 328;
+				this.match(PinescriptParser.LPAR);
+				this.state = 330;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+					{
+					this.state = 329;
+					this.parameter_list();
+					}
+				}
+
+				this.state = 332;
+				this.match(PinescriptParser.RPAR);
+				this.state = 333;
+				this.match(PinescriptParser.RARROW);
+				this.state = 334;
+				this.local_block();
 				}
 				break;
-			}
-			this.state = 329;
-			this.name();
-			this.state = 330;
-			this.match(PinescriptParser.LPAR);
-			this.state = 332;
-			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+			case 2:
+				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 331;
-				this.parameter_list();
+				this.state = 337;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===11) {
+					{
+					this.state = 336;
+					this.match(PinescriptParser.EXPORT);
+					}
 				}
-			}
 
-			this.state = 334;
-			this.match(PinescriptParser.RPAR);
-			this.state = 335;
-			this.match(PinescriptParser.RARROW);
-			this.state = 336;
-			this.local_block();
+				this.state = 339;
+				this.name();
+				this.state = 340;
+				this.match(PinescriptParser.LPAR);
+				this.state = 342;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+					{
+					this.state = 341;
+					this.parameter_list();
+					}
+				}
+
+				this.state = 344;
+				this.match(PinescriptParser.RPAR);
+				this.state = 345;
+				this.match(PinescriptParser.RARROW);
+				this.state = 346;
+				this.local_block();
+				}
+				break;
 			}
 		}
 		catch (re) {
@@ -1078,32 +1111,32 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 338;
+			this.state = 350;
 			this.parameter_definition();
-			this.state = 343;
+			this.state = 355;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 16, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 18, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 339;
+					this.state = 351;
 					this.match(PinescriptParser.COMMA);
-					this.state = 340;
+					this.state = 352;
 					this.parameter_definition();
 					}
 					}
 				}
-				this.state = 345;
+				this.state = 357;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 16, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 18, this._ctx);
 			}
-			this.state = 347;
+			this.state = 359;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 346;
+				this.state = 358;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
@@ -1130,32 +1163,49 @@ export default class PinescriptParser extends PinescriptParserBase {
 		this.enterRule(localctx, 36, PinescriptParser.RULE_parameter_definition);
 		let _la: number;
 		try {
-			this.enterOuterAlt(localctx, 1);
-			{
-			this.state = 350;
+			this.state = 372;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 18, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 22, this._ctx) ) {
 			case 1:
+				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 349;
+				this.state = 361;
 				this.type_specification();
+				this.state = 362;
+				this.name_store();
+				this.state = 365;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===42) {
+					{
+					this.state = 363;
+					this.match(PinescriptParser.EQUAL);
+					this.state = 364;
+					this.expression();
+					}
+				}
+
 				}
 				break;
-			}
-			this.state = 352;
-			this.name_store();
-			this.state = 355;
-			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if (_la===42) {
+			case 2:
+				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 353;
-				this.match(PinescriptParser.EQUAL);
-				this.state = 354;
-				this.expression();
+				this.state = 367;
+				this.name_store();
+				this.state = 370;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===42) {
+					{
+					this.state = 368;
+					this.match(PinescriptParser.EQUAL);
+					this.state = 369;
+					this.expression();
+					}
 				}
-			}
 
+				}
+				break;
 			}
 		}
 		catch (re) {
@@ -1178,50 +1228,85 @@ export default class PinescriptParser extends PinescriptParserBase {
 		this.enterRule(localctx, 38, PinescriptParser.RULE_method_declaration);
 		let _la: number;
 		try {
-			this.enterOuterAlt(localctx, 1);
-			{
-			this.state = 358;
+			this.state = 401;
 			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if (_la===11) {
-				{
-				this.state = 357;
-				this.match(PinescriptParser.EXPORT);
-				}
-			}
-
-			this.state = 360;
-			this.match(PinescriptParser.METHOD);
-			this.state = 362;
-			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 21, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 27, this._ctx) ) {
 			case 1:
+				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 361;
+				this.state = 375;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===11) {
+					{
+					this.state = 374;
+					this.match(PinescriptParser.EXPORT);
+					}
+				}
+
+				this.state = 377;
+				this.match(PinescriptParser.METHOD);
+				this.state = 378;
 				this.type_specification();
+				this.state = 379;
+				this.name();
+				this.state = 380;
+				this.match(PinescriptParser.LPAR);
+				this.state = 382;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+					{
+					this.state = 381;
+					this.method_parameter_list();
+					}
+				}
+
+				this.state = 384;
+				this.match(PinescriptParser.RPAR);
+				this.state = 385;
+				this.match(PinescriptParser.RARROW);
+				this.state = 386;
+				this.local_block();
 				}
 				break;
-			}
-			this.state = 364;
-			this.name();
-			this.state = 365;
-			this.match(PinescriptParser.LPAR);
-			this.state = 367;
-			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+			case 2:
+				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 366;
-				this.method_parameter_list();
+				this.state = 389;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===11) {
+					{
+					this.state = 388;
+					this.match(PinescriptParser.EXPORT);
+					}
 				}
-			}
 
-			this.state = 369;
-			this.match(PinescriptParser.RPAR);
-			this.state = 370;
-			this.match(PinescriptParser.RARROW);
-			this.state = 371;
-			this.local_block();
+				this.state = 391;
+				this.match(PinescriptParser.METHOD);
+				this.state = 392;
+				this.name();
+				this.state = 393;
+				this.match(PinescriptParser.LPAR);
+				this.state = 395;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
+					{
+					this.state = 394;
+					this.method_parameter_list();
+					}
+				}
+
+				this.state = 397;
+				this.match(PinescriptParser.RPAR);
+				this.state = 398;
+				this.match(PinescriptParser.RARROW);
+				this.state = 399;
+				this.local_block();
+				}
+				break;
 			}
 		}
 		catch (re) {
@@ -1247,32 +1332,32 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 373;
+			this.state = 403;
 			this.method_parameter_definition();
-			this.state = 378;
+			this.state = 408;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 23, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 28, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 374;
+					this.state = 404;
 					this.match(PinescriptParser.COMMA);
-					this.state = 375;
+					this.state = 405;
 					this.method_parameter_definition();
 					}
 					}
 				}
-				this.state = 380;
+				this.state = 410;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 23, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 28, this._ctx);
 			}
-			this.state = 382;
+			this.state = 412;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 381;
+				this.state = 411;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
@@ -1298,22 +1383,22 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Method_parameter_definitionContext = new Method_parameter_definitionContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 42, PinescriptParser.RULE_method_parameter_definition);
 		try {
-			this.state = 388;
+			this.state = 418;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 25, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 30, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 384;
+				this.state = 414;
 				this.type_specification();
-				this.state = 385;
+				this.state = 415;
 				this.name_store();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 387;
+				this.state = 417;
 				this.parameter_definition();
 				}
 				break;
@@ -1341,27 +1426,27 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 391;
+			this.state = 421;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===11) {
 				{
-				this.state = 390;
+				this.state = 420;
 				this.match(PinescriptParser.EXPORT);
 				}
 			}
 
-			this.state = 393;
+			this.state = 423;
 			this.match(PinescriptParser.TYPE);
-			this.state = 394;
+			this.state = 424;
 			this.name();
-			this.state = 395;
+			this.state = 425;
 			this.match(PinescriptParser.NEWLINE);
-			this.state = 396;
+			this.state = 426;
 			this.match(PinescriptParser.INDENT);
-			this.state = 397;
+			this.state = 427;
 			this.field_definitions();
-			this.state = 398;
+			this.state = 428;
 			this.match(PinescriptParser.DEDENT);
 			}
 		}
@@ -1387,17 +1472,17 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 401;
+			this.state = 431;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			do {
 				{
 				{
-				this.state = 400;
+				this.state = 430;
 				this.field_definition();
 				}
 				}
-				this.state = 403;
+				this.state = 433;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			} while ((((_la) & ~0x1F) === 0 && ((1 << _la) & 325453008) !== 0) || _la===63);
@@ -1425,33 +1510,33 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 406;
+			this.state = 436;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===28) {
 				{
-				this.state = 405;
+				this.state = 435;
 				this.match(PinescriptParser.VARIP);
 				}
 			}
 
-			this.state = 408;
+			this.state = 438;
 			this.type_specification();
-			this.state = 409;
+			this.state = 439;
 			this.name_store();
-			this.state = 412;
+			this.state = 442;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===42) {
 				{
-				this.state = 410;
+				this.state = 440;
 				this.match(PinescriptParser.EQUAL);
-				this.state = 411;
+				this.state = 441;
 				this.expression();
 				}
 			}
 
-			this.state = 414;
+			this.state = 444;
 			this.match(PinescriptParser.NEWLINE);
 			}
 		}
@@ -1477,27 +1562,27 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 417;
+			this.state = 447;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===11) {
 				{
-				this.state = 416;
+				this.state = 446;
 				this.match(PinescriptParser.EXPORT);
 				}
 			}
 
-			this.state = 419;
+			this.state = 449;
 			this.match(PinescriptParser.ENUM);
-			this.state = 420;
+			this.state = 450;
 			this.name();
-			this.state = 421;
+			this.state = 451;
 			this.match(PinescriptParser.NEWLINE);
-			this.state = 422;
+			this.state = 452;
 			this.match(PinescriptParser.INDENT);
-			this.state = 423;
+			this.state = 453;
 			this.enum_definitions();
-			this.state = 424;
+			this.state = 454;
 			this.match(PinescriptParser.DEDENT);
 			}
 		}
@@ -1523,17 +1608,17 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 427;
+			this.state = 457;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			do {
 				{
 				{
-				this.state = 426;
+				this.state = 456;
 				this.enum_definition();
 				}
 				}
-				this.state = 429;
+				this.state = 459;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			} while ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63);
@@ -1561,21 +1646,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 431;
+			this.state = 461;
 			this.name_store();
-			this.state = 434;
+			this.state = 464;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===42) {
 				{
-				this.state = 432;
+				this.state = 462;
 				this.match(PinescriptParser.EQUAL);
-				this.state = 433;
+				this.state = 463;
 				this.expression();
 				}
 			}
 
-			this.state = 436;
+			this.state = 466;
 			this.match(PinescriptParser.NEWLINE);
 			}
 		}
@@ -1598,34 +1683,34 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: StructureContext = new StructureContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 56, PinescriptParser.RULE_structure);
 		try {
-			this.state = 442;
+			this.state = 472;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 14:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 438;
+				this.state = 468;
 				this.if_structure();
 				}
 				break;
 			case 13:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 439;
+				this.state = 469;
 				this.for_structure();
 				}
 				break;
 			case 29:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 440;
+				this.state = 470;
 				this.while_structure();
 				}
 				break;
 			case 23:
 				this.enterOuterAlt(localctx, 4);
 				{
-				this.state = 441;
+				this.state = 471;
 				this.switch_structure();
 				}
 				break;
@@ -1654,7 +1739,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 444;
+			this.state = 474;
 			this.structure();
 			}
 		}
@@ -1679,7 +1764,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 446;
+			this.state = 476;
 			this.structure();
 			}
 		}
@@ -1704,18 +1789,18 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 448;
+			this.state = 478;
 			this.match(PinescriptParser.IF);
-			this.state = 449;
+			this.state = 479;
 			this.expression();
-			this.state = 450;
+			this.state = 480;
 			this.local_block();
-			this.state = 452;
+			this.state = 482;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 34, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 39, this._ctx) ) {
 			case 1:
 				{
-				this.state = 451;
+				this.state = 481;
 				this.if_tail();
 				}
 				break;
@@ -1743,20 +1828,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 454;
+			this.state = 484;
 			this.match(PinescriptParser.ELSE);
-			this.state = 455;
+			this.state = 485;
 			this.match(PinescriptParser.IF);
-			this.state = 456;
+			this.state = 486;
 			this.expression();
-			this.state = 457;
+			this.state = 487;
 			this.local_block();
-			this.state = 459;
+			this.state = 489;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 35, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 40, this._ctx) ) {
 			case 1:
 				{
-				this.state = 458;
+				this.state = 488;
 				this.if_tail();
 				}
 				break;
@@ -1782,20 +1867,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: If_tailContext = new If_tailContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 66, PinescriptParser.RULE_if_tail);
 		try {
-			this.state = 463;
+			this.state = 493;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 36, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 41, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 461;
+				this.state = 491;
 				this.elif_structure();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 462;
+				this.state = 492;
 				this.else_block();
 				}
 				break;
@@ -1822,9 +1907,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 465;
+			this.state = 495;
 			this.match(PinescriptParser.ELSE);
-			this.state = 466;
+			this.state = 496;
 			this.local_block();
 			}
 		}
@@ -1847,20 +1932,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: For_structureContext = new For_structureContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 70, PinescriptParser.RULE_for_structure);
 		try {
-			this.state = 470;
+			this.state = 500;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 37, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 42, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 468;
+				this.state = 498;
 				this.for_structure_to();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 469;
+				this.state = 499;
 				this.for_structure_in();
 				}
 				break;
@@ -1887,31 +1972,31 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 472;
+			this.state = 502;
 			this.match(PinescriptParser.FOR);
-			this.state = 473;
+			this.state = 503;
 			this.for_iterator();
-			this.state = 474;
+			this.state = 504;
 			this.match(PinescriptParser.EQUAL);
-			this.state = 475;
+			this.state = 505;
 			this.expression();
-			this.state = 476;
+			this.state = 506;
 			this.match(PinescriptParser.TO);
-			this.state = 477;
+			this.state = 507;
 			this.expression();
-			this.state = 480;
+			this.state = 510;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 38, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 43, this._ctx) ) {
 			case 1:
 				{
-				this.state = 478;
+				this.state = 508;
 				this.match(PinescriptParser.BY);
-				this.state = 479;
+				this.state = 509;
 				this.expression();
 				}
 				break;
 			}
-			this.state = 482;
+			this.state = 512;
 			this.local_block();
 			}
 		}
@@ -1936,15 +2021,15 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 484;
+			this.state = 514;
 			this.match(PinescriptParser.FOR);
-			this.state = 485;
+			this.state = 515;
 			this.for_iterator();
-			this.state = 486;
+			this.state = 516;
 			this.match(PinescriptParser.IN);
-			this.state = 487;
+			this.state = 517;
 			this.expression();
-			this.state = 488;
+			this.state = 518;
 			this.local_block();
 			}
 		}
@@ -1967,29 +2052,29 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: For_iteratorContext = new For_iteratorContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 76, PinescriptParser.RULE_for_iterator);
 		try {
-			this.state = 495;
+			this.state = 525;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 39, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 44, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 490;
+				this.state = 520;
 				this.type_specification();
-				this.state = 491;
+				this.state = 521;
 				this.name_store();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 493;
+				this.state = 523;
 				this.name_store();
 				}
 				break;
 			case 3:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 494;
+				this.state = 524;
 				this.tuple_declaration();
 				}
 				break;
@@ -2016,11 +2101,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 497;
+			this.state = 527;
 			this.match(PinescriptParser.WHILE);
-			this.state = 498;
+			this.state = 528;
 			this.expression();
-			this.state = 499;
+			this.state = 529;
 			this.local_block();
 			}
 		}
@@ -2046,25 +2131,25 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 501;
+			this.state = 531;
 			this.match(PinescriptParser.SWITCH);
-			this.state = 503;
+			this.state = 533;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (((((_la - 4)) & ~0x1F) === 0 && ((1 << (_la - 4)) & 343335245) !== 0) || ((((_la - 48)) & ~0x1F) === 0 && ((1 << (_la - 48)) & 491569) !== 0)) {
 				{
-				this.state = 502;
+				this.state = 532;
 				this.expression();
 				}
 			}
 
-			this.state = 505;
+			this.state = 535;
 			this.match(PinescriptParser.NEWLINE);
-			this.state = 506;
+			this.state = 536;
 			this.match(PinescriptParser.INDENT);
-			this.state = 507;
+			this.state = 537;
 			this.switch_cases();
-			this.state = 508;
+			this.state = 538;
 			this.match(PinescriptParser.DEDENT);
 			}
 		}
@@ -2090,26 +2175,26 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 511;
+			this.state = 541;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			do {
 				{
 				{
-				this.state = 510;
+				this.state = 540;
 				this.switch_pattern_case();
 				}
 				}
-				this.state = 513;
+				this.state = 543;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			} while (((((_la - 4)) & ~0x1F) === 0 && ((1 << (_la - 4)) & 343335245) !== 0) || ((((_la - 48)) & ~0x1F) === 0 && ((1 << (_la - 48)) & 491569) !== 0));
-			this.state = 516;
+			this.state = 546;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===43) {
 				{
-				this.state = 515;
+				this.state = 545;
 				this.switch_default_case();
 				}
 			}
@@ -2137,11 +2222,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 518;
+			this.state = 548;
 			this.expression();
-			this.state = 519;
+			this.state = 549;
 			this.match(PinescriptParser.RARROW);
-			this.state = 520;
+			this.state = 550;
 			this.local_block();
 			}
 		}
@@ -2166,9 +2251,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 522;
+			this.state = 552;
 			this.match(PinescriptParser.RARROW);
-			this.state = 523;
+			this.state = 553;
 			this.local_block();
 			}
 		}
@@ -2191,13 +2276,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Local_blockContext = new Local_blockContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 88, PinescriptParser.RULE_local_block);
 		try {
-			this.state = 527;
+			this.state = 557;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 67:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 525;
+				this.state = 555;
 				this.indented_local_block();
 				}
 				break;
@@ -2235,7 +2320,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 66:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 526;
+				this.state = 556;
 				this.inline_local_block();
 				}
 				break;
@@ -2264,13 +2349,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 529;
+			this.state = 559;
 			this.match(PinescriptParser.NEWLINE);
-			this.state = 530;
+			this.state = 560;
 			this.match(PinescriptParser.INDENT);
-			this.state = 531;
+			this.state = 561;
 			this.statements();
-			this.state = 532;
+			this.state = 562;
 			this.match(PinescriptParser.DEDENT);
 			}
 		}
@@ -2295,7 +2380,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 534;
+			this.state = 564;
 			this.statement();
 			}
 		}
@@ -2318,27 +2403,27 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Simple_assignmentContext = new Simple_assignmentContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 94, PinescriptParser.RULE_simple_assignment);
 		try {
-			this.state = 539;
+			this.state = 569;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 44, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 49, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 536;
+				this.state = 566;
 				this.simple_variable_initialization();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 537;
+				this.state = 567;
 				this.simple_reassignment();
 				}
 				break;
 			case 3:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 538;
+				this.state = 568;
 				this.simple_augassignment();
 				}
 				break;
@@ -2363,7 +2448,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Simple_variable_initializationContext = new Simple_variable_initializationContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 96, PinescriptParser.RULE_simple_variable_initialization);
 		try {
-			this.state = 543;
+			this.state = 573;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 4:
@@ -2382,14 +2467,14 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 63:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 541;
+				this.state = 571;
 				this.simple_name_initialization();
 				}
 				break;
 			case 32:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 542;
+				this.state = 572;
 				this.simple_tuple_initialization();
 				}
 				break;
@@ -2419,21 +2504,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 546;
+			this.state = 576;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===11) {
 				{
-				this.state = 545;
+				this.state = 575;
 				this.match(PinescriptParser.EXPORT);
 				}
 			}
 
-			this.state = 548;
+			this.state = 578;
 			this.variable_declaration();
-			this.state = 549;
+			this.state = 579;
 			this.match(PinescriptParser.EQUAL);
-			this.state = 550;
+			this.state = 580;
 			this.expression();
 			}
 		}
@@ -2458,11 +2543,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 552;
+			this.state = 582;
 			this.tuple_declaration();
-			this.state = 553;
+			this.state = 583;
 			this.match(PinescriptParser.EQUAL);
-			this.state = 554;
+			this.state = 584;
 			this.expression();
 			}
 		}
@@ -2484,23 +2569,43 @@ export default class PinescriptParser extends PinescriptParserBase {
 	public simple_reassignment(): Simple_reassignmentContext {
 		let localctx: Simple_reassignmentContext = new Simple_reassignmentContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 102, PinescriptParser.RULE_simple_reassignment);
-		let _la: number;
 		try {
-			this.enterOuterAlt(localctx, 1);
-			{
-			this.state = 556;
-			this.primary_expression(0);
-			this.state = 557;
-			_la = this._input.LA(1);
-			if(!(_la===42 || _la===62)) {
-			this._errHandler.recoverInline(this);
-			}
-			else {
-				this._errHandler.reportMatch(this);
-			    this.consume();
-			}
-			this.state = 558;
-			this.expression();
+			this.state = 598;
+			this._errHandler.sync(this);
+			switch ( this._interp.adaptivePredict(this._input, 52, this._ctx) ) {
+			case 1:
+				this.enterOuterAlt(localctx, 1);
+				{
+				this.state = 586;
+				this.assignment_target_attribute();
+				this.state = 587;
+				this.match(PinescriptParser.EQUAL);
+				this.state = 588;
+				this.expression();
+				}
+				break;
+			case 2:
+				this.enterOuterAlt(localctx, 2);
+				{
+				this.state = 590;
+				this.assignment_target_subscript();
+				this.state = 591;
+				this.match(PinescriptParser.EQUAL);
+				this.state = 592;
+				this.expression();
+				}
+				break;
+			case 3:
+				this.enterOuterAlt(localctx, 3);
+				{
+				this.state = 594;
+				this.primary_expression(0);
+				this.state = 595;
+				this.match(PinescriptParser.COLONEQUAL);
+				this.state = 596;
+				this.expression();
+				}
+				break;
 			}
 		}
 		catch (re) {
@@ -2524,11 +2629,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 560;
+			this.state = 600;
 			this.primary_expression(0);
-			this.state = 561;
+			this.state = 601;
 			this.augassign_op();
-			this.state = 562;
+			this.state = 602;
 			this.expression();
 			}
 		}
@@ -2553,7 +2658,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 564;
+			this.state = 604;
 			this.conditional_expression();
 			}
 		}
@@ -2578,7 +2683,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 566;
+			this.state = 606;
 			this.expression();
 			}
 		}
@@ -2604,20 +2709,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 568;
+			this.state = 608;
 			this.disjunction_expression();
-			this.state = 574;
+			this.state = 614;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===47) {
 				{
-				this.state = 569;
+				this.state = 609;
 				this.match(PinescriptParser.QUESTION);
-				this.state = 570;
+				this.state = 610;
 				this.expression();
-				this.state = 571;
+				this.state = 611;
 				this.match(PinescriptParser.COLON);
-				this.state = 572;
+				this.state = 612;
 				this.expression();
 				}
 			}
@@ -2646,21 +2751,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 576;
+			this.state = 616;
 			this.conjunction_expression();
-			this.state = 581;
+			this.state = 621;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			while (_la===20) {
 				{
 				{
-				this.state = 577;
+				this.state = 617;
 				this.match(PinescriptParser.OR);
-				this.state = 578;
+				this.state = 618;
 				this.conjunction_expression();
 				}
 				}
-				this.state = 583;
+				this.state = 623;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			}
@@ -2688,21 +2793,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 584;
+			this.state = 624;
 			this.bitwise_or_expression(0);
-			this.state = 589;
+			this.state = 629;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			while (_la===3) {
 				{
 				{
-				this.state = 585;
+				this.state = 625;
 				this.match(PinescriptParser.AND);
-				this.state = 586;
+				this.state = 626;
 				this.bitwise_or_expression(0);
 				}
 				}
-				this.state = 591;
+				this.state = 631;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			}
@@ -2742,13 +2847,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 593;
+			this.state = 633;
 			this.bitwise_xor_expression(0);
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 600;
+			this.state = 640;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 50, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 56, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -2759,20 +2864,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Bitwise_or_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_bitwise_or_expression);
-					this.state = 595;
+					this.state = 635;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 596;
+					this.state = 636;
 					this.match(PinescriptParser.PIPE);
-					this.state = 597;
+					this.state = 637;
 					this.bitwise_xor_expression(0);
 					}
 					}
 				}
-				this.state = 602;
+				this.state = 642;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 50, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 56, this._ctx);
 			}
 			}
 		}
@@ -2810,13 +2915,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 604;
+			this.state = 644;
 			this.bitwise_and_expression(0);
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 611;
+			this.state = 651;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 51, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 57, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -2827,20 +2932,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Bitwise_xor_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_bitwise_xor_expression);
-					this.state = 606;
+					this.state = 646;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 607;
+					this.state = 647;
 					this.match(PinescriptParser.CARET);
-					this.state = 608;
+					this.state = 648;
 					this.bitwise_and_expression(0);
 					}
 					}
 				}
-				this.state = 613;
+				this.state = 653;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 51, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 57, this._ctx);
 			}
 			}
 		}
@@ -2878,13 +2983,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 615;
+			this.state = 655;
 			this.equality_expression();
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 622;
+			this.state = 662;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 52, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 58, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -2895,20 +3000,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Bitwise_and_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_bitwise_and_expression);
-					this.state = 617;
+					this.state = 657;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 618;
+					this.state = 658;
 					this.match(PinescriptParser.AMP);
-					this.state = 619;
+					this.state = 659;
 					this.equality_expression();
 					}
 					}
 				}
-				this.state = 624;
+				this.state = 664;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 52, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 58, this._ctx);
 			}
 			}
 		}
@@ -2934,23 +3039,23 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 625;
+			this.state = 665;
 			this.inequality_expression();
-			this.state = 629;
+			this.state = 669;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 53, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 59, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 626;
+					this.state = 666;
 					this.equality_trailing_pair();
 					}
 					}
 				}
-				this.state = 631;
+				this.state = 671;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 53, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 59, this._ctx);
 			}
 			}
 		}
@@ -2973,20 +3078,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Equality_trailing_pairContext = new Equality_trailing_pairContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 124, PinescriptParser.RULE_equality_trailing_pair);
 		try {
-			this.state = 634;
+			this.state = 674;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 38:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 632;
+				this.state = 672;
 				this.equal_trailing_pair();
 				}
 				break;
 			case 39:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 633;
+				this.state = 673;
 				this.not_equal_trailing_pair();
 				}
 				break;
@@ -3015,9 +3120,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 636;
+			this.state = 676;
 			this.match(PinescriptParser.EQEQUAL);
-			this.state = 637;
+			this.state = 677;
 			this.inequality_expression();
 			}
 		}
@@ -3042,9 +3147,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 639;
+			this.state = 679;
 			this.match(PinescriptParser.NOTEQUAL);
-			this.state = 640;
+			this.state = 680;
 			this.inequality_expression();
 			}
 		}
@@ -3070,23 +3175,23 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 642;
+			this.state = 682;
 			this.shift_expression(0);
-			this.state = 646;
+			this.state = 686;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 55, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 61, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 643;
+					this.state = 683;
 					this.inequality_trailing_pair();
 					}
 					}
 				}
-				this.state = 648;
+				this.state = 688;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 55, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 61, this._ctx);
 			}
 			}
 		}
@@ -3109,34 +3214,34 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Inequality_trailing_pairContext = new Inequality_trailing_pairContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 132, PinescriptParser.RULE_inequality_trailing_pair);
 		try {
-			this.state = 653;
+			this.state = 693;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 36:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 649;
+				this.state = 689;
 				this.less_than_equal_trailing_pair();
 				}
 				break;
 			case 40:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 650;
+				this.state = 690;
 				this.less_than_trailing_pair();
 				}
 				break;
 			case 37:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 651;
+				this.state = 691;
 				this.greater_than_equal_trailing_pair();
 				}
 				break;
 			case 41:
 				this.enterOuterAlt(localctx, 4);
 				{
-				this.state = 652;
+				this.state = 692;
 				this.greater_than_trailing_pair();
 				}
 				break;
@@ -3165,9 +3270,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 655;
+			this.state = 695;
 			this.match(PinescriptParser.LESSEQUAL);
-			this.state = 656;
+			this.state = 696;
 			this.shift_expression(0);
 			}
 		}
@@ -3192,9 +3297,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 658;
+			this.state = 698;
 			this.match(PinescriptParser.LESS);
-			this.state = 659;
+			this.state = 699;
 			this.shift_expression(0);
 			}
 		}
@@ -3219,9 +3324,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 661;
+			this.state = 701;
 			this.match(PinescriptParser.GREATEREQUAL);
-			this.state = 662;
+			this.state = 702;
 			this.shift_expression(0);
 			}
 		}
@@ -3246,9 +3351,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 664;
+			this.state = 704;
 			this.match(PinescriptParser.GREATER);
-			this.state = 665;
+			this.state = 705;
 			this.shift_expression(0);
 			}
 		}
@@ -3286,13 +3391,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 668;
+			this.state = 708;
 			this.additive_expression(0);
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 676;
+			this.state = 716;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 57, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 63, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -3303,20 +3408,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Shift_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_shift_expression);
-					this.state = 670;
+					this.state = 710;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 671;
+					this.state = 711;
 					this.shift_op();
-					this.state = 672;
+					this.state = 712;
 					this.additive_expression(0);
 					}
 					}
 				}
-				this.state = 678;
+				this.state = 718;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 57, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 63, this._ctx);
 			}
 			}
 		}
@@ -3342,7 +3447,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 679;
+			this.state = 719;
 			_la = this._input.LA(1);
 			if(!(_la===34 || _la===35)) {
 			this._errHandler.recoverInline(this);
@@ -3387,13 +3492,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 682;
+			this.state = 722;
 			this.multiplicative_expression(0);
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 690;
+			this.state = 730;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 58, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 64, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -3404,20 +3509,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Additive_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_additive_expression);
-					this.state = 684;
+					this.state = 724;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 685;
+					this.state = 725;
 					this.additive_op();
-					this.state = 686;
+					this.state = 726;
 					this.multiplicative_expression(0);
 					}
 					}
 				}
-				this.state = 692;
+				this.state = 732;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 58, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 64, this._ctx);
 			}
 			}
 		}
@@ -3443,7 +3548,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 693;
+			this.state = 733;
 			_la = this._input.LA(1);
 			if(!(_la===52 || _la===53)) {
 			this._errHandler.recoverInline(this);
@@ -3488,13 +3593,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this.enterOuterAlt(localctx, 1);
 			{
 			{
-			this.state = 696;
+			this.state = 736;
 			this.unary_expression();
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 704;
+			this.state = 744;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 59, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 65, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -3505,20 +3610,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					{
 					localctx = new Multiplicative_expressionContext(this, _parentctx, _parentState);
 					this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_multiplicative_expression);
-					this.state = 698;
+					this.state = 738;
 					if (!(this.precpred(this._ctx, 2))) {
 						throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 					}
-					this.state = 699;
+					this.state = 739;
 					this.multiplicative_op();
-					this.state = 700;
+					this.state = 740;
 					this.unary_expression();
 					}
 					}
 				}
-				this.state = 706;
+				this.state = 746;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 59, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 65, this._ctx);
 			}
 			}
 		}
@@ -3544,7 +3649,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 707;
+			this.state = 747;
 			_la = this._input.LA(1);
 			if(!(((((_la - 54)) & ~0x1F) === 0 && ((1 << (_la - 54)) & 7) !== 0))) {
 			this._errHandler.recoverInline(this);
@@ -3574,7 +3679,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Unary_expressionContext = new Unary_expressionContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 154, PinescriptParser.RULE_unary_expression);
 		try {
-			this.state = 713;
+			this.state = 753;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 19:
@@ -3583,9 +3688,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 53:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 709;
+				this.state = 749;
 				this.unary_op();
-				this.state = 710;
+				this.state = 750;
 				this.unary_expression();
 				}
 				break;
@@ -3609,7 +3714,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 66:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 712;
+				this.state = 752;
 				this.primary_expression(0);
 				}
 				break;
@@ -3639,7 +3744,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 715;
+			this.state = 755;
 			_la = this._input.LA(1);
 			if(!(_la===19 || ((((_la - 48)) & ~0x1F) === 0 && ((1 << (_la - 48)) & 49) !== 0))) {
 			this._errHandler.recoverInline(this);
@@ -3689,13 +3794,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 			this._ctx = localctx;
 			_prevctx = localctx;
 
-			this.state = 718;
+			this.state = 758;
 			this.atomic_expression();
 			}
 			this._ctx.stop = this._input.LT(-1);
-			this.state = 739;
+			this.state = 779;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 64, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 70, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					if (this._parseListeners != null) {
@@ -3703,20 +3808,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 					}
 					_prevctx = localctx;
 					{
-					this.state = 737;
+					this.state = 777;
 					this._errHandler.sync(this);
-					switch ( this._interp.adaptivePredict(this._input, 63, this._ctx) ) {
+					switch ( this._interp.adaptivePredict(this._input, 69, this._ctx) ) {
 					case 1:
 						{
 						localctx = new Primary_expression_attributeContext(this, new Primary_expressionContext(this, _parentctx, _parentState));
 						this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_primary_expression);
-						this.state = 720;
+						this.state = 760;
 						if (!(this.precpred(this._ctx, 4))) {
 							throw this.createFailedPredicateException("this.precpred(this._ctx, 4)");
 						}
-						this.state = 721;
+						this.state = 761;
 						this.match(PinescriptParser.DOT);
-						this.state = 722;
+						this.state = 762;
 						this.name_load();
 						}
 						break;
@@ -3724,33 +3829,33 @@ export default class PinescriptParser extends PinescriptParserBase {
 						{
 						localctx = new Primary_expression_callContext(this, new Primary_expressionContext(this, _parentctx, _parentState));
 						this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_primary_expression);
-						this.state = 723;
+						this.state = 763;
 						if (!(this.precpred(this._ctx, 3))) {
 							throw this.createFailedPredicateException("this.precpred(this._ctx, 3)");
 						}
-						this.state = 725;
+						this.state = 765;
 						this._errHandler.sync(this);
 						_la = this._input.LA(1);
 						if (_la===40) {
 							{
-							this.state = 724;
+							this.state = 764;
 							this.template_spec_suffix();
 							}
 						}
 
-						this.state = 727;
+						this.state = 767;
 						this.match(PinescriptParser.LPAR);
-						this.state = 729;
+						this.state = 769;
 						this._errHandler.sync(this);
 						_la = this._input.LA(1);
 						if (((((_la - 4)) & ~0x1F) === 0 && ((1 << (_la - 4)) & 343335245) !== 0) || ((((_la - 48)) & ~0x1F) === 0 && ((1 << (_la - 48)) & 491569) !== 0)) {
 							{
-							this.state = 728;
+							this.state = 768;
 							this.argument_list();
 							}
 						}
 
-						this.state = 731;
+						this.state = 771;
 						this.match(PinescriptParser.RPAR);
 						}
 						break;
@@ -3758,24 +3863,24 @@ export default class PinescriptParser extends PinescriptParserBase {
 						{
 						localctx = new Primary_expression_subscriptContext(this, new Primary_expressionContext(this, _parentctx, _parentState));
 						this.pushNewRecursionContext(localctx, _startState, PinescriptParser.RULE_primary_expression);
-						this.state = 732;
+						this.state = 772;
 						if (!(this.precpred(this._ctx, 2))) {
 							throw this.createFailedPredicateException("this.precpred(this._ctx, 2)");
 						}
-						this.state = 733;
+						this.state = 773;
 						this.match(PinescriptParser.LSQB);
-						this.state = 734;
+						this.state = 774;
 						this.subscript_slice();
-						this.state = 735;
+						this.state = 775;
 						this.match(PinescriptParser.RSQB);
 						}
 						break;
 					}
 					}
 				}
-				this.state = 741;
+				this.state = 781;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 64, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 70, this._ctx);
 			}
 			}
 		}
@@ -3802,32 +3907,32 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 742;
+			this.state = 782;
 			this.argument_definition();
-			this.state = 747;
+			this.state = 787;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 65, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 71, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 743;
+					this.state = 783;
 					this.match(PinescriptParser.COMMA);
-					this.state = 744;
+					this.state = 784;
 					this.argument_definition();
 					}
 					}
 				}
-				this.state = 749;
+				this.state = 789;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 65, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 71, this._ctx);
 			}
-			this.state = 751;
+			this.state = 791;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 750;
+				this.state = 790;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
@@ -3855,19 +3960,19 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 756;
+			this.state = 796;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 67, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 73, this._ctx) ) {
 			case 1:
 				{
-				this.state = 753;
+				this.state = 793;
 				this.name_store();
-				this.state = 754;
+				this.state = 794;
 				this.match(PinescriptParser.EQUAL);
 				}
 				break;
 			}
-			this.state = 758;
+			this.state = 798;
 			this.expression();
 			}
 		}
@@ -3894,32 +3999,32 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 760;
+			this.state = 800;
 			this.expression();
-			this.state = 765;
+			this.state = 805;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 68, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 74, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 761;
+					this.state = 801;
 					this.match(PinescriptParser.COMMA);
-					this.state = 762;
+					this.state = 802;
 					this.expression();
 					}
 					}
 				}
-				this.state = 767;
+				this.state = 807;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 68, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 74, this._ctx);
 			}
-			this.state = 769;
+			this.state = 809;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 768;
+				this.state = 808;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
@@ -3945,7 +4050,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Atomic_expressionContext = new Atomic_expressionContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 166, PinescriptParser.RULE_atomic_expression);
 		try {
-			this.state = 775;
+			this.state = 815;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 4:
@@ -3961,7 +4066,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 63:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 771;
+				this.state = 811;
 				this.name_load();
 				}
 				break;
@@ -3972,21 +4077,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 66:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 772;
+				this.state = 812;
 				this.literal_expression();
 				}
 				break;
 			case 30:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 773;
+				this.state = 813;
 				this.grouped_expression();
 				}
 				break;
 			case 32:
 				this.enterOuterAlt(localctx, 4);
 				{
-				this.state = 774;
+				this.state = 814;
 				this.tuple_expression();
 				}
 				break;
@@ -4013,20 +4118,20 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Literal_expressionContext = new Literal_expressionContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 168, PinescriptParser.RULE_literal_expression);
 		try {
-			this.state = 781;
+			this.state = 821;
 			this._errHandler.sync(this);
 			switch (this._input.LA(1)) {
 			case 64:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 777;
+				this.state = 817;
 				this.literal_number();
 				}
 				break;
 			case 65:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 778;
+				this.state = 818;
 				this.literal_string();
 				}
 				break;
@@ -4034,14 +4139,14 @@ export default class PinescriptParser extends PinescriptParserBase {
 			case 26:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 779;
+				this.state = 819;
 				this.literal_bool();
 				}
 				break;
 			case 66:
 				this.enterOuterAlt(localctx, 4);
 				{
-				this.state = 780;
+				this.state = 820;
 				this.literal_color();
 				}
 				break;
@@ -4070,7 +4175,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 783;
+			this.state = 823;
 			this.match(PinescriptParser.NUMBER);
 			}
 		}
@@ -4095,7 +4200,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 785;
+			this.state = 825;
 			this.match(PinescriptParser.STRING);
 			}
 		}
@@ -4121,7 +4226,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 787;
+			this.state = 827;
 			_la = this._input.LA(1);
 			if(!(_la===12 || _la===26)) {
 			this._errHandler.recoverInline(this);
@@ -4153,7 +4258,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 789;
+			this.state = 829;
 			this.match(PinescriptParser.COLOR);
 			}
 		}
@@ -4178,11 +4283,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 791;
+			this.state = 831;
 			this.match(PinescriptParser.LPAR);
-			this.state = 792;
+			this.state = 832;
 			this.expression();
-			this.state = 793;
+			this.state = 833;
 			this.match(PinescriptParser.RPAR);
 			}
 		}
@@ -4209,39 +4314,39 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 795;
+			this.state = 835;
 			this.match(PinescriptParser.LSQB);
-			this.state = 807;
+			this.state = 847;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (((((_la - 4)) & ~0x1F) === 0 && ((1 << (_la - 4)) & 343335245) !== 0) || ((((_la - 48)) & ~0x1F) === 0 && ((1 << (_la - 48)) & 491569) !== 0)) {
 				{
-				this.state = 796;
+				this.state = 836;
 				this.expression();
-				this.state = 801;
+				this.state = 841;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 72, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 78, this._ctx);
 				while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 					if (_alt === 1) {
 						{
 						{
-						this.state = 797;
+						this.state = 837;
 						this.match(PinescriptParser.COMMA);
-						this.state = 798;
+						this.state = 838;
 						this.expression();
 						}
 						}
 					}
-					this.state = 803;
+					this.state = 843;
 					this._errHandler.sync(this);
-					_alt = this._interp.adaptivePredict(this._input, 72, this._ctx);
+					_alt = this._interp.adaptivePredict(this._input, 78, this._ctx);
 				}
-				this.state = 805;
+				this.state = 845;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 				if (_la===45) {
 					{
-					this.state = 804;
+					this.state = 844;
 					this.match(PinescriptParser.COMMA);
 					}
 				}
@@ -4249,7 +4354,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 				}
 			}
 
-			this.state = 809;
+			this.state = 849;
 			this.match(PinescriptParser.RSQB);
 			}
 		}
@@ -4275,26 +4380,26 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 811;
+			this.state = 851;
 			this.match(PinescriptParser.IMPORT);
-			this.state = 812;
+			this.state = 852;
 			this.name();
-			this.state = 813;
+			this.state = 853;
 			this.match(PinescriptParser.SLASH);
-			this.state = 814;
+			this.state = 854;
 			this.name();
-			this.state = 815;
+			this.state = 855;
 			this.match(PinescriptParser.SLASH);
-			this.state = 816;
+			this.state = 856;
 			this.literal_number();
-			this.state = 819;
+			this.state = 859;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===4) {
 				{
-				this.state = 817;
+				this.state = 857;
 				this.match(PinescriptParser.AS);
-				this.state = 818;
+				this.state = 858;
 				this.name();
 				}
 			}
@@ -4322,7 +4427,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 821;
+			this.state = 861;
 			this.match(PinescriptParser.BREAK);
 			}
 		}
@@ -4347,7 +4452,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 823;
+			this.state = 863;
 			this.match(PinescriptParser.CONTINUE);
 			}
 		}
@@ -4371,30 +4476,45 @@ export default class PinescriptParser extends PinescriptParserBase {
 		this.enterRule(localctx, 188, PinescriptParser.RULE_variable_declaration);
 		let _la: number;
 		try {
-			this.enterOuterAlt(localctx, 1);
-			{
-			this.state = 826;
+			this.state = 875;
 			this._errHandler.sync(this);
-			_la = this._input.LA(1);
-			if (_la===27 || _la===28) {
-				{
-				this.state = 825;
-				this.declaration_mode();
-				}
-			}
-
-			this.state = 829;
-			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 77, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 84, this._ctx) ) {
 			case 1:
+				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 828;
+				this.state = 866;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===27 || _la===28) {
+					{
+					this.state = 865;
+					this.declaration_mode();
+					}
+				}
+
+				this.state = 868;
 				this.type_specification();
+				this.state = 869;
+				this.name_store();
 				}
 				break;
-			}
-			this.state = 831;
-			this.name_store();
+			case 2:
+				this.enterOuterAlt(localctx, 2);
+				{
+				this.state = 872;
+				this._errHandler.sync(this);
+				_la = this._input.LA(1);
+				if (_la===27 || _la===28) {
+					{
+					this.state = 871;
+					this.declaration_mode();
+					}
+				}
+
+				this.state = 874;
+				this.name_store();
+				}
+				break;
 			}
 		}
 		catch (re) {
@@ -4420,39 +4540,39 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 833;
+			this.state = 877;
 			this.match(PinescriptParser.LSQB);
-			this.state = 834;
+			this.state = 878;
 			this.name_store();
-			this.state = 839;
+			this.state = 883;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 78, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 85, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 835;
+					this.state = 879;
 					this.match(PinescriptParser.COMMA);
-					this.state = 836;
+					this.state = 880;
 					this.name_store();
 					}
 					}
 				}
-				this.state = 841;
+				this.state = 885;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 78, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 85, this._ctx);
 			}
-			this.state = 843;
+			this.state = 887;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 842;
+				this.state = 886;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
 
-			this.state = 845;
+			this.state = 889;
 			this.match(PinescriptParser.RSQB);
 			}
 		}
@@ -4478,7 +4598,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 847;
+			this.state = 891;
 			_la = this._input.LA(1);
 			if(!(_la===27 || _la===28)) {
 			this._errHandler.recoverInline(this);
@@ -4508,34 +4628,34 @@ export default class PinescriptParser extends PinescriptParserBase {
 		let localctx: Assignment_targetContext = new Assignment_targetContext(this, this._ctx, this.state);
 		this.enterRule(localctx, 194, PinescriptParser.RULE_assignment_target);
 		try {
-			this.state = 853;
+			this.state = 897;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 80, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 87, this._ctx) ) {
 			case 1:
 				this.enterOuterAlt(localctx, 1);
 				{
-				this.state = 849;
+				this.state = 893;
 				this.assignment_target_attribute();
 				}
 				break;
 			case 2:
 				this.enterOuterAlt(localctx, 2);
 				{
-				this.state = 850;
+				this.state = 894;
 				this.assignment_target_subscript();
 				}
 				break;
 			case 3:
 				this.enterOuterAlt(localctx, 3);
 				{
-				this.state = 851;
+				this.state = 895;
 				this.assignment_target_name();
 				}
 				break;
 			case 4:
 				this.enterOuterAlt(localctx, 4);
 				{
-				this.state = 852;
+				this.state = 896;
 				this.assignment_target_group();
 				}
 				break;
@@ -4562,11 +4682,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 855;
+			this.state = 899;
 			this.primary_expression(0);
-			this.state = 856;
+			this.state = 900;
 			this.match(PinescriptParser.DOT);
-			this.state = 857;
+			this.state = 901;
 			this.name_store();
 			}
 		}
@@ -4591,13 +4711,13 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 859;
+			this.state = 903;
 			this.primary_expression(0);
-			this.state = 860;
+			this.state = 904;
 			this.match(PinescriptParser.LSQB);
-			this.state = 861;
+			this.state = 905;
 			this.subscript_slice();
-			this.state = 862;
+			this.state = 906;
 			this.match(PinescriptParser.RSQB);
 			}
 		}
@@ -4622,7 +4742,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 864;
+			this.state = 908;
 			this.name_store();
 			}
 		}
@@ -4647,11 +4767,11 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 866;
+			this.state = 910;
 			this.match(PinescriptParser.LPAR);
-			this.state = 867;
+			this.state = 911;
 			this.assignment_target();
-			this.state = 868;
+			this.state = 912;
 			this.match(PinescriptParser.RPAR);
 			}
 		}
@@ -4677,7 +4797,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 870;
+			this.state = 914;
 			_la = this._input.LA(1);
 			if(!(((((_la - 57)) & ~0x1F) === 0 && ((1 << (_la - 57)) & 31) !== 0))) {
 			this._errHandler.recoverInline(this);
@@ -4710,34 +4830,34 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 873;
+			this.state = 917;
 			this._errHandler.sync(this);
-			switch ( this._interp.adaptivePredict(this._input, 81, this._ctx) ) {
+			switch ( this._interp.adaptivePredict(this._input, 88, this._ctx) ) {
 			case 1:
 				{
-				this.state = 872;
+				this.state = 916;
 				this.type_qualifier();
 				}
 				break;
 			}
-			this.state = 875;
+			this.state = 919;
 			this.attributed_type_name();
-			this.state = 877;
+			this.state = 921;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===40) {
 				{
-				this.state = 876;
+				this.state = 920;
 				this.template_spec_suffix();
 				}
 			}
 
-			this.state = 880;
+			this.state = 924;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===32) {
 				{
-				this.state = 879;
+				this.state = 923;
 				this.array_type_suffix();
 				}
 			}
@@ -4766,7 +4886,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 882;
+			this.state = 926;
 			_la = this._input.LA(1);
 			if(!((((_la) & ~0x1F) === 0 && ((1 << _la) & 6422656) !== 0))) {
 			this._errHandler.recoverInline(this);
@@ -4799,21 +4919,21 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 884;
+			this.state = 928;
 			this.name_load();
-			this.state = 889;
+			this.state = 933;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			while (_la===44) {
 				{
 				{
-				this.state = 885;
+				this.state = 929;
 				this.match(PinescriptParser.DOT);
-				this.state = 886;
+				this.state = 930;
 				this.name_load();
 				}
 				}
-				this.state = 891;
+				this.state = 935;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			}
@@ -4841,19 +4961,19 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 892;
+			this.state = 936;
 			this.match(PinescriptParser.LESS);
-			this.state = 894;
+			this.state = 938;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if ((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63) {
 				{
-				this.state = 893;
+				this.state = 937;
 				this.type_argument_list();
 				}
 			}
 
-			this.state = 896;
+			this.state = 940;
 			this.match(PinescriptParser.GREATER);
 			}
 		}
@@ -4878,9 +4998,9 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 898;
+			this.state = 942;
 			this.match(PinescriptParser.LSQB);
-			this.state = 899;
+			this.state = 943;
 			this.match(PinescriptParser.RSQB);
 			}
 		}
@@ -4907,32 +5027,32 @@ export default class PinescriptParser extends PinescriptParserBase {
 			let _alt: number;
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 901;
+			this.state = 945;
 			this.type_specification();
-			this.state = 906;
+			this.state = 950;
 			this._errHandler.sync(this);
-			_alt = this._interp.adaptivePredict(this._input, 86, this._ctx);
+			_alt = this._interp.adaptivePredict(this._input, 93, this._ctx);
 			while (_alt !== 2 && _alt !== ATN.INVALID_ALT_NUMBER) {
 				if (_alt === 1) {
 					{
 					{
-					this.state = 902;
+					this.state = 946;
 					this.match(PinescriptParser.COMMA);
-					this.state = 903;
+					this.state = 947;
 					this.type_specification();
 					}
 					}
 				}
-				this.state = 908;
+				this.state = 952;
 				this._errHandler.sync(this);
-				_alt = this._interp.adaptivePredict(this._input, 86, this._ctx);
+				_alt = this._interp.adaptivePredict(this._input, 93, this._ctx);
 			}
-			this.state = 910;
+			this.state = 954;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			if (_la===45) {
 				{
-				this.state = 909;
+				this.state = 953;
 				this.match(PinescriptParser.COMMA);
 				}
 			}
@@ -4961,7 +5081,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 912;
+			this.state = 956;
 			_la = this._input.LA(1);
 			if(!((((_la) & ~0x1F) === 0 && ((1 << _la) & 57017552) !== 0) || _la===63)) {
 			this._errHandler.recoverInline(this);
@@ -4993,7 +5113,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 914;
+			this.state = 958;
 			this.name();
 			}
 		}
@@ -5018,7 +5138,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 916;
+			this.state = 960;
 			this.name();
 			}
 		}
@@ -5044,17 +5164,17 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 919;
+			this.state = 963;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
 			do {
 				{
 				{
-				this.state = 918;
+				this.state = 962;
 				this.comment();
 				}
 				}
-				this.state = 921;
+				this.state = 965;
 				this._errHandler.sync(this);
 				_la = this._input.LA(1);
 			} while (_la===69);
@@ -5081,7 +5201,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		try {
 			this.enterOuterAlt(localctx, 1);
 			{
-			this.state = 923;
+			this.state = 967;
 			this.match(PinescriptParser.COMMENT);
 			}
 		}
@@ -5173,7 +5293,7 @@ export default class PinescriptParser extends PinescriptParserBase {
 		return true;
 	}
 
-	public static readonly _serializedATN: number[] = [4,1,71,926,2,0,7,0,2,
+	public static readonly _serializedATN: number[] = [4,1,71,970,2,0,7,0,2,
 	1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,7,7,7,2,8,7,8,2,9,7,9,2,
 	10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,2,14,7,14,2,15,7,15,2,16,7,16,2,17,
 	7,17,2,18,7,18,2,19,7,19,2,20,7,20,2,21,7,21,2,22,7,22,2,23,7,23,2,24,7,
@@ -5196,283 +5316,298 @@ export default class PinescriptParser extends PinescriptParserBase {
 	1,7,1,8,1,8,1,8,5,8,281,8,8,10,8,12,8,284,9,8,1,8,1,8,1,8,1,9,1,9,1,9,1,
 	9,1,9,3,9,294,8,9,1,10,1,10,1,10,3,10,299,8,10,1,11,1,11,3,11,303,8,11,
 	1,12,3,12,306,8,12,1,12,1,12,1,12,1,12,1,13,1,13,1,13,1,13,1,14,1,14,1,
-	14,1,14,1,15,1,15,1,15,1,15,1,16,3,16,325,8,16,1,16,3,16,328,8,16,1,16,
-	1,16,1,16,3,16,333,8,16,1,16,1,16,1,16,1,16,1,17,1,17,1,17,5,17,342,8,17,
-	10,17,12,17,345,9,17,1,17,3,17,348,8,17,1,18,3,18,351,8,18,1,18,1,18,1,
-	18,3,18,356,8,18,1,19,3,19,359,8,19,1,19,1,19,3,19,363,8,19,1,19,1,19,1,
-	19,3,19,368,8,19,1,19,1,19,1,19,1,19,1,20,1,20,1,20,5,20,377,8,20,10,20,
-	12,20,380,9,20,1,20,3,20,383,8,20,1,21,1,21,1,21,1,21,3,21,389,8,21,1,22,
-	3,22,392,8,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,23,4,23,402,8,23,11,
-	23,12,23,403,1,24,3,24,407,8,24,1,24,1,24,1,24,1,24,3,24,413,8,24,1,24,
-	1,24,1,25,3,25,418,8,25,1,25,1,25,1,25,1,25,1,25,1,25,1,25,1,26,4,26,428,
-	8,26,11,26,12,26,429,1,27,1,27,1,27,3,27,435,8,27,1,27,1,27,1,28,1,28,1,
-	28,1,28,3,28,443,8,28,1,29,1,29,1,30,1,30,1,31,1,31,1,31,1,31,3,31,453,
-	8,31,1,32,1,32,1,32,1,32,1,32,3,32,460,8,32,1,33,1,33,3,33,464,8,33,1,34,
-	1,34,1,34,1,35,1,35,3,35,471,8,35,1,36,1,36,1,36,1,36,1,36,1,36,1,36,1,
-	36,3,36,481,8,36,1,36,1,36,1,37,1,37,1,37,1,37,1,37,1,37,1,38,1,38,1,38,
-	1,38,1,38,3,38,496,8,38,1,39,1,39,1,39,1,39,1,40,1,40,3,40,504,8,40,1,40,
-	1,40,1,40,1,40,1,40,1,41,4,41,512,8,41,11,41,12,41,513,1,41,3,41,517,8,
-	41,1,42,1,42,1,42,1,42,1,43,1,43,1,43,1,44,1,44,3,44,528,8,44,1,45,1,45,
-	1,45,1,45,1,45,1,46,1,46,1,47,1,47,1,47,3,47,540,8,47,1,48,1,48,3,48,544,
-	8,48,1,49,3,49,547,8,49,1,49,1,49,1,49,1,49,1,50,1,50,1,50,1,50,1,51,1,
-	51,1,51,1,51,1,52,1,52,1,52,1,52,1,53,1,53,1,54,1,54,1,55,1,55,1,55,1,55,
-	1,55,1,55,3,55,575,8,55,1,56,1,56,1,56,5,56,580,8,56,10,56,12,56,583,9,
-	56,1,57,1,57,1,57,5,57,588,8,57,10,57,12,57,591,9,57,1,58,1,58,1,58,1,58,
-	1,58,1,58,5,58,599,8,58,10,58,12,58,602,9,58,1,59,1,59,1,59,1,59,1,59,1,
-	59,5,59,610,8,59,10,59,12,59,613,9,59,1,60,1,60,1,60,1,60,1,60,1,60,5,60,
-	621,8,60,10,60,12,60,624,9,60,1,61,1,61,5,61,628,8,61,10,61,12,61,631,9,
-	61,1,62,1,62,3,62,635,8,62,1,63,1,63,1,63,1,64,1,64,1,64,1,65,1,65,5,65,
-	645,8,65,10,65,12,65,648,9,65,1,66,1,66,1,66,1,66,3,66,654,8,66,1,67,1,
-	67,1,67,1,68,1,68,1,68,1,69,1,69,1,69,1,70,1,70,1,70,1,71,1,71,1,71,1,71,
-	1,71,1,71,1,71,5,71,675,8,71,10,71,12,71,678,9,71,1,72,1,72,1,73,1,73,1,
-	73,1,73,1,73,1,73,1,73,5,73,689,8,73,10,73,12,73,692,9,73,1,74,1,74,1,75,
-	1,75,1,75,1,75,1,75,1,75,1,75,5,75,703,8,75,10,75,12,75,706,9,75,1,76,1,
-	76,1,77,1,77,1,77,1,77,3,77,714,8,77,1,78,1,78,1,79,1,79,1,79,1,79,1,79,
-	1,79,1,79,1,79,3,79,726,8,79,1,79,1,79,3,79,730,8,79,1,79,1,79,1,79,1,79,
-	1,79,1,79,5,79,738,8,79,10,79,12,79,741,9,79,1,80,1,80,1,80,5,80,746,8,
-	80,10,80,12,80,749,9,80,1,80,3,80,752,8,80,1,81,1,81,1,81,3,81,757,8,81,
-	1,81,1,81,1,82,1,82,1,82,5,82,764,8,82,10,82,12,82,767,9,82,1,82,3,82,770,
-	8,82,1,83,1,83,1,83,1,83,3,83,776,8,83,1,84,1,84,1,84,1,84,3,84,782,8,84,
-	1,85,1,85,1,86,1,86,1,87,1,87,1,88,1,88,1,89,1,89,1,89,1,89,1,90,1,90,1,
-	90,1,90,5,90,800,8,90,10,90,12,90,803,9,90,1,90,3,90,806,8,90,3,90,808,
-	8,90,1,90,1,90,1,91,1,91,1,91,1,91,1,91,1,91,1,91,1,91,3,91,820,8,91,1,
-	92,1,92,1,93,1,93,1,94,3,94,827,8,94,1,94,3,94,830,8,94,1,94,1,94,1,95,
-	1,95,1,95,1,95,5,95,838,8,95,10,95,12,95,841,9,95,1,95,3,95,844,8,95,1,
-	95,1,95,1,96,1,96,1,97,1,97,1,97,1,97,3,97,854,8,97,1,98,1,98,1,98,1,98,
-	1,99,1,99,1,99,1,99,1,99,1,100,1,100,1,101,1,101,1,101,1,101,1,102,1,102,
-	1,103,3,103,874,8,103,1,103,1,103,3,103,878,8,103,1,103,3,103,881,8,103,
-	1,104,1,104,1,105,1,105,1,105,5,105,888,8,105,10,105,12,105,891,9,105,1,
-	106,1,106,3,106,895,8,106,1,106,1,106,1,107,1,107,1,107,1,108,1,108,1,108,
-	5,108,905,8,108,10,108,12,108,908,9,108,1,108,3,108,911,8,108,1,109,1,109,
-	1,110,1,110,1,111,1,111,1,112,4,112,920,8,112,11,112,12,112,921,1,113,1,
-	113,1,113,0,7,116,118,120,142,146,150,158,114,0,2,4,6,8,10,12,14,16,18,
-	20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,
-	68,70,72,74,76,78,80,82,84,86,88,90,92,94,96,98,100,102,104,106,108,110,
-	112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,
-	148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,
-	184,186,188,190,192,194,196,198,200,202,204,206,208,210,212,214,216,218,
-	220,222,224,226,0,10,2,0,42,42,62,62,1,0,34,35,1,0,52,53,1,0,54,56,3,0,
-	19,19,48,48,52,53,2,0,12,12,26,26,1,0,27,28,1,0,57,61,3,0,7,7,17,17,21,
-	22,7,0,4,4,6,7,10,10,17,18,21,22,24,25,63,63,922,0,228,1,0,0,0,2,231,1,
-	0,0,0,4,235,1,0,0,0,6,242,1,0,0,0,8,247,1,0,0,0,10,254,1,0,0,0,12,262,1,
-	0,0,0,14,264,1,0,0,0,16,277,1,0,0,0,18,293,1,0,0,0,20,298,1,0,0,0,22,302,
-	1,0,0,0,24,305,1,0,0,0,26,311,1,0,0,0,28,315,1,0,0,0,30,319,1,0,0,0,32,
-	324,1,0,0,0,34,338,1,0,0,0,36,350,1,0,0,0,38,358,1,0,0,0,40,373,1,0,0,0,
-	42,388,1,0,0,0,44,391,1,0,0,0,46,401,1,0,0,0,48,406,1,0,0,0,50,417,1,0,
-	0,0,52,427,1,0,0,0,54,431,1,0,0,0,56,442,1,0,0,0,58,444,1,0,0,0,60,446,
-	1,0,0,0,62,448,1,0,0,0,64,454,1,0,0,0,66,463,1,0,0,0,68,465,1,0,0,0,70,
-	470,1,0,0,0,72,472,1,0,0,0,74,484,1,0,0,0,76,495,1,0,0,0,78,497,1,0,0,0,
-	80,501,1,0,0,0,82,511,1,0,0,0,84,518,1,0,0,0,86,522,1,0,0,0,88,527,1,0,
-	0,0,90,529,1,0,0,0,92,534,1,0,0,0,94,539,1,0,0,0,96,543,1,0,0,0,98,546,
-	1,0,0,0,100,552,1,0,0,0,102,556,1,0,0,0,104,560,1,0,0,0,106,564,1,0,0,0,
-	108,566,1,0,0,0,110,568,1,0,0,0,112,576,1,0,0,0,114,584,1,0,0,0,116,592,
-	1,0,0,0,118,603,1,0,0,0,120,614,1,0,0,0,122,625,1,0,0,0,124,634,1,0,0,0,
-	126,636,1,0,0,0,128,639,1,0,0,0,130,642,1,0,0,0,132,653,1,0,0,0,134,655,
-	1,0,0,0,136,658,1,0,0,0,138,661,1,0,0,0,140,664,1,0,0,0,142,667,1,0,0,0,
-	144,679,1,0,0,0,146,681,1,0,0,0,148,693,1,0,0,0,150,695,1,0,0,0,152,707,
-	1,0,0,0,154,713,1,0,0,0,156,715,1,0,0,0,158,717,1,0,0,0,160,742,1,0,0,0,
-	162,756,1,0,0,0,164,760,1,0,0,0,166,775,1,0,0,0,168,781,1,0,0,0,170,783,
-	1,0,0,0,172,785,1,0,0,0,174,787,1,0,0,0,176,789,1,0,0,0,178,791,1,0,0,0,
-	180,795,1,0,0,0,182,811,1,0,0,0,184,821,1,0,0,0,186,823,1,0,0,0,188,826,
-	1,0,0,0,190,833,1,0,0,0,192,847,1,0,0,0,194,853,1,0,0,0,196,855,1,0,0,0,
-	198,859,1,0,0,0,200,864,1,0,0,0,202,866,1,0,0,0,204,870,1,0,0,0,206,873,
-	1,0,0,0,208,882,1,0,0,0,210,884,1,0,0,0,212,892,1,0,0,0,214,898,1,0,0,0,
-	216,901,1,0,0,0,218,912,1,0,0,0,220,914,1,0,0,0,222,916,1,0,0,0,224,919,
-	1,0,0,0,226,923,1,0,0,0,228,229,3,2,1,0,229,1,1,0,0,0,230,232,3,8,4,0,231,
-	230,1,0,0,0,231,232,1,0,0,0,232,233,1,0,0,0,233,234,5,0,0,1,234,3,1,0,0,
-	0,235,237,3,106,53,0,236,238,5,67,0,0,237,236,1,0,0,0,237,238,1,0,0,0,238,
-	239,1,0,0,0,239,240,5,0,0,1,240,5,1,0,0,0,241,243,3,224,112,0,242,241,1,
-	0,0,0,242,243,1,0,0,0,243,244,1,0,0,0,244,245,5,0,0,1,245,7,1,0,0,0,246,
-	248,3,10,5,0,247,246,1,0,0,0,248,249,1,0,0,0,249,247,1,0,0,0,249,250,1,
-	0,0,0,250,9,1,0,0,0,251,255,3,12,6,0,252,255,3,14,7,0,253,255,3,16,8,0,
-	254,251,1,0,0,0,254,252,1,0,0,0,254,253,1,0,0,0,255,11,1,0,0,0,256,263,
-	3,20,10,0,257,263,3,44,22,0,258,263,3,50,25,0,259,263,3,58,29,0,260,263,
-	3,38,19,0,261,263,3,32,16,0,262,256,1,0,0,0,262,257,1,0,0,0,262,258,1,0,
-	0,0,262,259,1,0,0,0,262,260,1,0,0,0,262,261,1,0,0,0,263,13,1,0,0,0,264,
-	269,3,18,9,0,265,266,5,45,0,0,266,268,3,18,9,0,267,265,1,0,0,0,268,271,
-	1,0,0,0,269,267,1,0,0,0,269,270,1,0,0,0,270,273,1,0,0,0,271,269,1,0,0,0,
-	272,274,5,45,0,0,273,272,1,0,0,0,273,274,1,0,0,0,274,275,1,0,0,0,275,276,
-	5,67,0,0,276,15,1,0,0,0,277,282,3,18,9,0,278,279,5,45,0,0,279,281,3,18,
-	9,0,280,278,1,0,0,0,281,284,1,0,0,0,282,280,1,0,0,0,282,283,1,0,0,0,283,
-	285,1,0,0,0,284,282,1,0,0,0,285,286,5,45,0,0,286,287,3,56,28,0,287,17,1,
-	0,0,0,288,294,3,94,47,0,289,294,3,108,54,0,290,294,3,182,91,0,291,294,3,
-	184,92,0,292,294,3,186,93,0,293,288,1,0,0,0,293,289,1,0,0,0,293,290,1,0,
-	0,0,293,291,1,0,0,0,293,292,1,0,0,0,294,19,1,0,0,0,295,299,3,22,11,0,296,
-	299,3,28,14,0,297,299,3,30,15,0,298,295,1,0,0,0,298,296,1,0,0,0,298,297,
-	1,0,0,0,299,21,1,0,0,0,300,303,3,24,12,0,301,303,3,26,13,0,302,300,1,0,
-	0,0,302,301,1,0,0,0,303,23,1,0,0,0,304,306,5,11,0,0,305,304,1,0,0,0,305,
-	306,1,0,0,0,306,307,1,0,0,0,307,308,3,188,94,0,308,309,5,42,0,0,309,310,
-	3,60,30,0,310,25,1,0,0,0,311,312,3,190,95,0,312,313,5,42,0,0,313,314,3,
-	60,30,0,314,27,1,0,0,0,315,316,3,158,79,0,316,317,5,62,0,0,317,318,3,60,
-	30,0,318,29,1,0,0,0,319,320,3,158,79,0,320,321,3,204,102,0,321,322,3,60,
-	30,0,322,31,1,0,0,0,323,325,5,11,0,0,324,323,1,0,0,0,324,325,1,0,0,0,325,
-	327,1,0,0,0,326,328,3,206,103,0,327,326,1,0,0,0,327,328,1,0,0,0,328,329,
-	1,0,0,0,329,330,3,218,109,0,330,332,5,30,0,0,331,333,3,34,17,0,332,331,
-	1,0,0,0,332,333,1,0,0,0,333,334,1,0,0,0,334,335,5,31,0,0,335,336,5,43,0,
-	0,336,337,3,88,44,0,337,33,1,0,0,0,338,343,3,36,18,0,339,340,5,45,0,0,340,
-	342,3,36,18,0,341,339,1,0,0,0,342,345,1,0,0,0,343,341,1,0,0,0,343,344,1,
-	0,0,0,344,347,1,0,0,0,345,343,1,0,0,0,346,348,5,45,0,0,347,346,1,0,0,0,
-	347,348,1,0,0,0,348,35,1,0,0,0,349,351,3,206,103,0,350,349,1,0,0,0,350,
-	351,1,0,0,0,351,352,1,0,0,0,352,355,3,222,111,0,353,354,5,42,0,0,354,356,
-	3,106,53,0,355,353,1,0,0,0,355,356,1,0,0,0,356,37,1,0,0,0,357,359,5,11,
-	0,0,358,357,1,0,0,0,358,359,1,0,0,0,359,360,1,0,0,0,360,362,5,18,0,0,361,
-	363,3,206,103,0,362,361,1,0,0,0,362,363,1,0,0,0,363,364,1,0,0,0,364,365,
-	3,218,109,0,365,367,5,30,0,0,366,368,3,40,20,0,367,366,1,0,0,0,367,368,
-	1,0,0,0,368,369,1,0,0,0,369,370,5,31,0,0,370,371,5,43,0,0,371,372,3,88,
-	44,0,372,39,1,0,0,0,373,378,3,42,21,0,374,375,5,45,0,0,375,377,3,42,21,
-	0,376,374,1,0,0,0,377,380,1,0,0,0,378,376,1,0,0,0,378,379,1,0,0,0,379,382,
-	1,0,0,0,380,378,1,0,0,0,381,383,5,45,0,0,382,381,1,0,0,0,382,383,1,0,0,
-	0,383,41,1,0,0,0,384,385,3,206,103,0,385,386,3,222,111,0,386,389,1,0,0,
-	0,387,389,3,36,18,0,388,384,1,0,0,0,388,387,1,0,0,0,389,43,1,0,0,0,390,
-	392,5,11,0,0,391,390,1,0,0,0,391,392,1,0,0,0,392,393,1,0,0,0,393,394,5,
-	25,0,0,394,395,3,218,109,0,395,396,5,67,0,0,396,397,5,1,0,0,397,398,3,46,
-	23,0,398,399,5,2,0,0,399,45,1,0,0,0,400,402,3,48,24,0,401,400,1,0,0,0,402,
-	403,1,0,0,0,403,401,1,0,0,0,403,404,1,0,0,0,404,47,1,0,0,0,405,407,5,28,
-	0,0,406,405,1,0,0,0,406,407,1,0,0,0,407,408,1,0,0,0,408,409,3,206,103,0,
-	409,412,3,222,111,0,410,411,5,42,0,0,411,413,3,106,53,0,412,410,1,0,0,0,
-	412,413,1,0,0,0,413,414,1,0,0,0,414,415,5,67,0,0,415,49,1,0,0,0,416,418,
-	5,11,0,0,417,416,1,0,0,0,417,418,1,0,0,0,418,419,1,0,0,0,419,420,5,10,0,
-	0,420,421,3,218,109,0,421,422,5,67,0,0,422,423,5,1,0,0,423,424,3,52,26,
-	0,424,425,5,2,0,0,425,51,1,0,0,0,426,428,3,54,27,0,427,426,1,0,0,0,428,
-	429,1,0,0,0,429,427,1,0,0,0,429,430,1,0,0,0,430,53,1,0,0,0,431,434,3,222,
-	111,0,432,433,5,42,0,0,433,435,3,106,53,0,434,432,1,0,0,0,434,435,1,0,0,
-	0,435,436,1,0,0,0,436,437,5,67,0,0,437,55,1,0,0,0,438,443,3,62,31,0,439,
-	443,3,70,35,0,440,443,3,78,39,0,441,443,3,80,40,0,442,438,1,0,0,0,442,439,
-	1,0,0,0,442,440,1,0,0,0,442,441,1,0,0,0,443,57,1,0,0,0,444,445,3,56,28,
-	0,445,59,1,0,0,0,446,447,3,56,28,0,447,61,1,0,0,0,448,449,5,14,0,0,449,
-	450,3,106,53,0,450,452,3,88,44,0,451,453,3,66,33,0,452,451,1,0,0,0,452,
-	453,1,0,0,0,453,63,1,0,0,0,454,455,5,9,0,0,455,456,5,14,0,0,456,457,3,106,
-	53,0,457,459,3,88,44,0,458,460,3,66,33,0,459,458,1,0,0,0,459,460,1,0,0,
-	0,460,65,1,0,0,0,461,464,3,64,32,0,462,464,3,68,34,0,463,461,1,0,0,0,463,
-	462,1,0,0,0,464,67,1,0,0,0,465,466,5,9,0,0,466,467,3,88,44,0,467,69,1,0,
-	0,0,468,471,3,72,36,0,469,471,3,74,37,0,470,468,1,0,0,0,470,469,1,0,0,0,
-	471,71,1,0,0,0,472,473,5,13,0,0,473,474,3,76,38,0,474,475,5,42,0,0,475,
-	476,3,106,53,0,476,477,5,24,0,0,477,480,3,106,53,0,478,479,5,6,0,0,479,
-	481,3,106,53,0,480,478,1,0,0,0,480,481,1,0,0,0,481,482,1,0,0,0,482,483,
-	3,88,44,0,483,73,1,0,0,0,484,485,5,13,0,0,485,486,3,76,38,0,486,487,5,16,
-	0,0,487,488,3,106,53,0,488,489,3,88,44,0,489,75,1,0,0,0,490,491,3,206,103,
-	0,491,492,3,222,111,0,492,496,1,0,0,0,493,496,3,222,111,0,494,496,3,190,
-	95,0,495,490,1,0,0,0,495,493,1,0,0,0,495,494,1,0,0,0,496,77,1,0,0,0,497,
-	498,5,29,0,0,498,499,3,106,53,0,499,500,3,88,44,0,500,79,1,0,0,0,501,503,
-	5,23,0,0,502,504,3,106,53,0,503,502,1,0,0,0,503,504,1,0,0,0,504,505,1,0,
-	0,0,505,506,5,67,0,0,506,507,5,1,0,0,507,508,3,82,41,0,508,509,5,2,0,0,
-	509,81,1,0,0,0,510,512,3,84,42,0,511,510,1,0,0,0,512,513,1,0,0,0,513,511,
-	1,0,0,0,513,514,1,0,0,0,514,516,1,0,0,0,515,517,3,86,43,0,516,515,1,0,0,
-	0,516,517,1,0,0,0,517,83,1,0,0,0,518,519,3,106,53,0,519,520,5,43,0,0,520,
-	521,3,88,44,0,521,85,1,0,0,0,522,523,5,43,0,0,523,524,3,88,44,0,524,87,
-	1,0,0,0,525,528,3,90,45,0,526,528,3,92,46,0,527,525,1,0,0,0,527,526,1,0,
-	0,0,528,89,1,0,0,0,529,530,5,67,0,0,530,531,5,1,0,0,531,532,3,8,4,0,532,
-	533,5,2,0,0,533,91,1,0,0,0,534,535,3,10,5,0,535,93,1,0,0,0,536,540,3,96,
-	48,0,537,540,3,102,51,0,538,540,3,104,52,0,539,536,1,0,0,0,539,537,1,0,
-	0,0,539,538,1,0,0,0,540,95,1,0,0,0,541,544,3,98,49,0,542,544,3,100,50,0,
-	543,541,1,0,0,0,543,542,1,0,0,0,544,97,1,0,0,0,545,547,5,11,0,0,546,545,
-	1,0,0,0,546,547,1,0,0,0,547,548,1,0,0,0,548,549,3,188,94,0,549,550,5,42,
-	0,0,550,551,3,106,53,0,551,99,1,0,0,0,552,553,3,190,95,0,553,554,5,42,0,
-	0,554,555,3,106,53,0,555,101,1,0,0,0,556,557,3,158,79,0,557,558,7,0,0,0,
-	558,559,3,106,53,0,559,103,1,0,0,0,560,561,3,158,79,0,561,562,3,204,102,
-	0,562,563,3,106,53,0,563,105,1,0,0,0,564,565,3,110,55,0,565,107,1,0,0,0,
-	566,567,3,106,53,0,567,109,1,0,0,0,568,574,3,112,56,0,569,570,5,47,0,0,
-	570,571,3,106,53,0,571,572,5,46,0,0,572,573,3,106,53,0,573,575,1,0,0,0,
-	574,569,1,0,0,0,574,575,1,0,0,0,575,111,1,0,0,0,576,581,3,114,57,0,577,
-	578,5,20,0,0,578,580,3,114,57,0,579,577,1,0,0,0,580,583,1,0,0,0,581,579,
-	1,0,0,0,581,582,1,0,0,0,582,113,1,0,0,0,583,581,1,0,0,0,584,589,3,116,58,
-	0,585,586,5,3,0,0,586,588,3,116,58,0,587,585,1,0,0,0,588,591,1,0,0,0,589,
-	587,1,0,0,0,589,590,1,0,0,0,590,115,1,0,0,0,591,589,1,0,0,0,592,593,6,58,
-	-1,0,593,594,3,118,59,0,594,600,1,0,0,0,595,596,10,2,0,0,596,597,5,50,0,
-	0,597,599,3,118,59,0,598,595,1,0,0,0,599,602,1,0,0,0,600,598,1,0,0,0,600,
-	601,1,0,0,0,601,117,1,0,0,0,602,600,1,0,0,0,603,604,6,59,-1,0,604,605,3,
-	120,60,0,605,611,1,0,0,0,606,607,10,2,0,0,607,608,5,51,0,0,608,610,3,120,
-	60,0,609,606,1,0,0,0,610,613,1,0,0,0,611,609,1,0,0,0,611,612,1,0,0,0,612,
-	119,1,0,0,0,613,611,1,0,0,0,614,615,6,60,-1,0,615,616,3,122,61,0,616,622,
-	1,0,0,0,617,618,10,2,0,0,618,619,5,49,0,0,619,621,3,122,61,0,620,617,1,
-	0,0,0,621,624,1,0,0,0,622,620,1,0,0,0,622,623,1,0,0,0,623,121,1,0,0,0,624,
-	622,1,0,0,0,625,629,3,130,65,0,626,628,3,124,62,0,627,626,1,0,0,0,628,631,
-	1,0,0,0,629,627,1,0,0,0,629,630,1,0,0,0,630,123,1,0,0,0,631,629,1,0,0,0,
-	632,635,3,126,63,0,633,635,3,128,64,0,634,632,1,0,0,0,634,633,1,0,0,0,635,
-	125,1,0,0,0,636,637,5,38,0,0,637,638,3,130,65,0,638,127,1,0,0,0,639,640,
-	5,39,0,0,640,641,3,130,65,0,641,129,1,0,0,0,642,646,3,142,71,0,643,645,
-	3,132,66,0,644,643,1,0,0,0,645,648,1,0,0,0,646,644,1,0,0,0,646,647,1,0,
-	0,0,647,131,1,0,0,0,648,646,1,0,0,0,649,654,3,134,67,0,650,654,3,136,68,
-	0,651,654,3,138,69,0,652,654,3,140,70,0,653,649,1,0,0,0,653,650,1,0,0,0,
-	653,651,1,0,0,0,653,652,1,0,0,0,654,133,1,0,0,0,655,656,5,36,0,0,656,657,
-	3,142,71,0,657,135,1,0,0,0,658,659,5,40,0,0,659,660,3,142,71,0,660,137,
-	1,0,0,0,661,662,5,37,0,0,662,663,3,142,71,0,663,139,1,0,0,0,664,665,5,41,
-	0,0,665,666,3,142,71,0,666,141,1,0,0,0,667,668,6,71,-1,0,668,669,3,146,
-	73,0,669,676,1,0,0,0,670,671,10,2,0,0,671,672,3,144,72,0,672,673,3,146,
-	73,0,673,675,1,0,0,0,674,670,1,0,0,0,675,678,1,0,0,0,676,674,1,0,0,0,676,
-	677,1,0,0,0,677,143,1,0,0,0,678,676,1,0,0,0,679,680,7,1,0,0,680,145,1,0,
-	0,0,681,682,6,73,-1,0,682,683,3,150,75,0,683,690,1,0,0,0,684,685,10,2,0,
-	0,685,686,3,148,74,0,686,687,3,150,75,0,687,689,1,0,0,0,688,684,1,0,0,0,
-	689,692,1,0,0,0,690,688,1,0,0,0,690,691,1,0,0,0,691,147,1,0,0,0,692,690,
-	1,0,0,0,693,694,7,2,0,0,694,149,1,0,0,0,695,696,6,75,-1,0,696,697,3,154,
-	77,0,697,704,1,0,0,0,698,699,10,2,0,0,699,700,3,152,76,0,700,701,3,154,
-	77,0,701,703,1,0,0,0,702,698,1,0,0,0,703,706,1,0,0,0,704,702,1,0,0,0,704,
-	705,1,0,0,0,705,151,1,0,0,0,706,704,1,0,0,0,707,708,7,3,0,0,708,153,1,0,
-	0,0,709,710,3,156,78,0,710,711,3,154,77,0,711,714,1,0,0,0,712,714,3,158,
-	79,0,713,709,1,0,0,0,713,712,1,0,0,0,714,155,1,0,0,0,715,716,7,4,0,0,716,
-	157,1,0,0,0,717,718,6,79,-1,0,718,719,3,166,83,0,719,739,1,0,0,0,720,721,
-	10,4,0,0,721,722,5,44,0,0,722,738,3,220,110,0,723,725,10,3,0,0,724,726,
-	3,212,106,0,725,724,1,0,0,0,725,726,1,0,0,0,726,727,1,0,0,0,727,729,5,30,
-	0,0,728,730,3,160,80,0,729,728,1,0,0,0,729,730,1,0,0,0,730,731,1,0,0,0,
-	731,738,5,31,0,0,732,733,10,2,0,0,733,734,5,32,0,0,734,735,3,164,82,0,735,
-	736,5,33,0,0,736,738,1,0,0,0,737,720,1,0,0,0,737,723,1,0,0,0,737,732,1,
-	0,0,0,738,741,1,0,0,0,739,737,1,0,0,0,739,740,1,0,0,0,740,159,1,0,0,0,741,
-	739,1,0,0,0,742,747,3,162,81,0,743,744,5,45,0,0,744,746,3,162,81,0,745,
-	743,1,0,0,0,746,749,1,0,0,0,747,745,1,0,0,0,747,748,1,0,0,0,748,751,1,0,
-	0,0,749,747,1,0,0,0,750,752,5,45,0,0,751,750,1,0,0,0,751,752,1,0,0,0,752,
-	161,1,0,0,0,753,754,3,222,111,0,754,755,5,42,0,0,755,757,1,0,0,0,756,753,
-	1,0,0,0,756,757,1,0,0,0,757,758,1,0,0,0,758,759,3,106,53,0,759,163,1,0,
-	0,0,760,765,3,106,53,0,761,762,5,45,0,0,762,764,3,106,53,0,763,761,1,0,
-	0,0,764,767,1,0,0,0,765,763,1,0,0,0,765,766,1,0,0,0,766,769,1,0,0,0,767,
-	765,1,0,0,0,768,770,5,45,0,0,769,768,1,0,0,0,769,770,1,0,0,0,770,165,1,
-	0,0,0,771,776,3,220,110,0,772,776,3,168,84,0,773,776,3,178,89,0,774,776,
-	3,180,90,0,775,771,1,0,0,0,775,772,1,0,0,0,775,773,1,0,0,0,775,774,1,0,
-	0,0,776,167,1,0,0,0,777,782,3,170,85,0,778,782,3,172,86,0,779,782,3,174,
-	87,0,780,782,3,176,88,0,781,777,1,0,0,0,781,778,1,0,0,0,781,779,1,0,0,0,
-	781,780,1,0,0,0,782,169,1,0,0,0,783,784,5,64,0,0,784,171,1,0,0,0,785,786,
-	5,65,0,0,786,173,1,0,0,0,787,788,7,5,0,0,788,175,1,0,0,0,789,790,5,66,0,
-	0,790,177,1,0,0,0,791,792,5,30,0,0,792,793,3,106,53,0,793,794,5,31,0,0,
-	794,179,1,0,0,0,795,807,5,32,0,0,796,801,3,106,53,0,797,798,5,45,0,0,798,
-	800,3,106,53,0,799,797,1,0,0,0,800,803,1,0,0,0,801,799,1,0,0,0,801,802,
-	1,0,0,0,802,805,1,0,0,0,803,801,1,0,0,0,804,806,5,45,0,0,805,804,1,0,0,
-	0,805,806,1,0,0,0,806,808,1,0,0,0,807,796,1,0,0,0,807,808,1,0,0,0,808,809,
-	1,0,0,0,809,810,5,33,0,0,810,181,1,0,0,0,811,812,5,15,0,0,812,813,3,218,
-	109,0,813,814,5,55,0,0,814,815,3,218,109,0,815,816,5,55,0,0,816,819,3,170,
-	85,0,817,818,5,4,0,0,818,820,3,218,109,0,819,817,1,0,0,0,819,820,1,0,0,
-	0,820,183,1,0,0,0,821,822,5,5,0,0,822,185,1,0,0,0,823,824,5,8,0,0,824,187,
-	1,0,0,0,825,827,3,192,96,0,826,825,1,0,0,0,826,827,1,0,0,0,827,829,1,0,
-	0,0,828,830,3,206,103,0,829,828,1,0,0,0,829,830,1,0,0,0,830,831,1,0,0,0,
-	831,832,3,222,111,0,832,189,1,0,0,0,833,834,5,32,0,0,834,839,3,222,111,
-	0,835,836,5,45,0,0,836,838,3,222,111,0,837,835,1,0,0,0,838,841,1,0,0,0,
-	839,837,1,0,0,0,839,840,1,0,0,0,840,843,1,0,0,0,841,839,1,0,0,0,842,844,
-	5,45,0,0,843,842,1,0,0,0,843,844,1,0,0,0,844,845,1,0,0,0,845,846,5,33,0,
-	0,846,191,1,0,0,0,847,848,7,6,0,0,848,193,1,0,0,0,849,854,3,196,98,0,850,
-	854,3,198,99,0,851,854,3,200,100,0,852,854,3,202,101,0,853,849,1,0,0,0,
-	853,850,1,0,0,0,853,851,1,0,0,0,853,852,1,0,0,0,854,195,1,0,0,0,855,856,
-	3,158,79,0,856,857,5,44,0,0,857,858,3,222,111,0,858,197,1,0,0,0,859,860,
-	3,158,79,0,860,861,5,32,0,0,861,862,3,164,82,0,862,863,5,33,0,0,863,199,
-	1,0,0,0,864,865,3,222,111,0,865,201,1,0,0,0,866,867,5,30,0,0,867,868,3,
-	194,97,0,868,869,5,31,0,0,869,203,1,0,0,0,870,871,7,7,0,0,871,205,1,0,0,
-	0,872,874,3,208,104,0,873,872,1,0,0,0,873,874,1,0,0,0,874,875,1,0,0,0,875,
-	877,3,210,105,0,876,878,3,212,106,0,877,876,1,0,0,0,877,878,1,0,0,0,878,
-	880,1,0,0,0,879,881,3,214,107,0,880,879,1,0,0,0,880,881,1,0,0,0,881,207,
-	1,0,0,0,882,883,7,8,0,0,883,209,1,0,0,0,884,889,3,220,110,0,885,886,5,44,
-	0,0,886,888,3,220,110,0,887,885,1,0,0,0,888,891,1,0,0,0,889,887,1,0,0,0,
-	889,890,1,0,0,0,890,211,1,0,0,0,891,889,1,0,0,0,892,894,5,40,0,0,893,895,
-	3,216,108,0,894,893,1,0,0,0,894,895,1,0,0,0,895,896,1,0,0,0,896,897,5,41,
-	0,0,897,213,1,0,0,0,898,899,5,32,0,0,899,900,5,33,0,0,900,215,1,0,0,0,901,
-	906,3,206,103,0,902,903,5,45,0,0,903,905,3,206,103,0,904,902,1,0,0,0,905,
-	908,1,0,0,0,906,904,1,0,0,0,906,907,1,0,0,0,907,910,1,0,0,0,908,906,1,0,
-	0,0,909,911,5,45,0,0,910,909,1,0,0,0,910,911,1,0,0,0,911,217,1,0,0,0,912,
-	913,7,9,0,0,913,219,1,0,0,0,914,915,3,218,109,0,915,221,1,0,0,0,916,917,
-	3,218,109,0,917,223,1,0,0,0,918,920,3,226,113,0,919,918,1,0,0,0,920,921,
-	1,0,0,0,921,919,1,0,0,0,921,922,1,0,0,0,922,225,1,0,0,0,923,924,5,69,0,
-	0,924,227,1,0,0,0,89,231,237,242,249,254,262,269,273,282,293,298,302,305,
-	324,327,332,343,347,350,355,358,362,367,378,382,388,391,403,406,412,417,
-	429,434,442,452,459,463,470,480,495,503,513,516,527,539,543,546,574,581,
-	589,600,611,622,629,634,646,653,676,690,704,713,725,729,737,739,747,751,
-	756,765,769,775,781,801,805,807,819,826,829,839,843,853,873,877,880,889,
-	894,906,910,921];
+	14,1,14,1,15,1,15,1,15,1,15,1,16,3,16,325,8,16,1,16,1,16,1,16,1,16,3,16,
+	331,8,16,1,16,1,16,1,16,1,16,1,16,3,16,338,8,16,1,16,1,16,1,16,3,16,343,
+	8,16,1,16,1,16,1,16,1,16,3,16,349,8,16,1,17,1,17,1,17,5,17,354,8,17,10,
+	17,12,17,357,9,17,1,17,3,17,360,8,17,1,18,1,18,1,18,1,18,3,18,366,8,18,
+	1,18,1,18,1,18,3,18,371,8,18,3,18,373,8,18,1,19,3,19,376,8,19,1,19,1,19,
+	1,19,1,19,1,19,3,19,383,8,19,1,19,1,19,1,19,1,19,1,19,3,19,390,8,19,1,19,
+	1,19,1,19,1,19,3,19,396,8,19,1,19,1,19,1,19,1,19,3,19,402,8,19,1,20,1,20,
+	1,20,5,20,407,8,20,10,20,12,20,410,9,20,1,20,3,20,413,8,20,1,21,1,21,1,
+	21,1,21,3,21,419,8,21,1,22,3,22,422,8,22,1,22,1,22,1,22,1,22,1,22,1,22,
+	1,22,1,23,4,23,432,8,23,11,23,12,23,433,1,24,3,24,437,8,24,1,24,1,24,1,
+	24,1,24,3,24,443,8,24,1,24,1,24,1,25,3,25,448,8,25,1,25,1,25,1,25,1,25,
+	1,25,1,25,1,25,1,26,4,26,458,8,26,11,26,12,26,459,1,27,1,27,1,27,3,27,465,
+	8,27,1,27,1,27,1,28,1,28,1,28,1,28,3,28,473,8,28,1,29,1,29,1,30,1,30,1,
+	31,1,31,1,31,1,31,3,31,483,8,31,1,32,1,32,1,32,1,32,1,32,3,32,490,8,32,
+	1,33,1,33,3,33,494,8,33,1,34,1,34,1,34,1,35,1,35,3,35,501,8,35,1,36,1,36,
+	1,36,1,36,1,36,1,36,1,36,1,36,3,36,511,8,36,1,36,1,36,1,37,1,37,1,37,1,
+	37,1,37,1,37,1,38,1,38,1,38,1,38,1,38,3,38,526,8,38,1,39,1,39,1,39,1,39,
+	1,40,1,40,3,40,534,8,40,1,40,1,40,1,40,1,40,1,40,1,41,4,41,542,8,41,11,
+	41,12,41,543,1,41,3,41,547,8,41,1,42,1,42,1,42,1,42,1,43,1,43,1,43,1,44,
+	1,44,3,44,558,8,44,1,45,1,45,1,45,1,45,1,45,1,46,1,46,1,47,1,47,1,47,3,
+	47,570,8,47,1,48,1,48,3,48,574,8,48,1,49,3,49,577,8,49,1,49,1,49,1,49,1,
+	49,1,50,1,50,1,50,1,50,1,51,1,51,1,51,1,51,1,51,1,51,1,51,1,51,1,51,1,51,
+	1,51,1,51,3,51,599,8,51,1,52,1,52,1,52,1,52,1,53,1,53,1,54,1,54,1,55,1,
+	55,1,55,1,55,1,55,1,55,3,55,615,8,55,1,56,1,56,1,56,5,56,620,8,56,10,56,
+	12,56,623,9,56,1,57,1,57,1,57,5,57,628,8,57,10,57,12,57,631,9,57,1,58,1,
+	58,1,58,1,58,1,58,1,58,5,58,639,8,58,10,58,12,58,642,9,58,1,59,1,59,1,59,
+	1,59,1,59,1,59,5,59,650,8,59,10,59,12,59,653,9,59,1,60,1,60,1,60,1,60,1,
+	60,1,60,5,60,661,8,60,10,60,12,60,664,9,60,1,61,1,61,5,61,668,8,61,10,61,
+	12,61,671,9,61,1,62,1,62,3,62,675,8,62,1,63,1,63,1,63,1,64,1,64,1,64,1,
+	65,1,65,5,65,685,8,65,10,65,12,65,688,9,65,1,66,1,66,1,66,1,66,3,66,694,
+	8,66,1,67,1,67,1,67,1,68,1,68,1,68,1,69,1,69,1,69,1,70,1,70,1,70,1,71,1,
+	71,1,71,1,71,1,71,1,71,1,71,5,71,715,8,71,10,71,12,71,718,9,71,1,72,1,72,
+	1,73,1,73,1,73,1,73,1,73,1,73,1,73,5,73,729,8,73,10,73,12,73,732,9,73,1,
+	74,1,74,1,75,1,75,1,75,1,75,1,75,1,75,1,75,5,75,743,8,75,10,75,12,75,746,
+	9,75,1,76,1,76,1,77,1,77,1,77,1,77,3,77,754,8,77,1,78,1,78,1,79,1,79,1,
+	79,1,79,1,79,1,79,1,79,1,79,3,79,766,8,79,1,79,1,79,3,79,770,8,79,1,79,
+	1,79,1,79,1,79,1,79,1,79,5,79,778,8,79,10,79,12,79,781,9,79,1,80,1,80,1,
+	80,5,80,786,8,80,10,80,12,80,789,9,80,1,80,3,80,792,8,80,1,81,1,81,1,81,
+	3,81,797,8,81,1,81,1,81,1,82,1,82,1,82,5,82,804,8,82,10,82,12,82,807,9,
+	82,1,82,3,82,810,8,82,1,83,1,83,1,83,1,83,3,83,816,8,83,1,84,1,84,1,84,
+	1,84,3,84,822,8,84,1,85,1,85,1,86,1,86,1,87,1,87,1,88,1,88,1,89,1,89,1,
+	89,1,89,1,90,1,90,1,90,1,90,5,90,840,8,90,10,90,12,90,843,9,90,1,90,3,90,
+	846,8,90,3,90,848,8,90,1,90,1,90,1,91,1,91,1,91,1,91,1,91,1,91,1,91,1,91,
+	3,91,860,8,91,1,92,1,92,1,93,1,93,1,94,3,94,867,8,94,1,94,1,94,1,94,1,94,
+	3,94,873,8,94,1,94,3,94,876,8,94,1,95,1,95,1,95,1,95,5,95,882,8,95,10,95,
+	12,95,885,9,95,1,95,3,95,888,8,95,1,95,1,95,1,96,1,96,1,97,1,97,1,97,1,
+	97,3,97,898,8,97,1,98,1,98,1,98,1,98,1,99,1,99,1,99,1,99,1,99,1,100,1,100,
+	1,101,1,101,1,101,1,101,1,102,1,102,1,103,3,103,918,8,103,1,103,1,103,3,
+	103,922,8,103,1,103,3,103,925,8,103,1,104,1,104,1,105,1,105,1,105,5,105,
+	932,8,105,10,105,12,105,935,9,105,1,106,1,106,3,106,939,8,106,1,106,1,106,
+	1,107,1,107,1,107,1,108,1,108,1,108,5,108,949,8,108,10,108,12,108,952,9,
+	108,1,108,3,108,955,8,108,1,109,1,109,1,110,1,110,1,111,1,111,1,112,4,112,
+	964,8,112,11,112,12,112,965,1,113,1,113,1,113,0,7,116,118,120,142,146,150,
+	158,114,0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,
+	46,48,50,52,54,56,58,60,62,64,66,68,70,72,74,76,78,80,82,84,86,88,90,92,
+	94,96,98,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,
+	132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,
+	168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200,202,
+	204,206,208,210,212,214,216,218,220,222,224,226,0,9,1,0,34,35,1,0,52,53,
+	1,0,54,56,3,0,19,19,48,48,52,53,2,0,12,12,26,26,1,0,27,28,1,0,57,61,3,0,
+	7,7,17,17,21,22,7,0,4,4,6,7,10,10,17,18,21,22,24,25,63,63,974,0,228,1,0,
+	0,0,2,231,1,0,0,0,4,235,1,0,0,0,6,242,1,0,0,0,8,247,1,0,0,0,10,254,1,0,
+	0,0,12,262,1,0,0,0,14,264,1,0,0,0,16,277,1,0,0,0,18,293,1,0,0,0,20,298,
+	1,0,0,0,22,302,1,0,0,0,24,305,1,0,0,0,26,311,1,0,0,0,28,315,1,0,0,0,30,
+	319,1,0,0,0,32,348,1,0,0,0,34,350,1,0,0,0,36,372,1,0,0,0,38,401,1,0,0,0,
+	40,403,1,0,0,0,42,418,1,0,0,0,44,421,1,0,0,0,46,431,1,0,0,0,48,436,1,0,
+	0,0,50,447,1,0,0,0,52,457,1,0,0,0,54,461,1,0,0,0,56,472,1,0,0,0,58,474,
+	1,0,0,0,60,476,1,0,0,0,62,478,1,0,0,0,64,484,1,0,0,0,66,493,1,0,0,0,68,
+	495,1,0,0,0,70,500,1,0,0,0,72,502,1,0,0,0,74,514,1,0,0,0,76,525,1,0,0,0,
+	78,527,1,0,0,0,80,531,1,0,0,0,82,541,1,0,0,0,84,548,1,0,0,0,86,552,1,0,
+	0,0,88,557,1,0,0,0,90,559,1,0,0,0,92,564,1,0,0,0,94,569,1,0,0,0,96,573,
+	1,0,0,0,98,576,1,0,0,0,100,582,1,0,0,0,102,598,1,0,0,0,104,600,1,0,0,0,
+	106,604,1,0,0,0,108,606,1,0,0,0,110,608,1,0,0,0,112,616,1,0,0,0,114,624,
+	1,0,0,0,116,632,1,0,0,0,118,643,1,0,0,0,120,654,1,0,0,0,122,665,1,0,0,0,
+	124,674,1,0,0,0,126,676,1,0,0,0,128,679,1,0,0,0,130,682,1,0,0,0,132,693,
+	1,0,0,0,134,695,1,0,0,0,136,698,1,0,0,0,138,701,1,0,0,0,140,704,1,0,0,0,
+	142,707,1,0,0,0,144,719,1,0,0,0,146,721,1,0,0,0,148,733,1,0,0,0,150,735,
+	1,0,0,0,152,747,1,0,0,0,154,753,1,0,0,0,156,755,1,0,0,0,158,757,1,0,0,0,
+	160,782,1,0,0,0,162,796,1,0,0,0,164,800,1,0,0,0,166,815,1,0,0,0,168,821,
+	1,0,0,0,170,823,1,0,0,0,172,825,1,0,0,0,174,827,1,0,0,0,176,829,1,0,0,0,
+	178,831,1,0,0,0,180,835,1,0,0,0,182,851,1,0,0,0,184,861,1,0,0,0,186,863,
+	1,0,0,0,188,875,1,0,0,0,190,877,1,0,0,0,192,891,1,0,0,0,194,897,1,0,0,0,
+	196,899,1,0,0,0,198,903,1,0,0,0,200,908,1,0,0,0,202,910,1,0,0,0,204,914,
+	1,0,0,0,206,917,1,0,0,0,208,926,1,0,0,0,210,928,1,0,0,0,212,936,1,0,0,0,
+	214,942,1,0,0,0,216,945,1,0,0,0,218,956,1,0,0,0,220,958,1,0,0,0,222,960,
+	1,0,0,0,224,963,1,0,0,0,226,967,1,0,0,0,228,229,3,2,1,0,229,1,1,0,0,0,230,
+	232,3,8,4,0,231,230,1,0,0,0,231,232,1,0,0,0,232,233,1,0,0,0,233,234,5,0,
+	0,1,234,3,1,0,0,0,235,237,3,106,53,0,236,238,5,67,0,0,237,236,1,0,0,0,237,
+	238,1,0,0,0,238,239,1,0,0,0,239,240,5,0,0,1,240,5,1,0,0,0,241,243,3,224,
+	112,0,242,241,1,0,0,0,242,243,1,0,0,0,243,244,1,0,0,0,244,245,5,0,0,1,245,
+	7,1,0,0,0,246,248,3,10,5,0,247,246,1,0,0,0,248,249,1,0,0,0,249,247,1,0,
+	0,0,249,250,1,0,0,0,250,9,1,0,0,0,251,255,3,12,6,0,252,255,3,14,7,0,253,
+	255,3,16,8,0,254,251,1,0,0,0,254,252,1,0,0,0,254,253,1,0,0,0,255,11,1,0,
+	0,0,256,263,3,20,10,0,257,263,3,44,22,0,258,263,3,50,25,0,259,263,3,58,
+	29,0,260,263,3,38,19,0,261,263,3,32,16,0,262,256,1,0,0,0,262,257,1,0,0,
+	0,262,258,1,0,0,0,262,259,1,0,0,0,262,260,1,0,0,0,262,261,1,0,0,0,263,13,
+	1,0,0,0,264,269,3,18,9,0,265,266,5,45,0,0,266,268,3,18,9,0,267,265,1,0,
+	0,0,268,271,1,0,0,0,269,267,1,0,0,0,269,270,1,0,0,0,270,273,1,0,0,0,271,
+	269,1,0,0,0,272,274,5,45,0,0,273,272,1,0,0,0,273,274,1,0,0,0,274,275,1,
+	0,0,0,275,276,5,67,0,0,276,15,1,0,0,0,277,282,3,18,9,0,278,279,5,45,0,0,
+	279,281,3,18,9,0,280,278,1,0,0,0,281,284,1,0,0,0,282,280,1,0,0,0,282,283,
+	1,0,0,0,283,285,1,0,0,0,284,282,1,0,0,0,285,286,5,45,0,0,286,287,3,56,28,
+	0,287,17,1,0,0,0,288,294,3,94,47,0,289,294,3,108,54,0,290,294,3,182,91,
+	0,291,294,3,184,92,0,292,294,3,186,93,0,293,288,1,0,0,0,293,289,1,0,0,0,
+	293,290,1,0,0,0,293,291,1,0,0,0,293,292,1,0,0,0,294,19,1,0,0,0,295,299,
+	3,22,11,0,296,299,3,28,14,0,297,299,3,30,15,0,298,295,1,0,0,0,298,296,1,
+	0,0,0,298,297,1,0,0,0,299,21,1,0,0,0,300,303,3,24,12,0,301,303,3,26,13,
+	0,302,300,1,0,0,0,302,301,1,0,0,0,303,23,1,0,0,0,304,306,5,11,0,0,305,304,
+	1,0,0,0,305,306,1,0,0,0,306,307,1,0,0,0,307,308,3,188,94,0,308,309,5,42,
+	0,0,309,310,3,60,30,0,310,25,1,0,0,0,311,312,3,190,95,0,312,313,5,42,0,
+	0,313,314,3,60,30,0,314,27,1,0,0,0,315,316,3,158,79,0,316,317,5,62,0,0,
+	317,318,3,60,30,0,318,29,1,0,0,0,319,320,3,158,79,0,320,321,3,204,102,0,
+	321,322,3,60,30,0,322,31,1,0,0,0,323,325,5,11,0,0,324,323,1,0,0,0,324,325,
+	1,0,0,0,325,326,1,0,0,0,326,327,3,206,103,0,327,328,3,218,109,0,328,330,
+	5,30,0,0,329,331,3,34,17,0,330,329,1,0,0,0,330,331,1,0,0,0,331,332,1,0,
+	0,0,332,333,5,31,0,0,333,334,5,43,0,0,334,335,3,88,44,0,335,349,1,0,0,0,
+	336,338,5,11,0,0,337,336,1,0,0,0,337,338,1,0,0,0,338,339,1,0,0,0,339,340,
+	3,218,109,0,340,342,5,30,0,0,341,343,3,34,17,0,342,341,1,0,0,0,342,343,
+	1,0,0,0,343,344,1,0,0,0,344,345,5,31,0,0,345,346,5,43,0,0,346,347,3,88,
+	44,0,347,349,1,0,0,0,348,324,1,0,0,0,348,337,1,0,0,0,349,33,1,0,0,0,350,
+	355,3,36,18,0,351,352,5,45,0,0,352,354,3,36,18,0,353,351,1,0,0,0,354,357,
+	1,0,0,0,355,353,1,0,0,0,355,356,1,0,0,0,356,359,1,0,0,0,357,355,1,0,0,0,
+	358,360,5,45,0,0,359,358,1,0,0,0,359,360,1,0,0,0,360,35,1,0,0,0,361,362,
+	3,206,103,0,362,365,3,222,111,0,363,364,5,42,0,0,364,366,3,106,53,0,365,
+	363,1,0,0,0,365,366,1,0,0,0,366,373,1,0,0,0,367,370,3,222,111,0,368,369,
+	5,42,0,0,369,371,3,106,53,0,370,368,1,0,0,0,370,371,1,0,0,0,371,373,1,0,
+	0,0,372,361,1,0,0,0,372,367,1,0,0,0,373,37,1,0,0,0,374,376,5,11,0,0,375,
+	374,1,0,0,0,375,376,1,0,0,0,376,377,1,0,0,0,377,378,5,18,0,0,378,379,3,
+	206,103,0,379,380,3,218,109,0,380,382,5,30,0,0,381,383,3,40,20,0,382,381,
+	1,0,0,0,382,383,1,0,0,0,383,384,1,0,0,0,384,385,5,31,0,0,385,386,5,43,0,
+	0,386,387,3,88,44,0,387,402,1,0,0,0,388,390,5,11,0,0,389,388,1,0,0,0,389,
+	390,1,0,0,0,390,391,1,0,0,0,391,392,5,18,0,0,392,393,3,218,109,0,393,395,
+	5,30,0,0,394,396,3,40,20,0,395,394,1,0,0,0,395,396,1,0,0,0,396,397,1,0,
+	0,0,397,398,5,31,0,0,398,399,5,43,0,0,399,400,3,88,44,0,400,402,1,0,0,0,
+	401,375,1,0,0,0,401,389,1,0,0,0,402,39,1,0,0,0,403,408,3,42,21,0,404,405,
+	5,45,0,0,405,407,3,42,21,0,406,404,1,0,0,0,407,410,1,0,0,0,408,406,1,0,
+	0,0,408,409,1,0,0,0,409,412,1,0,0,0,410,408,1,0,0,0,411,413,5,45,0,0,412,
+	411,1,0,0,0,412,413,1,0,0,0,413,41,1,0,0,0,414,415,3,206,103,0,415,416,
+	3,222,111,0,416,419,1,0,0,0,417,419,3,36,18,0,418,414,1,0,0,0,418,417,1,
+	0,0,0,419,43,1,0,0,0,420,422,5,11,0,0,421,420,1,0,0,0,421,422,1,0,0,0,422,
+	423,1,0,0,0,423,424,5,25,0,0,424,425,3,218,109,0,425,426,5,67,0,0,426,427,
+	5,1,0,0,427,428,3,46,23,0,428,429,5,2,0,0,429,45,1,0,0,0,430,432,3,48,24,
+	0,431,430,1,0,0,0,432,433,1,0,0,0,433,431,1,0,0,0,433,434,1,0,0,0,434,47,
+	1,0,0,0,435,437,5,28,0,0,436,435,1,0,0,0,436,437,1,0,0,0,437,438,1,0,0,
+	0,438,439,3,206,103,0,439,442,3,222,111,0,440,441,5,42,0,0,441,443,3,106,
+	53,0,442,440,1,0,0,0,442,443,1,0,0,0,443,444,1,0,0,0,444,445,5,67,0,0,445,
+	49,1,0,0,0,446,448,5,11,0,0,447,446,1,0,0,0,447,448,1,0,0,0,448,449,1,0,
+	0,0,449,450,5,10,0,0,450,451,3,218,109,0,451,452,5,67,0,0,452,453,5,1,0,
+	0,453,454,3,52,26,0,454,455,5,2,0,0,455,51,1,0,0,0,456,458,3,54,27,0,457,
+	456,1,0,0,0,458,459,1,0,0,0,459,457,1,0,0,0,459,460,1,0,0,0,460,53,1,0,
+	0,0,461,464,3,222,111,0,462,463,5,42,0,0,463,465,3,106,53,0,464,462,1,0,
+	0,0,464,465,1,0,0,0,465,466,1,0,0,0,466,467,5,67,0,0,467,55,1,0,0,0,468,
+	473,3,62,31,0,469,473,3,70,35,0,470,473,3,78,39,0,471,473,3,80,40,0,472,
+	468,1,0,0,0,472,469,1,0,0,0,472,470,1,0,0,0,472,471,1,0,0,0,473,57,1,0,
+	0,0,474,475,3,56,28,0,475,59,1,0,0,0,476,477,3,56,28,0,477,61,1,0,0,0,478,
+	479,5,14,0,0,479,480,3,106,53,0,480,482,3,88,44,0,481,483,3,66,33,0,482,
+	481,1,0,0,0,482,483,1,0,0,0,483,63,1,0,0,0,484,485,5,9,0,0,485,486,5,14,
+	0,0,486,487,3,106,53,0,487,489,3,88,44,0,488,490,3,66,33,0,489,488,1,0,
+	0,0,489,490,1,0,0,0,490,65,1,0,0,0,491,494,3,64,32,0,492,494,3,68,34,0,
+	493,491,1,0,0,0,493,492,1,0,0,0,494,67,1,0,0,0,495,496,5,9,0,0,496,497,
+	3,88,44,0,497,69,1,0,0,0,498,501,3,72,36,0,499,501,3,74,37,0,500,498,1,
+	0,0,0,500,499,1,0,0,0,501,71,1,0,0,0,502,503,5,13,0,0,503,504,3,76,38,0,
+	504,505,5,42,0,0,505,506,3,106,53,0,506,507,5,24,0,0,507,510,3,106,53,0,
+	508,509,5,6,0,0,509,511,3,106,53,0,510,508,1,0,0,0,510,511,1,0,0,0,511,
+	512,1,0,0,0,512,513,3,88,44,0,513,73,1,0,0,0,514,515,5,13,0,0,515,516,3,
+	76,38,0,516,517,5,16,0,0,517,518,3,106,53,0,518,519,3,88,44,0,519,75,1,
+	0,0,0,520,521,3,206,103,0,521,522,3,222,111,0,522,526,1,0,0,0,523,526,3,
+	222,111,0,524,526,3,190,95,0,525,520,1,0,0,0,525,523,1,0,0,0,525,524,1,
+	0,0,0,526,77,1,0,0,0,527,528,5,29,0,0,528,529,3,106,53,0,529,530,3,88,44,
+	0,530,79,1,0,0,0,531,533,5,23,0,0,532,534,3,106,53,0,533,532,1,0,0,0,533,
+	534,1,0,0,0,534,535,1,0,0,0,535,536,5,67,0,0,536,537,5,1,0,0,537,538,3,
+	82,41,0,538,539,5,2,0,0,539,81,1,0,0,0,540,542,3,84,42,0,541,540,1,0,0,
+	0,542,543,1,0,0,0,543,541,1,0,0,0,543,544,1,0,0,0,544,546,1,0,0,0,545,547,
+	3,86,43,0,546,545,1,0,0,0,546,547,1,0,0,0,547,83,1,0,0,0,548,549,3,106,
+	53,0,549,550,5,43,0,0,550,551,3,88,44,0,551,85,1,0,0,0,552,553,5,43,0,0,
+	553,554,3,88,44,0,554,87,1,0,0,0,555,558,3,90,45,0,556,558,3,92,46,0,557,
+	555,1,0,0,0,557,556,1,0,0,0,558,89,1,0,0,0,559,560,5,67,0,0,560,561,5,1,
+	0,0,561,562,3,8,4,0,562,563,5,2,0,0,563,91,1,0,0,0,564,565,3,10,5,0,565,
+	93,1,0,0,0,566,570,3,96,48,0,567,570,3,102,51,0,568,570,3,104,52,0,569,
+	566,1,0,0,0,569,567,1,0,0,0,569,568,1,0,0,0,570,95,1,0,0,0,571,574,3,98,
+	49,0,572,574,3,100,50,0,573,571,1,0,0,0,573,572,1,0,0,0,574,97,1,0,0,0,
+	575,577,5,11,0,0,576,575,1,0,0,0,576,577,1,0,0,0,577,578,1,0,0,0,578,579,
+	3,188,94,0,579,580,5,42,0,0,580,581,3,106,53,0,581,99,1,0,0,0,582,583,3,
+	190,95,0,583,584,5,42,0,0,584,585,3,106,53,0,585,101,1,0,0,0,586,587,3,
+	196,98,0,587,588,5,42,0,0,588,589,3,106,53,0,589,599,1,0,0,0,590,591,3,
+	198,99,0,591,592,5,42,0,0,592,593,3,106,53,0,593,599,1,0,0,0,594,595,3,
+	158,79,0,595,596,5,62,0,0,596,597,3,106,53,0,597,599,1,0,0,0,598,586,1,
+	0,0,0,598,590,1,0,0,0,598,594,1,0,0,0,599,103,1,0,0,0,600,601,3,158,79,
+	0,601,602,3,204,102,0,602,603,3,106,53,0,603,105,1,0,0,0,604,605,3,110,
+	55,0,605,107,1,0,0,0,606,607,3,106,53,0,607,109,1,0,0,0,608,614,3,112,56,
+	0,609,610,5,47,0,0,610,611,3,106,53,0,611,612,5,46,0,0,612,613,3,106,53,
+	0,613,615,1,0,0,0,614,609,1,0,0,0,614,615,1,0,0,0,615,111,1,0,0,0,616,621,
+	3,114,57,0,617,618,5,20,0,0,618,620,3,114,57,0,619,617,1,0,0,0,620,623,
+	1,0,0,0,621,619,1,0,0,0,621,622,1,0,0,0,622,113,1,0,0,0,623,621,1,0,0,0,
+	624,629,3,116,58,0,625,626,5,3,0,0,626,628,3,116,58,0,627,625,1,0,0,0,628,
+	631,1,0,0,0,629,627,1,0,0,0,629,630,1,0,0,0,630,115,1,0,0,0,631,629,1,0,
+	0,0,632,633,6,58,-1,0,633,634,3,118,59,0,634,640,1,0,0,0,635,636,10,2,0,
+	0,636,637,5,50,0,0,637,639,3,118,59,0,638,635,1,0,0,0,639,642,1,0,0,0,640,
+	638,1,0,0,0,640,641,1,0,0,0,641,117,1,0,0,0,642,640,1,0,0,0,643,644,6,59,
+	-1,0,644,645,3,120,60,0,645,651,1,0,0,0,646,647,10,2,0,0,647,648,5,51,0,
+	0,648,650,3,120,60,0,649,646,1,0,0,0,650,653,1,0,0,0,651,649,1,0,0,0,651,
+	652,1,0,0,0,652,119,1,0,0,0,653,651,1,0,0,0,654,655,6,60,-1,0,655,656,3,
+	122,61,0,656,662,1,0,0,0,657,658,10,2,0,0,658,659,5,49,0,0,659,661,3,122,
+	61,0,660,657,1,0,0,0,661,664,1,0,0,0,662,660,1,0,0,0,662,663,1,0,0,0,663,
+	121,1,0,0,0,664,662,1,0,0,0,665,669,3,130,65,0,666,668,3,124,62,0,667,666,
+	1,0,0,0,668,671,1,0,0,0,669,667,1,0,0,0,669,670,1,0,0,0,670,123,1,0,0,0,
+	671,669,1,0,0,0,672,675,3,126,63,0,673,675,3,128,64,0,674,672,1,0,0,0,674,
+	673,1,0,0,0,675,125,1,0,0,0,676,677,5,38,0,0,677,678,3,130,65,0,678,127,
+	1,0,0,0,679,680,5,39,0,0,680,681,3,130,65,0,681,129,1,0,0,0,682,686,3,142,
+	71,0,683,685,3,132,66,0,684,683,1,0,0,0,685,688,1,0,0,0,686,684,1,0,0,0,
+	686,687,1,0,0,0,687,131,1,0,0,0,688,686,1,0,0,0,689,694,3,134,67,0,690,
+	694,3,136,68,0,691,694,3,138,69,0,692,694,3,140,70,0,693,689,1,0,0,0,693,
+	690,1,0,0,0,693,691,1,0,0,0,693,692,1,0,0,0,694,133,1,0,0,0,695,696,5,36,
+	0,0,696,697,3,142,71,0,697,135,1,0,0,0,698,699,5,40,0,0,699,700,3,142,71,
+	0,700,137,1,0,0,0,701,702,5,37,0,0,702,703,3,142,71,0,703,139,1,0,0,0,704,
+	705,5,41,0,0,705,706,3,142,71,0,706,141,1,0,0,0,707,708,6,71,-1,0,708,709,
+	3,146,73,0,709,716,1,0,0,0,710,711,10,2,0,0,711,712,3,144,72,0,712,713,
+	3,146,73,0,713,715,1,0,0,0,714,710,1,0,0,0,715,718,1,0,0,0,716,714,1,0,
+	0,0,716,717,1,0,0,0,717,143,1,0,0,0,718,716,1,0,0,0,719,720,7,0,0,0,720,
+	145,1,0,0,0,721,722,6,73,-1,0,722,723,3,150,75,0,723,730,1,0,0,0,724,725,
+	10,2,0,0,725,726,3,148,74,0,726,727,3,150,75,0,727,729,1,0,0,0,728,724,
+	1,0,0,0,729,732,1,0,0,0,730,728,1,0,0,0,730,731,1,0,0,0,731,147,1,0,0,0,
+	732,730,1,0,0,0,733,734,7,1,0,0,734,149,1,0,0,0,735,736,6,75,-1,0,736,737,
+	3,154,77,0,737,744,1,0,0,0,738,739,10,2,0,0,739,740,3,152,76,0,740,741,
+	3,154,77,0,741,743,1,0,0,0,742,738,1,0,0,0,743,746,1,0,0,0,744,742,1,0,
+	0,0,744,745,1,0,0,0,745,151,1,0,0,0,746,744,1,0,0,0,747,748,7,2,0,0,748,
+	153,1,0,0,0,749,750,3,156,78,0,750,751,3,154,77,0,751,754,1,0,0,0,752,754,
+	3,158,79,0,753,749,1,0,0,0,753,752,1,0,0,0,754,155,1,0,0,0,755,756,7,3,
+	0,0,756,157,1,0,0,0,757,758,6,79,-1,0,758,759,3,166,83,0,759,779,1,0,0,
+	0,760,761,10,4,0,0,761,762,5,44,0,0,762,778,3,220,110,0,763,765,10,3,0,
+	0,764,766,3,212,106,0,765,764,1,0,0,0,765,766,1,0,0,0,766,767,1,0,0,0,767,
+	769,5,30,0,0,768,770,3,160,80,0,769,768,1,0,0,0,769,770,1,0,0,0,770,771,
+	1,0,0,0,771,778,5,31,0,0,772,773,10,2,0,0,773,774,5,32,0,0,774,775,3,164,
+	82,0,775,776,5,33,0,0,776,778,1,0,0,0,777,760,1,0,0,0,777,763,1,0,0,0,777,
+	772,1,0,0,0,778,781,1,0,0,0,779,777,1,0,0,0,779,780,1,0,0,0,780,159,1,0,
+	0,0,781,779,1,0,0,0,782,787,3,162,81,0,783,784,5,45,0,0,784,786,3,162,81,
+	0,785,783,1,0,0,0,786,789,1,0,0,0,787,785,1,0,0,0,787,788,1,0,0,0,788,791,
+	1,0,0,0,789,787,1,0,0,0,790,792,5,45,0,0,791,790,1,0,0,0,791,792,1,0,0,
+	0,792,161,1,0,0,0,793,794,3,222,111,0,794,795,5,42,0,0,795,797,1,0,0,0,
+	796,793,1,0,0,0,796,797,1,0,0,0,797,798,1,0,0,0,798,799,3,106,53,0,799,
+	163,1,0,0,0,800,805,3,106,53,0,801,802,5,45,0,0,802,804,3,106,53,0,803,
+	801,1,0,0,0,804,807,1,0,0,0,805,803,1,0,0,0,805,806,1,0,0,0,806,809,1,0,
+	0,0,807,805,1,0,0,0,808,810,5,45,0,0,809,808,1,0,0,0,809,810,1,0,0,0,810,
+	165,1,0,0,0,811,816,3,220,110,0,812,816,3,168,84,0,813,816,3,178,89,0,814,
+	816,3,180,90,0,815,811,1,0,0,0,815,812,1,0,0,0,815,813,1,0,0,0,815,814,
+	1,0,0,0,816,167,1,0,0,0,817,822,3,170,85,0,818,822,3,172,86,0,819,822,3,
+	174,87,0,820,822,3,176,88,0,821,817,1,0,0,0,821,818,1,0,0,0,821,819,1,0,
+	0,0,821,820,1,0,0,0,822,169,1,0,0,0,823,824,5,64,0,0,824,171,1,0,0,0,825,
+	826,5,65,0,0,826,173,1,0,0,0,827,828,7,4,0,0,828,175,1,0,0,0,829,830,5,
+	66,0,0,830,177,1,0,0,0,831,832,5,30,0,0,832,833,3,106,53,0,833,834,5,31,
+	0,0,834,179,1,0,0,0,835,847,5,32,0,0,836,841,3,106,53,0,837,838,5,45,0,
+	0,838,840,3,106,53,0,839,837,1,0,0,0,840,843,1,0,0,0,841,839,1,0,0,0,841,
+	842,1,0,0,0,842,845,1,0,0,0,843,841,1,0,0,0,844,846,5,45,0,0,845,844,1,
+	0,0,0,845,846,1,0,0,0,846,848,1,0,0,0,847,836,1,0,0,0,847,848,1,0,0,0,848,
+	849,1,0,0,0,849,850,5,33,0,0,850,181,1,0,0,0,851,852,5,15,0,0,852,853,3,
+	218,109,0,853,854,5,55,0,0,854,855,3,218,109,0,855,856,5,55,0,0,856,859,
+	3,170,85,0,857,858,5,4,0,0,858,860,3,218,109,0,859,857,1,0,0,0,859,860,
+	1,0,0,0,860,183,1,0,0,0,861,862,5,5,0,0,862,185,1,0,0,0,863,864,5,8,0,0,
+	864,187,1,0,0,0,865,867,3,192,96,0,866,865,1,0,0,0,866,867,1,0,0,0,867,
+	868,1,0,0,0,868,869,3,206,103,0,869,870,3,222,111,0,870,876,1,0,0,0,871,
+	873,3,192,96,0,872,871,1,0,0,0,872,873,1,0,0,0,873,874,1,0,0,0,874,876,
+	3,222,111,0,875,866,1,0,0,0,875,872,1,0,0,0,876,189,1,0,0,0,877,878,5,32,
+	0,0,878,883,3,222,111,0,879,880,5,45,0,0,880,882,3,222,111,0,881,879,1,
+	0,0,0,882,885,1,0,0,0,883,881,1,0,0,0,883,884,1,0,0,0,884,887,1,0,0,0,885,
+	883,1,0,0,0,886,888,5,45,0,0,887,886,1,0,0,0,887,888,1,0,0,0,888,889,1,
+	0,0,0,889,890,5,33,0,0,890,191,1,0,0,0,891,892,7,5,0,0,892,193,1,0,0,0,
+	893,898,3,196,98,0,894,898,3,198,99,0,895,898,3,200,100,0,896,898,3,202,
+	101,0,897,893,1,0,0,0,897,894,1,0,0,0,897,895,1,0,0,0,897,896,1,0,0,0,898,
+	195,1,0,0,0,899,900,3,158,79,0,900,901,5,44,0,0,901,902,3,222,111,0,902,
+	197,1,0,0,0,903,904,3,158,79,0,904,905,5,32,0,0,905,906,3,164,82,0,906,
+	907,5,33,0,0,907,199,1,0,0,0,908,909,3,222,111,0,909,201,1,0,0,0,910,911,
+	5,30,0,0,911,912,3,194,97,0,912,913,5,31,0,0,913,203,1,0,0,0,914,915,7,
+	6,0,0,915,205,1,0,0,0,916,918,3,208,104,0,917,916,1,0,0,0,917,918,1,0,0,
+	0,918,919,1,0,0,0,919,921,3,210,105,0,920,922,3,212,106,0,921,920,1,0,0,
+	0,921,922,1,0,0,0,922,924,1,0,0,0,923,925,3,214,107,0,924,923,1,0,0,0,924,
+	925,1,0,0,0,925,207,1,0,0,0,926,927,7,7,0,0,927,209,1,0,0,0,928,933,3,220,
+	110,0,929,930,5,44,0,0,930,932,3,220,110,0,931,929,1,0,0,0,932,935,1,0,
+	0,0,933,931,1,0,0,0,933,934,1,0,0,0,934,211,1,0,0,0,935,933,1,0,0,0,936,
+	938,5,40,0,0,937,939,3,216,108,0,938,937,1,0,0,0,938,939,1,0,0,0,939,940,
+	1,0,0,0,940,941,5,41,0,0,941,213,1,0,0,0,942,943,5,32,0,0,943,944,5,33,
+	0,0,944,215,1,0,0,0,945,950,3,206,103,0,946,947,5,45,0,0,947,949,3,206,
+	103,0,948,946,1,0,0,0,949,952,1,0,0,0,950,948,1,0,0,0,950,951,1,0,0,0,951,
+	954,1,0,0,0,952,950,1,0,0,0,953,955,5,45,0,0,954,953,1,0,0,0,954,955,1,
+	0,0,0,955,217,1,0,0,0,956,957,7,8,0,0,957,219,1,0,0,0,958,959,3,218,109,
+	0,959,221,1,0,0,0,960,961,3,218,109,0,961,223,1,0,0,0,962,964,3,226,113,
+	0,963,962,1,0,0,0,964,965,1,0,0,0,965,963,1,0,0,0,965,966,1,0,0,0,966,225,
+	1,0,0,0,967,968,5,69,0,0,968,227,1,0,0,0,96,231,237,242,249,254,262,269,
+	273,282,293,298,302,305,324,330,337,342,348,355,359,365,370,372,375,382,
+	389,395,401,408,412,418,421,433,436,442,447,459,464,472,482,489,493,500,
+	510,525,533,543,546,557,569,573,576,598,614,621,629,640,651,662,669,674,
+	686,693,716,730,744,753,765,769,777,779,787,791,796,805,809,815,821,841,
+	845,847,859,866,872,875,883,887,897,917,921,924,933,938,950,954,965];
 
 	private static __ATN: ATN;
 	public static get _ATN(): ATN {
@@ -5953,6 +6088,9 @@ export class Function_declarationContext extends ParserRuleContext {
 		super(parent, invokingState);
     	this.parser = parser;
 	}
+	public type_specification(): Type_specificationContext {
+		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
+	}
 	public name(): NameContext {
 		return this.getTypedRuleContext(NameContext, 0) as NameContext;
 	}
@@ -5970,9 +6108,6 @@ export class Function_declarationContext extends ParserRuleContext {
 	}
 	public EXPORT(): TerminalNode {
 		return this.getToken(PinescriptParser.EXPORT, 0);
-	}
-	public type_specification(): Type_specificationContext {
-		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
 	}
 	public parameter_list(): Parameter_listContext {
 		return this.getTypedRuleContext(Parameter_listContext, 0) as Parameter_listContext;
@@ -6027,11 +6162,11 @@ export class Parameter_definitionContext extends ParserRuleContext {
 		super(parent, invokingState);
     	this.parser = parser;
 	}
-	public name_store(): Name_storeContext {
-		return this.getTypedRuleContext(Name_storeContext, 0) as Name_storeContext;
-	}
 	public type_specification(): Type_specificationContext {
 		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
+	}
+	public name_store(): Name_storeContext {
+		return this.getTypedRuleContext(Name_storeContext, 0) as Name_storeContext;
 	}
 	public EQUAL(): TerminalNode {
 		return this.getToken(PinescriptParser.EQUAL, 0);
@@ -6061,6 +6196,9 @@ export class Method_declarationContext extends ParserRuleContext {
 	public METHOD(): TerminalNode {
 		return this.getToken(PinescriptParser.METHOD, 0);
 	}
+	public type_specification(): Type_specificationContext {
+		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
+	}
 	public name(): NameContext {
 		return this.getTypedRuleContext(NameContext, 0) as NameContext;
 	}
@@ -6078,9 +6216,6 @@ export class Method_declarationContext extends ParserRuleContext {
 	}
 	public EXPORT(): TerminalNode {
 		return this.getToken(PinescriptParser.EXPORT, 0);
-	}
-	public type_specification(): Type_specificationContext {
-		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
 	}
 	public method_parameter_list(): Method_parameter_listContext {
 		return this.getTypedRuleContext(Method_parameter_listContext, 0) as Method_parameter_listContext;
@@ -7017,17 +7152,23 @@ export class Simple_reassignmentContext extends ParserRuleContext {
 		super(parent, invokingState);
     	this.parser = parser;
 	}
-	public primary_expression(): Primary_expressionContext {
-		return this.getTypedRuleContext(Primary_expressionContext, 0) as Primary_expressionContext;
+	public assignment_target_attribute(): Assignment_target_attributeContext {
+		return this.getTypedRuleContext(Assignment_target_attributeContext, 0) as Assignment_target_attributeContext;
+	}
+	public EQUAL(): TerminalNode {
+		return this.getToken(PinescriptParser.EQUAL, 0);
 	}
 	public expression(): ExpressionContext {
 		return this.getTypedRuleContext(ExpressionContext, 0) as ExpressionContext;
 	}
+	public assignment_target_subscript(): Assignment_target_subscriptContext {
+		return this.getTypedRuleContext(Assignment_target_subscriptContext, 0) as Assignment_target_subscriptContext;
+	}
+	public primary_expression(): Primary_expressionContext {
+		return this.getTypedRuleContext(Primary_expressionContext, 0) as Primary_expressionContext;
+	}
 	public COLONEQUAL(): TerminalNode {
 		return this.getToken(PinescriptParser.COLONEQUAL, 0);
-	}
-	public EQUAL(): TerminalNode {
-		return this.getToken(PinescriptParser.EQUAL, 0);
 	}
     public get ruleIndex(): number {
     	return PinescriptParser.RULE_simple_reassignment;
@@ -8284,14 +8425,14 @@ export class Variable_declarationContext extends ParserRuleContext {
 		super(parent, invokingState);
     	this.parser = parser;
 	}
+	public type_specification(): Type_specificationContext {
+		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
+	}
 	public name_store(): Name_storeContext {
 		return this.getTypedRuleContext(Name_storeContext, 0) as Name_storeContext;
 	}
 	public declaration_mode(): Declaration_modeContext {
 		return this.getTypedRuleContext(Declaration_modeContext, 0) as Declaration_modeContext;
-	}
-	public type_specification(): Type_specificationContext {
-		return this.getTypedRuleContext(Type_specificationContext, 0) as Type_specificationContext;
 	}
     public get ruleIndex(): number {
     	return PinescriptParser.RULE_variable_declaration;

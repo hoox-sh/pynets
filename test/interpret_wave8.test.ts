@@ -45,6 +45,22 @@ plot(str.length(str.format_time(timestamp(2020, 1, 1))))`,
     expect(out.plots[0]).toBeGreaterThan(10);
   });
 
+  test("Type.new positional args fill fields in order", () => {
+    const out = new Runtime("TEST").run(
+      `indicator("t")
+type T
+    float a = 1
+    float b = 2
+x = T.new(9)
+plot(x.a)
+plot(x.b, title="b")`,
+      BARS,
+    );
+    expect(out.error).toBeUndefined();
+    expect(out.series.plot?.[0]).toBe(9);
+    expect(out.series.b?.[0]).toBe(2);
+  });
+
   test("UDT method binds this", () => {
     const out = new Runtime("TEST").run(
       `indicator("t")

@@ -3,8 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * Tiny Pine `matrix.*` value. `null` is `na`. Get is na-safe (OOB / non-finite → na).
- * Set OOB is a no-op. Python `Matrix` remains the source of truth.
+ * Set OOB is a no-op. Slots may hold numbers, na, or UDT instances.
+ * Python `Matrix` remains the source of truth.
  */
+
+import { UdtInstance } from "./udt.ts";
 
 export type Cell = number | null;
 
@@ -29,11 +32,82 @@ function fitsElements(rows: number, cols: number): boolean {
 }
 
 /** Pad with `na` or truncate so the vector has length *n*. */
-function padOrTrunc(values: Cell[] | undefined, n: number): Cell[] {
-  const out: Cell[] = [];
+function padOrTrunc(values: unknown[] | undefined, n: number): unknown[] {
+  const out: unknown[] = [];
   const src = values ?? [];
   for (let i = 0; i < n; i++) out.push(i < src.length ? src[i]! : null);
   return out;
+}
+
+function looksLikeUdt(item: unknown): boolean {
+  if (item == null || typeof item !== "object") return false;
+  if (item instanceof UdtInstance) return true;
+  return !Array.isArray(item) && Object.prototype.hasOwnProperty.call(item, "__type__");
+}
+
+function udtFieldNames(item: object): string[] | null {
+  if (item instanceof UdtInstance) return item.type.fields.map((f) => f.name);
+  const rec = item as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(rec, "__type__")) {
+    return Object.keys(rec).filter((k) => k !== "__type__");
+  }
+  return null;
+}
+
+function readUdtField(item: object, name: string): unknown {
+  if (item instanceof UdtInstance) return item.get(name);
+  return (item as Record<string, unknown>)[name];
+}
+
+function udtFieldKey(item: unknown, sortField: unknown): unknown {
+  if (item == null || sortField == null || typeof item !== "object") return item;
+  if (typeof sortField === "string") return readUdtField(item, sortField);
+  if (typeof sortField === "number" && Number.isFinite(sortField)) {
+    const names = udtFieldNames(item);
+    if (names == null) return item;
+    const idx = Math.trunc(sortField);
+    if (idx < 0 || idx >= names.length) return item;
+    return readUdtField(item, names[idx]!);
+  }
+  return item;
+}
+
+function cellSortValue(cell: unknown, sortField: unknown): unknown {
+  return sortField != null ? udtFieldKey(cell, sortField) : cell;
+}
+
+function isSortNa(v: unknown): boolean {
+  if (v == null) return true;
+  if (typeof v === "number") return !Number.isFinite(v);
+  return false;
+}
+
+function asFiniteNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function defaultMatrixSortField(rows: readonly unknown[][], column: number): unknown {
+  for (const row of rows) {
+    const cell = row[column];
+    if (cell == null) continue;
+    if (looksLikeUdt(cell)) return 0;
+    break;
+  }
+  return null;
+}
+
+function compareSortKeys(a: unknown, b: unknown): number {
+  if (a === b) return 0;
+  if (typeof a === "number" && typeof b === "number") {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  }
+  const sa = `${String(Object.prototype.toString.call(a))}${String(a)}`;
+  const sb = `${String(Object.prototype.toString.call(b))}${String(b)}`;
+  if (sa < sb) return -1;
+  if (sa > sb) return 1;
+  return 0;
 }
 
 function cloneGrid(src: number[][]): number[][] {
@@ -346,11 +420,11 @@ function nullspaceUnit(M: number[][]): number[] | null {
 }
 
 export class PineMatrix {
-  private readonly cells: Cell[][] = [];
+  private readonly cells: unknown[][] = [];
   private nRows: number;
   private nCols: number;
 
-  constructor(rows: number, cols: number, initial?: Cell) {
+  constructor(rows: number, cols: number, initial?: unknown) {
     let r = dim(rows);
     let c = dim(cols);
     if (r > 0 && c > Math.floor(MAX_MATRIX_ELEMENTS / r)) {
@@ -359,9 +433,9 @@ export class PineMatrix {
     }
     this.nRows = r;
     this.nCols = c;
-    const fill: Cell = initial === undefined ? null : initial;
+    const fill = initial === undefined ? null : initial;
     for (let i = 0; i < this.nRows; i++) {
-      const row: Cell[] = [];
+      const row: unknown[] = [];
       for (let j = 0; j < this.nCols; j++) row.push(fill);
       this.cells.push(row);
     }
@@ -380,18 +454,18 @@ export class PineMatrix {
     const i = resolveIndex(row, this.nRows);
     const j = resolveIndex(col, this.nCols);
     if (i === null || j === null) return null;
-    return this.cells[i]![j]!;
+    return this.cells[i]![j] as Cell;
   }
 
   /** `matrix.set` — OOB / non-finite index is a no-op. */
-  set(row: number, col: number, value: Cell): void {
+  set(row: number, col: number, value: unknown): void {
     const i = resolveIndex(row, this.nRows);
     const j = resolveIndex(col, this.nCols);
     if (i === null || j === null) return;
     this.cells[i]![j] = value;
   }
 
-  fill(value: Cell): void {
+  fill(value: unknown): void {
     for (let i = 0; i < this.nRows; i++) {
       const row = this.cells[i]!;
       for (let j = 0; j < this.nCols; j++) row[j] = value;
@@ -408,14 +482,14 @@ export class PineMatrix {
 
   row(i: number): Cell[] {
     const r = resolveIndex(i, this.nRows);
-    return r === null ? [] : this.cells[r]!.slice();
+    return r === null ? [] : (this.cells[r]!.slice() as Cell[]);
   }
 
   col(j: number): Cell[] {
     const c = resolveIndex(j, this.nCols);
     if (c === null) return [];
     const out: Cell[] = [];
-    for (let i = 0; i < this.nRows; i++) out.push(this.cells[i]![c]!);
+    for (let i = 0; i < this.nRows; i++) out.push(this.cells[i]![c] as Cell);
     return out;
   }
 
@@ -473,8 +547,8 @@ export class PineMatrix {
     if (!this.isSquare()) return null;
     let acc = 0;
     for (let i = 0; i < this.nRows; i++) {
-      const v = this.cells[i]![i]!;
-      if (v === null || !Number.isFinite(v)) return null;
+      const v = asFiniteNumber(this.cells[i]![i]);
+      if (v === null) return null;
       acc += v;
     }
     return acc;
@@ -489,8 +563,8 @@ export class PineMatrix {
     for (let i = 0; i < n; i++) {
       const row: number[] = [];
       for (let j = 0; j < n; j++) {
-        const v = this.cells[i]![j]!;
-        if (v === null || !Number.isFinite(v)) return null;
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v === null) return null;
         row.push(v);
       }
       a.push(row);
@@ -536,8 +610,8 @@ export class PineMatrix {
       const out = new PineMatrix(this.nRows, this.nCols);
       for (let i = 0; i < this.nRows; i++) {
         for (let j = 0; j < this.nCols; j++) {
-          const v = this.cells[i]![j]!;
-          if (v === null || !Number.isFinite(v)) {
+          const v = asFiniteNumber(this.cells[i]![j]);
+          if (v === null) {
             out.set(i, j, null);
             continue;
           }
@@ -773,7 +847,7 @@ export class PineMatrix {
    * Short rows pad `na`; long rows truncate. 0×0 adopts column count from *values*.
    * Negative / non-finite index or size cap → no-op.
    */
-  addRow(index?: number, values?: Cell[]): void {
+  addRow(index?: number, values?: unknown[]): void {
     const adopt = this.nRows === 0 && this.nCols === 0;
     const cols = adopt ? (values?.length ?? 0) : this.nCols;
     if (!fitsElements(this.nRows + 1, cols)) return;
@@ -793,7 +867,7 @@ export class PineMatrix {
    * Insert a column at *index* (append if omitted / past end).
    * Short cols pad `na`; long cols truncate. 0×0 becomes N×1 from *values*.
    */
-  addCol(index?: number, values?: Cell[]): void {
+  addCol(index?: number, values?: unknown[]): void {
     if (this.nRows === 0 && this.nCols === 0) {
       const n = values?.length ?? 0;
       if (!fitsElements(n, n === 0 ? 0 : 1)) return;
@@ -891,26 +965,51 @@ export class PineMatrix {
     for (const row of this.cells) row.reverse();
   }
 
-  /** Sort rows by *column*. `na` / non-finite keys always last. */
-  sort(column = 0, order: "asc" | "desc" = "asc"): void {
+  /** Sort rows by *column*. `na` last. Optional *sortField* keys UDT cells. */
+  sort(column = 0, order: "asc" | "desc" = "asc", sortField?: unknown): void {
     if (this.nRows === 0) return;
     const c = resolveIndex(column, this.nCols);
     if (c === null) return;
     const desc = order === "desc";
-    const nonNa: Cell[][] = [];
-    const naRows: Cell[][] = [];
+    const field = sortField ?? defaultMatrixSortField(this.cells, c);
+    const nonNa: unknown[][] = [];
+    const naRows: unknown[][] = [];
     for (const row of this.cells) {
-      const v = row[c]!;
-      if (v === null || !Number.isFinite(v)) naRows.push(row);
+      const v = cellSortValue(row[c], field);
+      if (isSortNa(v)) naRows.push(row);
       else nonNa.push(row);
     }
     nonNa.sort((a, b) => {
-      const d = (a[c] as number) - (b[c] as number);
-      return desc ? -d : d;
+      const ka = cellSortValue(a[c], field);
+      const kb = cellSortValue(b[c], field);
+      const cmp = compareSortKeys(ka, kb);
+      return desc ? -cmp : cmp;
     });
     this.cells.length = 0;
     for (const row of nonNa) this.cells.push(row);
     for (const row of naRows) this.cells.push(row);
+  }
+
+  /** Row indices that would sort by *column*; `na` indices last. */
+  sortIndices(column = 0, order: "asc" | "desc" = "asc", sortField?: unknown): number[] {
+    if (this.nRows === 0) return [];
+    const c = resolveIndex(column, this.nCols);
+    if (c === null) return [];
+    const desc = order === "desc";
+    const field = sortField ?? defaultMatrixSortField(this.cells, c);
+    const nonNa: { key: unknown; idx: number }[] = [];
+    const naIdx: number[] = [];
+    for (let i = 0; i < this.nRows; i++) {
+      const v = cellSortValue(this.cells[i]![c], field);
+      if (isSortNa(v)) naIdx.push(i);
+      else nonNa.push({ key: v, idx: i });
+    }
+    nonNa.sort((a, b) => {
+      const cmp = compareSortKeys(a.key, b.key);
+      if (cmp !== 0) return desc ? -cmp : cmp;
+      return a.idx - b.idx;
+    });
+    return nonNa.map((x) => x.idx).concat(naIdx);
   }
 
   /** Median of finite cells (Python skips `na`). Empty → `na`. */
@@ -918,8 +1017,8 @@ export class PineMatrix {
     const vals: number[] = [];
     for (let i = 0; i < this.nRows; i++) {
       for (let j = 0; j < this.nCols; j++) {
-        const v = this.cells[i]![j]!;
-        if (v !== null && Number.isFinite(v)) vals.push(v);
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v !== null) vals.push(v);
       }
     }
     if (vals.length === 0) return null;
@@ -936,8 +1035,8 @@ export class PineMatrix {
     let bestCount = 0;
     for (let i = 0; i < this.nRows; i++) {
       for (let j = 0; j < this.nCols; j++) {
-        const v = this.cells[i]![j]!;
-        if (v === null || !Number.isFinite(v)) continue;
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v === null) continue;
         const n = (counts.get(v) ?? 0) + 1;
         counts.set(v, n);
         if (n > bestCount) {
@@ -965,8 +1064,8 @@ export class PineMatrix {
     for (let i = 0; i < this.nRows; i++) {
       let total = 0;
       for (let j = 0; j < this.nCols; j++) {
-        const v = this.cells[i]![j]!;
-        if (v === null || !Number.isFinite(v) || v < 0) return false;
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v === null || v < 0) return false;
         total += v;
       }
       if (Math.abs(total - 1) > 1e-9) return false;
@@ -994,9 +1093,9 @@ export class PineMatrix {
     const out = new PineMatrix(this.nRows, this.nCols);
     for (let i = 0; i < this.nRows; i++) {
       for (let j = 0; j < this.nCols; j++) {
-        const a = this.cells[i]![j]!;
-        const b = other.cells[i]![j]!;
-        if (a === null || b === null || !Number.isFinite(a) || !Number.isFinite(b)) {
+        const a = asFiniteNumber(this.cells[i]![j]);
+        const b = asFiniteNumber(other.cells[i]![j]);
+        if (a === null || b === null) {
           out.set(i, j, null);
           continue;
         }
@@ -1123,8 +1222,8 @@ export class PineMatrix {
     for (let i = 0; i < this.nRows; i++) {
       const row: number[] = [];
       for (let j = 0; j < this.nCols; j++) {
-        const v = this.cells[i]![j]!;
-        if (v === null || !Number.isFinite(v)) return null;
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v === null) return null;
         row.push(v);
       }
       out.push(row);
@@ -1136,8 +1235,8 @@ export class PineMatrix {
     const out: number[] = [];
     for (let i = 0; i < this.nRows; i++) {
       for (let j = 0; j < this.nCols; j++) {
-        const v = this.cells[i]![j]!;
-        if (v === null || !Number.isFinite(v)) return null;
+        const v = asFiniteNumber(this.cells[i]![j]);
+        if (v === null) return null;
         out.push(v);
       }
     }
@@ -1147,7 +1246,7 @@ export class PineMatrix {
   private flatten(): Cell[] {
     const out: Cell[] = [];
     for (let i = 0; i < this.nRows; i++) {
-      for (let j = 0; j < this.nCols; j++) out.push(this.cells[i]![j]!);
+      for (let j = 0; j < this.nCols; j++) out.push(this.cells[i]![j] as Cell);
     }
     return out;
   }

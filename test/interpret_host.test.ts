@@ -86,4 +86,43 @@ plot(1)`,
     const lines = (out.drawings ?? []).filter((d) => d.kind === "line" && !d.deleted);
     expect(lines.length).toBeLessThanOrEqual(2);
   });
+
+  test("timeout_seconds stops interpret and sets timed_out", () => {
+    const bars = Array.from({ length: 64 }, (_, i) => ({ close: i + 1 }));
+    const out = new Runtime("TEST").run(`indicator("t")\nplot(close)`, bars, {
+      timeout_seconds: 0,
+    });
+    expect(out.timed_out).toBe(true);
+    expect(out.error).toBe("Script execution timed out");
+    expect(out.error_kind).toBe("runtime");
+    expect(out.count).toBe(0);
+    expect(out.plots.length).toBe(0);
+  });
+
+  test("run libraries= list registers import sources", () => {
+    const out = new Runtime("TEST").run(
+      `indicator("t")
+import User/Geom/1 as g
+p = g.Point.new(x=4)
+plot(p.double())`,
+      [{ close: 1 }],
+      {
+        libraries: [
+          {
+            namespace: "User",
+            name: "Geom",
+            version: 1,
+            source: `//@version=5
+library("Geom")
+export type Point
+    float x = 1
+export method double(Point this) =>
+    this.x * 2`,
+          },
+        ],
+      },
+    );
+    expect(out.error).toBeUndefined();
+    expect(out.plots[0]).toBe(8);
+  });
 });

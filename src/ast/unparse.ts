@@ -11,6 +11,7 @@ import type {
   Arg,
   Assign,
   Attribute,
+  AugAssign,
   BinOp,
   BoolOp,
   Call,
@@ -28,8 +29,10 @@ import type {
   Import,
   Name,
   Param,
+  Qualify,
   ReAssign,
   Script,
+  Specialize,
   Subscript,
   Switch,
   Tuple,
@@ -38,6 +41,7 @@ import type {
   While,
   expr,
   stmt,
+  type_qual,
 } from "./nodes.ts";
 
 const OP: Record<string, string> = {
@@ -46,6 +50,18 @@ const OP: Record<string, string> = {
   Mult: "*",
   Div: "/",
   Mod: "%",
+  BitAnd: "&",
+  BitOr: "|",
+  BitXor: "^",
+  LShift: "<<",
+  RShift: ">>",
+};
+
+const TYPE_QUAL: Record<string, string> = {
+  Const: "const",
+  Input: "input",
+  Simple: "simple",
+  Series: "series",
 };
 
 const UOP: Record<string, string> = {
@@ -111,7 +127,31 @@ function emitExpr(node: expr): string {
       return emitSwitch(node);
     case "BoolOp":
       return emitBoolOp(node);
+    case "Qualify":
+      return emitQualify(node);
+    case "Specialize":
+      return emitSpecialize(node);
+    case "AugAssign":
+      return emitAugAssign(node);
   }
+}
+
+function emitTypeQual(node: type_qual): string {
+  return TYPE_QUAL[node.kind] ?? node.kind.toLowerCase();
+}
+
+function emitQualify(node: Qualify): string {
+  return `${emitTypeQual(node.qualifier)} ${emitExpr(node.value)}`;
+}
+
+function emitSpecializeArgs(args: expr | null): string {
+  if (args == null) return "";
+  if (args.kind === "Tuple") return args.elts.map(emitExpr).join(", ");
+  return emitExpr(args);
+}
+
+function emitSpecialize(node: Specialize): string {
+  return `${emitExpr(node.value)}<${emitSpecializeArgs(node.args)}>`;
 }
 
 function emitCompare(node: Compare): string {
@@ -229,6 +269,7 @@ function emitStmt(node: stmt): string {
   if (node.kind === "Expr") return emitExpr(node.value);
   if (node.kind === "Assign") return emitAssign(node);
   if (node.kind === "ReAssign") return emitReAssign(node);
+  if (node.kind === "AugAssign") return emitAugAssign(node);
   if (node.kind === "FunctionDef") return emitFunctionDef(node);
   if (node.kind === "TypeDef") return emitTypeDef(node);
   if (node.kind === "EnumDef") return emitEnumDef(node);
@@ -274,6 +315,7 @@ function emitFunctionDef(node: FunctionDef): string {
   const chunks: string[] = [];
   if (node.export) chunks.push("export");
   if (node.method) chunks.push("method");
+  if (node.returns) chunks.push(emitExpr(node.returns));
   chunks.push(`${node.name}(${asParams(node.args).map(emitParam).join(", ")}) =>`);
   const head = chunks.join(" ");
   const body = node.body;
@@ -305,6 +347,10 @@ function emitReAssign(node: ReAssign): string {
   return `${emitExpr(node.target)} := ${emitExpr(node.value)}`;
 }
 
+function emitAugAssign(node: AugAssign): string {
+  return `${emitExpr(node.target)} ${OP[node.op.kind] ?? "?"}= ${emitExpr(node.value)}`;
+}
+
 export function unparse(node: AST): string {
   if (node.kind === "Script") {
     const s = node as Script;
@@ -317,12 +363,19 @@ export function unparse(node: AST): string {
   if (node.kind === "Expr") return emitExpr((node as Expr).value);
   if (node.kind === "Assign") return emitAssign(node as Assign);
   if (node.kind === "ReAssign") return emitReAssign(node as ReAssign);
+  if (node.kind === "AugAssign") return emitAugAssign(node as AugAssign);
   if (node.kind === "FunctionDef") return emitFunctionDef(node as FunctionDef);
   if (node.kind === "TypeDef") return emitTypeDef(node as TypeDef);
   if (node.kind === "EnumDef") return emitEnumDef(node as EnumDef);
   if (node.kind === "Param") return emitParam(node as Param);
   if (node.kind === "Var") return "var";
   if (node.kind === "VarIp") return "varip";
+  if (node.kind === "Const") return "const";
+  if (node.kind === "Input") return "input";
+  if (node.kind === "Simple") return "simple";
+  if (node.kind === "Series") return "series";
+  if (node.kind === "Qualify") return emitQualify(node as Qualify);
+  if (node.kind === "Specialize") return emitSpecialize(node as Specialize);
   if (node.kind === "Call") return emitCall(node as Call);
   if (node.kind === "Name") return (node as Name).id;
   if (node.kind === "Constant") return emitConstant(node as Constant);

@@ -177,9 +177,181 @@ describe("compile vs interpret strategy", () => {
     expect(requestRun.plots.every((v) => v == null)).toBe(true);
   });
 
+  test("strategy.exit profit ticks match interpret", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+    strategy.exit("X", profit=100)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 100.2, high: 100.5, low: 100, close: 100.4, volume: 1000, time: 1_700_000_060_000 },
+      { open: 100.4, high: 101.5, low: 100.2, close: 101.2, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.mode).toBe("compile");
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots).toEqual([1, 1, 0]);
+  });
+
+  test("trail_points=0 does not disable trail_offset", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+    strategy.exit("XT", trail_points=0, trail_offset=100)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 109.5, high: 110, low: 109.2, close: 109.8, volume: 1000, time: 1_700_000_060_000 },
+      { open: 109.5, high: 109.6, low: 109.1, close: 109.2, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots.at(-1)).toBe(1);
+  });
+
+  test("qty_percent sizes the compile exit", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 10)
+    strategy.exit("X", qty_percent=50)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_060_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots.at(-1)).toBe(5);
+  });
+
   test("Runtime mode=compile on strategy script has no error", () => {
     const out = new Runtime("TEST", { mode: "compile" }).run(ENTRY_SRC, BARS);
     expect(out.error).toBeUndefined();
     expect(out.mode).toBe("compile");
+  });
+
+  test("plot(strategy.leverage) after leverage=10 matches interpret", () => {
+    const src = `strategy("t", leverage=10)
+plot(strategy.leverage)`;
+    const bars = [{ close: 100 }, { close: 101 }];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, bars);
+    const interpreted = new Runtime("TEST").run(src, bars);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.mode).toBe("compile");
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots).toEqual([10, 10]);
+  });
+
+  test("futures avg_price_model stays sticky after partial close", () => {
+    const src = `strategy("t", pyramiding=1, avg_price_model="futures")
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots[1]).toBeCloseTo(110);
+    expect(compiled.plots[2]).toBeCloseTo(110);
+  });
+
+  test("strategy.avg_price_futures token selects sticky avg", () => {
+    const src = `strategy("t", pyramiding=1, avg_price_model=strategy.avg_price_futures)
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots[2]).toBeCloseTo(110);
+  });
+
+  test("stock default reweights FIFO avg after partial close", () => {
+    const src = `strategy("t", pyramiding=1)
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
+    const interpreted = new Runtime("TEST").run(src, ohlcv);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    expect(compiled.plots[1]).toBeCloseTo(110);
+    expect(compiled.plots[2]).toBeCloseTo(120);
+  });
+
+  test("cash default qty scales by leverage", () => {
+    const src = `strategy("t", default_qty_type=strategy.cash, default_qty_value=1000, leverage=10)
+if bar_index == 0
+    strategy.entry("L", strategy.long)
+plot(strategy.position_size)`;
+    const bars = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1 },
+      { open: 100, high: 100, low: 100, close: 100, volume: 1 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, bars);
+    const interpreted = new Runtime("TEST").run(src, bars);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    // qty = 1000 * 10 / 100 = 100
+    expect(compiled.plots[0]).toBeCloseTo(100);
+  });
+
+  test("margin_liquidation_price after leveraged long matches interpret", () => {
+    const src = `strategy("t", leverage=10)
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+plot(strategy.margin_liquidation_price)`;
+    const bars = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1 },
+      { open: 100, high: 100, low: 100, close: 100, volume: 1 },
+    ];
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, bars);
+    const interpreted = new Runtime("TEST").run(src, bars);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    // liq = 100 * (1 - 1/10) = 90
+    expect(compiled.plots[0]).toBeCloseTo(90);
   });
 });

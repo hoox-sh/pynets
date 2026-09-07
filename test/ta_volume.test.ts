@@ -72,28 +72,38 @@ describe("ta.pvt incremental", () => {
 });
 
 describe("ta.wad incremental", () => {
-  test("first bar 0; up adds close-low; down subtracts high-close", () => {
+  test("first bar 0; up adds vol*(close-low); down subtracts vol*(high-close)", () => {
     const ta = new TaEngine();
-    expect(ta.wad("wad:0", 100, 90, 95)).toBe(0);
-    expect(ta.wad("wad:0", 105, 95, 103)).toBe(8);
-    expect(ta.wad("wad:0", 102, 92, 94)).toBe(0);
+    expect(ta.wad("wad:0", 100, 90, 95, 10)).toBe(0);
+    expect(ta.wad("wad:0", 105, 95, 103, 2)).toBe(16);
+    expect(ta.wad("wad:0", 102, 92, 94, 3)).toBe(-8);
   });
 
-  test("unchanged close and H/L/C na keep previous", () => {
+  test("volume=1 path matches close-low / high-close increments", () => {
     const ta = new TaEngine();
-    expect(ta.wad("wad:0", 100, 90, 95)).toBe(0);
-    expect(ta.wad("wad:0", 105, 95, 103)).toBe(8);
-    expect(ta.wad("wad:0", 106, 96, 103)).toBe(8);
-    expect(ta.wad("wad:0", null, 96, 100)).toBe(8);
-    expect(ta.wad("wad:0", 104, 94, 110)).toBe(24);
+    expect(ta.wad("wad:0", 100, 90, 95, 1)).toBe(0);
+    expect(ta.wad("wad:0", 105, 95, 103, 1)).toBe(8);
+    expect(ta.wad("wad:0", 102, 92, 94, 1)).toBe(0);
   });
 
-  test("sites do not share state", () => {
+  test("unchanged close keeps previous; missing H/L fallback to close", () => {
     const ta = new TaEngine();
-    expect(ta.wad("a", 100, 90, 95)).toBe(0);
-    expect(ta.wad("b", 100, 90, 95)).toBe(0);
-    expect(ta.wad("a", 105, 95, 103)).toBe(8);
-    expect(ta.wad("b", 102, 92, 90)).toBe(-12);
+    expect(ta.wad("wad:0", 100, 90, 95, 1)).toBe(0);
+    expect(ta.wad("wad:0", 105, 95, 103, 1)).toBe(8);
+    expect(ta.wad("wad:0", 106, 96, 103, 1)).toBe(8);
+    // H na → hi=close, down: vol*(hi-c)=0
+    expect(ta.wad("wad:0", null, 96, 100, 1)).toBe(8);
+    expect(ta.wad("wad:0", 104, 94, 110, 1)).toBe(24);
+  });
+
+  test("C na keeps previous; vol na counts as 0; sites stay isolated", () => {
+    const ta = new TaEngine();
+    expect(ta.wad("a", 100, 90, 95, 1)).toBe(0);
+    expect(ta.wad("b", 100, 90, 95, 1)).toBe(0);
+    expect(ta.wad("a", 105, 95, 103, 1)).toBe(8);
+    expect(ta.wad("a", 102, 92, null, 1)).toBe(8);
+    expect(ta.wad("a", 102, 92, 90, null)).toBe(8);
+    expect(ta.wad("b", 102, 92, 90, 1)).toBe(-12);
   });
 });
 
@@ -157,24 +167,81 @@ describe("ta.iii incremental", () => {
 });
 
 describe("ta.wvad incremental", () => {
-  test("cumulative ((c-o)/(h-l))*volume", () => {
+  test("volume=1 path equals wad / rolling volume", () => {
     const ta = new TaEngine();
-    expect(ta.wvad("wvad:0", 98, 105, 95, 100, 1000)).toBe(200);
-    expect(ta.wvad("wvad:0", 104, 106, 96, 104, 1200)).toBe(200);
+    expect(ta.wvad("wvad:0", 100, 90, 95, 1, 2)).toBe(0);
+    expect(ta.wvad("wvad:0", 105, 95, 103, 1, 2)).toBe(4);
+    expect(ta.wvad("wvad:0", 102, 92, 94, 1, 2)).toBe(0);
   });
 
-  test("zero range adds 0; O/H/L/C na keeps previous; vol na → 0", () => {
+  test("period<=0 → 0; zero volume sum → 0", () => {
     const ta = new TaEngine();
-    expect(ta.wvad("wvad:0", 100, 100, 100, 100, 1000)).toBe(0);
-    expect(ta.wvad("wvad:0", 98, 105, 95, 100, 1000)).toBe(200);
-    expect(ta.wvad("wvad:0", null, 105, 95, 100, 1000)).toBe(200);
-    expect(ta.wvad("wvad:0", 98, 105, 95, 105, null)).toBe(200);
+    expect(ta.wvad("wvad:0", 100, 90, 95, 10, 0)).toBe(0);
+    expect(ta.wvad("wvad:0", 105, 95, 103, 2, -1)).toBe(0);
+    expect(ta.wvad("z", 100, 90, 95, 0, 2)).toBe(0);
+    expect(ta.wvad("z", 105, 95, 103, 0, 2)).toBe(0);
   });
 
   test("sites do not share state", () => {
     const ta = new TaEngine();
-    expect(ta.wvad("a", 98, 105, 95, 100, 1000)).toBe(200);
-    expect(ta.wvad("b", 102, 105, 95, 100, 1000)).toBe(-200);
+    expect(ta.wvad("a", 100, 90, 95, 10, 20)).toBe(0);
+    expect(ta.wvad("b", 100, 90, 95, 10, 20)).toBe(0);
+    expect(ta.wvad("a", 105, 95, 103, 2, 20)).toBeCloseTo(16 / 12);
+    expect(ta.wvad("b", 102, 92, 90, 4, 20)).toBeCloseTo(-48 / 14);
+  });
+});
+
+describe("ta.cmf incremental", () => {
+  test("CLV*vol rolling window; partial windows allowed", () => {
+    const ta = new TaEngine();
+    expect(ta.cmf("cmf:0", 100, 90, 95, 10, 20)).toBe(0);
+    expect(ta.cmf("cmf:0", 105, 95, 103, 2, 20)).toBeCloseTo(0.1);
+    expect(ta.cmf("cmf:0", 102, 92, 94, 3, 20)).toBeCloseTo(-0.04);
+  });
+
+  test("period<=0 → na; zero vol sum → 0", () => {
+    const ta = new TaEngine();
+    expect(ta.cmf("cmf:0", 100, 90, 95, 10, 0)).toBeNull();
+    expect(ta.cmf("cmf:0", 105, 95, 103, 2, -5)).toBeNull();
+    expect(ta.cmf("z", 100, 90, 95, 0, 2)).toBe(0);
+    expect(ta.cmf("z", 105, 95, 103, 0, 2)).toBe(0);
+  });
+
+  test("missing H/L/C → clv 0; sites stay isolated", () => {
+    const ta = new TaEngine();
+    expect(ta.cmf("a", null, 90, 95, 10, 2)).toBe(0);
+    expect(ta.cmf("a", 105, 95, 105, 10, 2)).toBe(0.5);
+    expect(ta.cmf("b", 105, 95, 95, 10, 2)).toBe(-1);
+  });
+});
+
+describe("ta.klinger incremental", () => {
+  test("signed-volume EMA(fast)−EMA(slow); last value matches Python", () => {
+    const ta = new TaEngine();
+    const closes = [100, 101, 102, 101, 103, 104, 102, 105];
+    const vols = [10, 20, 30, 40, 50, 60, 70, 80];
+    const out = closes.map((c, i) => ta.klinger("ko:0", c, vols[i]!, 2, 3));
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBeCloseTo(13.333333333333332);
+    expect(out[out.length - 1]).toBeCloseTo(11.089677640603568);
+  });
+
+  test("sites do not share EMA / cumulant state", () => {
+    const ta = new TaEngine();
+    const closes = [100, 101, 102, 101, 103];
+    const vols = [10, 20, 30, 40, 50];
+    const a: Cell[] = [];
+    const b: Cell[] = [];
+    for (let i = 0; i < closes.length; i++) {
+      a.push(ta.klinger("a", closes[i]!, vols[i]!, 2, 3));
+      b.push(ta.klinger("b", closes[i]!, vols[i]! * 2, 2, 3));
+    }
+    expect(a[0]).toBeNull();
+    expect(b[0]).toBeNull();
+    expect(a[2]).toBeCloseTo(13.333333333333332);
+    expect(b[2]).toBeCloseTo(26.666666666666664);
+    expect(a[2]).not.toBe(b[2]);
   });
 });
 

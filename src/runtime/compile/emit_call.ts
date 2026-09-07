@@ -13,6 +13,12 @@ const LOW = "low_arr[__bar_idx]";
 const CLOSE = "close_arr[__bar_idx]";
 const VOL = "vol_arr[__bar_idx]";
 const OPEN = "open_arr[__bar_idx]";
+// Interpret's bare `ta.vwap` sources hlc3 = (h+l+c)/3, falling back to close
+// when any component is na — mirror that exactly on the compile side.
+const HLC3 =
+  "((high_arr[__bar_idx] != null && low_arr[__bar_idx] != null && close_arr[__bar_idx] != null)" +
+  " ? (high_arr[__bar_idx] + low_arr[__bar_idx] + close_arr[__bar_idx]) / 3" +
+  " : close_arr[__bar_idx])";
 
 const NS = new Set([
   "ta",
@@ -87,13 +93,19 @@ const TA_METHODS = new Set([
   "cum",
   "range",
   "accdist",
+  "ad",
   "pvt",
+  "vpt",
   "wad",
   "nvi",
   "pvi",
   "wvad",
+  "cmf",
+  "klinger",
   "iii",
   "obv",
+  "ao",
+  "aroon",
   "highestbars",
   "lowestbars",
   "dev",
@@ -106,6 +118,28 @@ const TA_METHODS = new Set([
   "bbw",
   "max",
   "min",
+]);
+
+/**
+ * Bare `ta.<attr>` auto-call whitelist. Mirrors interpret's evalTaAttr
+ * (interpret.ts) exactly: only these attributes auto-invoke a zero-arg TA
+ * kernel on a bare attribute load; anything else is na on both backends.
+ * `aroon` is deliberately absent — interpret's evalTaAttr does not handle it.
+ */
+export const TA_BARE_ATTRS = new Set([
+  "accdist",
+  "ad",
+  "obv",
+  "tr",
+  "vwap",
+  "pvt",
+  "vpt",
+  "nvi",
+  "pvi",
+  "wad",
+  "wvad",
+  "cmf",
+  "ao",
 ]);
 
 const SRC_LEN = new Set([
@@ -160,6 +194,10 @@ const STRATEGY_QUERIES = new Set([
   "strategy_openprofit",
   "strategy_opentrades",
   "strategy_closedtrades",
+  "strategy_leverage",
+  "strategy_margin_liquidation_price",
+  "strategy_position_avg_price",
+  "strategy_initial_capital",
 ]);
 
 const CHART_SERIES_ARR: Record<string, string> = {
@@ -232,7 +270,7 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   if (PLOT_FUNCS.has(name)) return emitPlot(ctx, name, args);
 
   if (name === "indicator" || name === "study" || name === "library") return "null";
-  if (name === "strategy") return "null";
+  if (name === "strategy") return emitStrategyDecl(ctx, args);
 
   if (name === "na") {
     if (args.pos.length === 0 && args.kw.x == null && args.kw.source == null) return "null";
@@ -452,7 +490,7 @@ const ARRAY_SIGS: Record<string, string[][]> = {
   fill: [["id"], ["value"]],
   copy: [["id"]],
   reverse: [["id"]],
-  sort: [["id"], ["order"]],
+  sort: [["id"], ["order"], ["sort_field"]],
   concat: [["id"], ["other", "id2"]],
   slice: [["id"], ["index_from", "from"], ["index_to", "to"]],
   indexof: [["id"], ["value"]],
@@ -476,10 +514,10 @@ const ARRAY_SIGS: Record<string, string[][]> = {
   percentile_linear_interpolation: [["id"], ["percentage", "percent"]],
   percentile_nearest: [["id"], ["percentage", "percent"]],
   percentile_nearest_rank: [["id"], ["percentage", "percent"]],
-  binary_search: [["id"], ["value"]],
-  binary_search_leftmost: [["id"], ["value"]],
-  binary_search_rightmost: [["id"], ["value"]],
-  sort_indices: [["id"], ["order"]],
+  binary_search: [["id"], ["value"], ["sort_field"]],
+  binary_search_leftmost: [["id"], ["value"], ["sort_field"]],
+  binary_search_rightmost: [["id"], ["value"], ["sort_field"]],
+  sort_indices: [["id"], ["order"], ["sort_field"]],
   covariance: [["id"], ["id2", "other"], ["biased"]],
 };
 
@@ -541,7 +579,8 @@ const MATRIX_SIGS: Record<string, string[][]> = {
   concat: [["id"], ["other"]],
   reshape: [["id"], ["rows"], ["columns", "cols"]],
   reverse: [["id"]],
-  sort: [["id"], ["column", "col"], ["order"]],
+  sort: [["id"], ["column", "col"], ["order"], ["sort_field"]],
+  sort_indices: [["id"], ["column", "col"], ["order"], ["sort_field"]],
   eigenvalues: [["id"]],
   eigenvectors: [["id"]],
   pow: [["id"], ["power", "n"]],
@@ -891,6 +930,26 @@ function isStrategyAction(name: string, method: string): boolean {
   );
 }
 
+/** `strategy(...)` declaration — kwargs only, matching interpret `applyStrategyDecl`. */
+function emitStrategyDecl(ctx: EmitCtx, args: CallArgs): string {
+  ctx.usesStrategy = true;
+  const fields: string[] = [];
+  const add = (names: string[], key: string): void => {
+    if (hasArg(args, -1, names)) fields.push(`${key}: ${pick(args, -1, names, "null")}`);
+  };
+  add(["commission", "commission_value"], "commission");
+  add(["slippage"], "slippage");
+  add(["pyramiding"], "pyramiding");
+  add(["avg_price_model"], "avg_price_model");
+  add(["leverage"], "leverage");
+  add(["margin_long"], "margin_long");
+  add(["margin_short"], "margin_short");
+  add(["default_qty_type"], "default_qty_type");
+  add(["default_qty_value"], "default_qty_value");
+  add(["initial_capital"], "initial_capital");
+  return `__h.strategy.configure({${fields.join(", ")}})`;
+}
+
 function emitStrategyEntry(method: "entry" | "order", args: CallArgs): string {
   const id = pick(args, 0, ["id"], "null");
   const direction = pick(args, 1, ["direction"], "null");
@@ -926,10 +985,22 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
       return "__h.strategy.close_all()";
     case "exit": {
       ctx.usesStrategy = true;
-      const fromEntry = pick(args, 1, ["from_entry"], "null");
-      return hasArg(args, 2, ["qty"])
-        ? `__h.strategy.exit(${fromEntry}, ${pick(args, 2, ["qty"], "null")})`
-        : `__h.strategy.exit(${fromEntry})`;
+      const id = pick(args, 0, ["id"], "null");
+      const fields: string[] = [];
+      const add = (index: number, names: string[], key: string): void => {
+        if (hasArg(args, index, names)) fields.push(`${key}: ${pick(args, index, names, "null")}`);
+      };
+      add(1, ["from_entry"], "from_entry");
+      add(2, ["qty"], "qty");
+      add(3, ["qty_percent"], "qty_percent");
+      add(4, ["profit"], "profit");
+      add(5, ["limit"], "limit");
+      add(6, ["loss"], "loss");
+      add(7, ["stop"], "stop");
+      add(8, ["trail_price"], "trail_price");
+      add(9, ["trail_points"], "trail_points");
+      add(10, ["trail_offset"], "trail_offset");
+      return `__h.strategy.exit(${id}, {${fields.join(", ")}})`;
     }
     case "cancel":
       ctx.usesStrategy = true;
@@ -943,6 +1014,10 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
     case "openprofit":
     case "opentrades":
     case "closedtrades":
+    case "leverage":
+    case "margin_liquidation_price":
+    case "position_avg_price":
+    case "initial_capital":
       ctx.usesStrategy = true;
       return `__h.strategy.${method}()`;
     case "risk_allow_entry_in":
@@ -1176,6 +1251,7 @@ function taCall(method: string, site: string, parts: string[]): string {
 
 function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (!TA_METHODS.has(method)) return "null";
+  if (method === "ad") method = "accdist";
   const site = allocSite(ctx);
   const src = () => pick(args, 0, ["source", "series", "src"], CLOSE);
   const len = (index: number, fb: string, names: string[] = ["length", "len", "period"]) =>
@@ -1355,7 +1431,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return taCall("willr", site, [HIGH, LOW, CLOSE, len(0, "14")]);
   }
   if (method === "vwap") {
-    return taCall("vwap", site, [src(), pick(args, 1, ["volume"], VOL)]);
+    return taCall("vwap", site, [
+      pick(args, 0, ["source", "series", "src"], HLC3),
+      pick(args, 1, ["volume"], VOL),
+    ]);
   }
   if (method === "sar") {
     return taCall("sar", site, [
@@ -1387,20 +1466,69 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 3, ["volume"], VOL),
     ]);
   }
-  if (method === "pvt" || method === "obv" || method === "nvi" || method === "pvi") {
-    return taCall(method, site, [
+  // `vpt` is an alias of the pvt kernel on interpret (no ta.vpt engine fn).
+  if (method === "pvt" || method === "vpt" || method === "obv" || method === "nvi" || method === "pvi") {
+    return taCall(method === "vpt" ? "pvt" : method, site, [
       pick(args, 0, ["source", "close"], CLOSE),
       pick(args, 1, ["volume"], VOL),
     ]);
   }
   if (method === "wad") {
-    return taCall("wad", site, [HIGH, LOW, CLOSE]);
+    return taCall("wad", site, [
+      pick(args, 0, ["high"], HIGH),
+      pick(args, 1, ["low"], LOW),
+      pick(args, 2, ["close"], CLOSE),
+      pick(args, 3, ["volume"], VOL),
+    ]);
   }
   if (method === "iii") {
     return taCall("iii", site, [HIGH, LOW, CLOSE, VOL]);
   }
   if (method === "wvad") {
-    return taCall("wvad", site, [OPEN, HIGH, LOW, CLOSE, VOL]);
+    if (args.pos.length >= 4 || Object.hasOwn(args.kw, "high")) {
+      return taCall("wvad", site, [
+        pick(args, 0, ["high"], HIGH),
+        pick(args, 1, ["low"], LOW),
+        pick(args, 2, ["close"], CLOSE),
+        pick(args, 3, ["volume"], VOL),
+        pick(args, 4, ["length", "period"], "20"),
+      ]);
+    }
+    return taCall("wvad", site, [HIGH, LOW, CLOSE, VOL, pick(args, 0, ["length", "period"], "20")]);
+  }
+  if (method === "cmf") {
+    if (args.pos.length >= 5) {
+      return taCall("cmf", site, [
+        pick(args, 1, ["high"], HIGH),
+        pick(args, 2, ["low"], LOW),
+        pick(args, 0, ["close", "source"], CLOSE),
+        pick(args, 3, ["volume"], VOL),
+        pick(args, 4, ["length", "period"], "20"),
+      ]);
+    }
+    return taCall("cmf", site, [HIGH, LOW, CLOSE, VOL, pick(args, 0, ["length", "period"], "20")]);
+  }
+  if (method === "klinger") {
+    return taCall("klinger", site, [
+      pick(args, 2, ["close"], CLOSE),
+      pick(args, 3, ["volume"], VOL),
+      pick(args, 4, ["fast_period", "fast", "fastlen"], "0"),
+      pick(args, 5, ["slow_period", "slow", "slowlen"], "0"),
+    ]);
+  }
+  if (method === "ao") {
+    // SMA(hl2, fast) − SMA(hl2, slow); high/low always come from the bar context.
+    return taCall("ao", site, [
+      HIGH,
+      LOW,
+      pick(args, 0, ["fast", "fastlen"], "5"),
+      pick(args, 1, ["slow", "slowlen"], "34"),
+    ]);
+  }
+  if (method === "aroon") {
+    // Kernel returns {down, up}; interpret exposes the tuple [down, up].
+    const call = taCall("aroon", site, [HIGH, LOW, pick(args, 0, ["length"], "14")]);
+    return `(() => { const __r = ${call}; return [__r.down, __r.up]; })()`;
   }
   return "null";
 }

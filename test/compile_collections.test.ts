@@ -113,4 +113,44 @@ describe("compile vs interpret collections", () => {
   test("array.avg after push 1 and 3 is 2", () => {
     assertCompileMatchesInterpret(ARRAY_AVG_SRC, 2);
   });
+
+  test("UDT sort_field + binary_search matches interpret", () => {
+    const src = `indicator("t")
+type T
+    float x
+    float y
+a = array.new<T>()
+array.push(a, T.new(1, 10))
+array.push(a, T.new(3, 30))
+array.push(a, T.new(5, 50))
+array.sort(a, "ascending", 0)
+plot(array.binary_search(a, 3, 0))`;
+    assertCompileMatchesInterpret(src, 1, [1, 1, 1, 1]);
+  });
+
+  test("matrix UDT sort by field 0 matches interpret", () => {
+    const src = `indicator("t")
+type T
+    float x
+m = matrix.new<T>(3, 1)
+matrix.set(m, 0, 0, T.new(3))
+matrix.set(m, 1, 0, T.new(1))
+matrix.set(m, 2, 0, T.new(2))
+matrix.sort(m, 0, "ascending", 0)
+plot(matrix.get(m, 0, 0).x)`;
+    assertCompileMatchesInterpret(src, 1, [1, 1, 1, 1]);
+  });
+
+  test("matrix.sort_indices last index matches interpret", () => {
+    const src = `indicator("t")
+type T
+    float x
+m = matrix.new<T>(3, 1)
+matrix.set(m, 0, 0, T.new(9))
+matrix.set(m, 1, 0, T.new(1))
+matrix.set(m, 2, 0, T.new(5))
+idx = matrix.sort_indices(m, 0, "ascending", "x")
+plot(array.get(idx, array.size(idx) - 1))`;
+    assertCompileMatchesInterpret(src, 0, [0, 0, 0, 0]);
+  });
 });

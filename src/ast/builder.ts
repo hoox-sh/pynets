@@ -13,8 +13,15 @@ import {
   type Additive_opContext,
   type Argument_definitionContext,
   type Argument_listContext,
+  type Assignment_target_attributeContext,
+  type Assignment_target_subscriptContext,
   type Attributed_type_nameContext,
+  type Augassign_opContext,
+  type Bitwise_and_expressionContext,
+  type Bitwise_or_expressionContext,
+  type Bitwise_xor_expressionContext,
   type Break_statementContext,
+  type Compound_augassignmentContext,
   type Compound_name_initializationContext,
   type Compound_reassignmentContext,
   type Compound_tuple_initializationContext,
@@ -68,6 +75,7 @@ import {
   type Not_equal_trailing_pairContext,
   type Parameter_definitionContext,
   type Parameter_listContext,
+  type Simple_augassignmentContext,
   type Simple_name_initializationContext,
   type Simple_reassignmentContext,
   type Simple_tuple_initializationContext,
@@ -80,8 +88,13 @@ import {
   type Trailing_structure_statementsContext,
   type Tuple_declarationContext,
   type Tuple_expressionContext,
+  type Template_spec_suffixContext,
+  type Type_argument_listContext,
   type Type_declarationContext,
+  type Type_qualifierContext,
   type Type_specificationContext,
+  type Shift_expressionContext,
+  type Shift_opContext,
   type Simple_statementsContext,
   type Start_expressionContext,
   type Start_scriptContext,
@@ -97,11 +110,17 @@ import {
 import {
   Add,
   And,
+  BitAnd,
+  BitOr,
+  BitXor,
+  Const,
   Div,
   Eq,
   Gt,
   GtE,
+  Input,
   Invert,
+  LShift,
   Lt,
   LtE,
   NotEq,
@@ -110,6 +129,9 @@ import {
   Mult,
   NotOp,
   Or,
+  RShift,
+  Series,
+  Simple,
   Store,
   Sub,
   UAdd,
@@ -119,6 +141,7 @@ import {
   arg,
   assign,
   attribute,
+  augAssign,
   binOp,
   boolOp,
   breakStmt,
@@ -138,8 +161,10 @@ import {
   importStmt,
   name,
   param,
+  qualify,
   reAssign,
   script,
+  specialize,
   subscript,
   switchExpr,
   tupleExpr,
@@ -157,6 +182,7 @@ import {
   type operator,
   type Param,
   type stmt,
+  type type_qual,
   type unary_op,
 } from "./nodes.ts";
 
@@ -354,6 +380,64 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(exprs[0]);
   };
 
+  visitBitwise_or_expression = (ctx: Bitwise_or_expressionContext): unknown => {
+    if (hasTerminal(ctx.PIPE())) {
+      const node = binOp(
+        this.visit(ctx.bitwise_or_expression()) as expr,
+        BitOr,
+        this.visit(ctx.bitwise_xor_expression()) as expr,
+      );
+      loc(node, ctx);
+      return node;
+    }
+    return this.visit(ctx.bitwise_xor_expression());
+  };
+
+  visitBitwise_xor_expression = (ctx: Bitwise_xor_expressionContext): unknown => {
+    if (hasTerminal(ctx.CARET())) {
+      const node = binOp(
+        this.visit(ctx.bitwise_xor_expression()) as expr,
+        BitXor,
+        this.visit(ctx.bitwise_and_expression()) as expr,
+      );
+      loc(node, ctx);
+      return node;
+    }
+    return this.visit(ctx.bitwise_and_expression());
+  };
+
+  visitBitwise_and_expression = (ctx: Bitwise_and_expressionContext): unknown => {
+    if (hasTerminal(ctx.AMP())) {
+      const node = binOp(
+        this.visit(ctx.bitwise_and_expression()) as expr,
+        BitAnd,
+        this.visit(ctx.equality_expression()) as expr,
+      );
+      loc(node, ctx);
+      return node;
+    }
+    return this.visit(ctx.equality_expression());
+  };
+
+  visitShift_op = (ctx: Shift_opContext): unknown => {
+    if (hasTerminal(ctx.LSHIFT())) return LShift;
+    if (hasTerminal(ctx.RSHIFT())) return RShift;
+    return LShift;
+  };
+
+  visitShift_expression = (ctx: Shift_expressionContext): unknown => {
+    if (isRuleCtx(ctx.shift_op())) {
+      const node = binOp(
+        this.visit(ctx.shift_expression()) as expr,
+        this.visit(ctx.shift_op()) as operator,
+        this.visit(ctx.additive_expression()) as expr,
+      );
+      loc(node, ctx);
+      return node;
+    }
+    return this.visit(ctx.additive_expression());
+  };
+
   visitAdditive_expression = (ctx: Additive_expressionContext): unknown => {
     if (ctx.additive_op()) {
       const node = binOp(
@@ -414,7 +498,23 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitPrimary_expression_call = (ctx: Primary_expression_callContext): unknown => {
-    const func = this.visit(ctx.primary_expression()) as expr;
+    let func = this.visit(ctx.primary_expression()) as expr;
+    const spec = ctx.template_spec_suffix();
+    if (isRuleCtx(spec)) {
+      const specArgs = (this.visit(spec) as expr | null | undefined) ?? null;
+      const specNode = specialize(func, specArgs);
+      specNode.lineno = func.lineno;
+      specNode.col_offset = func.col_offset;
+      if (specArgs) {
+        specNode.end_lineno = specArgs.end_lineno ?? null;
+        specNode.end_col_offset = specArgs.end_col_offset ?? null;
+      } else {
+        loc(specNode, spec);
+        specNode.lineno = func.lineno;
+        specNode.col_offset = func.col_offset;
+      }
+      func = specNode;
+    }
     const argsCtx = ctx.argument_list();
     const args = isRuleCtx(argsCtx) ? asArgList(this.visit(argsCtx)) : [];
     const node = call(func, args);
@@ -529,14 +629,57 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitType_specification = (ctx: Type_specificationContext): unknown => {
     let typeSpec = this.visit(ctx.attributed_type_name()) as expr;
-    if (isRuleCtx(ctx.array_type_suffix())) {
-      const node = subscript(typeSpec, null, Load);
-      loc(node, ctx);
+    const tempSpec = ctx.template_spec_suffix();
+    if (isRuleCtx(tempSpec)) {
+      const args = (this.visit(tempSpec) as expr | null | undefined) ?? null;
+      const node = specialize(typeSpec, args);
+      loc(node, tempSpec);
       node.lineno = typeSpec.lineno;
       node.col_offset = typeSpec.col_offset;
       typeSpec = node;
     }
+    const arraySuffix = ctx.array_type_suffix();
+    if (isRuleCtx(arraySuffix)) {
+      const node = subscript(typeSpec, null, Load);
+      loc(node, arraySuffix);
+      node.lineno = typeSpec.lineno;
+      node.col_offset = typeSpec.col_offset;
+      typeSpec = node;
+    }
+    const typeQual = ctx.type_qualifier();
+    if (isRuleCtx(typeQual)) {
+      const qualifier = this.visit(typeQual) as type_qual | undefined;
+      if (qualifier) {
+        const node = qualify(qualifier, typeSpec);
+        loc(node, typeQual);
+        node.end_lineno = typeSpec.end_lineno ?? null;
+        node.end_col_offset = typeSpec.end_col_offset ?? null;
+        typeSpec = node;
+      }
+    }
     return typeSpec;
+  };
+
+  visitType_qualifier = (ctx: Type_qualifierContext): unknown => {
+    if (hasTerminal(ctx.CONST())) return Const;
+    if (hasTerminal(ctx.INPUT())) return Input;
+    if (hasTerminal(ctx.SIMPLE())) return Simple;
+    if (hasTerminal(ctx.SERIES())) return Series;
+    return undefined;
+  };
+
+  visitTemplate_spec_suffix = (ctx: Template_spec_suffixContext): unknown => {
+    const argsCtx = ctx.type_argument_list();
+    if (!isRuleCtx(argsCtx)) return null;
+    return this.visit(argsCtx);
+  };
+
+  visitType_argument_list = (ctx: Type_argument_listContext): unknown => {
+    const args = (ctx.type_specification_list() ?? []).map((a) => this.visit(a) as expr);
+    if (args.length === 1) return args[0];
+    const node = tupleExpr(args, Load);
+    loc(node, ctx);
+    return node;
   };
 
   visitAttributed_type_name = (ctx: Attributed_type_nameContext): unknown => {
@@ -616,10 +759,62 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitSimple_reassignment = (ctx: Simple_reassignmentContext): unknown => {
+  visitSimple_augassignment = (ctx: Simple_augassignmentContext): unknown => {
     const target = setStoreCtx(this.visit(ctx.primary_expression()) as expr);
+    const op = this.visit(ctx.augassign_op()) as operator;
+    const value = this.visit(ctx.expression()) as expr;
+    const node = augAssign(target, op, value);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitCompound_augassignment = (ctx: Compound_augassignmentContext): unknown => {
+    const target = setStoreCtx(this.visit(ctx.primary_expression()) as expr);
+    const op = this.visit(ctx.augassign_op()) as operator;
+    const value = this.visit(ctx.structure_expression()) as expr;
+    const node = augAssign(target, op, value);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitAugassign_op = (ctx: Augassign_opContext): unknown => {
+    if (hasTerminal(ctx.STAREQUAL())) return Mult;
+    if (hasTerminal(ctx.SLASHEQUAL())) return Div;
+    if (hasTerminal(ctx.PERCENTEQUAL())) return Mod;
+    if (hasTerminal(ctx.PLUSEQUAL())) return Add;
+    if (hasTerminal(ctx.MINEQUAL())) return Sub;
+    return Add;
+  };
+
+  visitSimple_reassignment = (ctx: Simple_reassignmentContext): unknown => {
+    const attr = ctx.assignment_target_attribute();
+    const sub = ctx.assignment_target_subscript();
+    let target: expr;
+    if (isRuleCtx(attr)) {
+      target = this.visit(attr) as expr;
+    } else if (isRuleCtx(sub)) {
+      target = this.visit(sub) as expr;
+    } else {
+      target = setStoreCtx(this.visit(ctx.primary_expression()) as expr);
+    }
     const value = this.visit(ctx.expression()) as expr;
     const node = reAssign(target, value);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitAssignment_target_attribute = (ctx: Assignment_target_attributeContext): unknown => {
+    const value = this.visit(ctx.primary_expression()) as expr;
+    const n = this.visit(ctx.name_store()) as ReturnType<typeof name>;
+    const node = attribute(value, n.id, Store);
+    loc(node, ctx);
+    return node;
+  };
+
+  visitAssignment_target_subscript = (ctx: Assignment_target_subscriptContext): unknown => {
+    const value = this.visit(ctx.primary_expression()) as expr;
+    const items = this.visit(ctx.subscript_slice()) as expr;
+    const node = subscript(value, items, Store);
     loc(node, ctx);
     return node;
   };
@@ -654,7 +849,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const args = isRuleCtx(argsCtx) ? asParamList(this.visit(argsCtx)) : [];
     const body = asStmtList(this.visit(ctx.local_block()));
     const exported = hasTerminal(ctx.EXPORT()) ? 1 : 0;
-    const node = functionDef(fname, args, body, 0, exported);
+    const retCtx = ctx.type_specification();
+    const returns = isRuleCtx(retCtx) ? ((this.visit(retCtx) as expr | undefined) ?? null) : null;
+    const node = functionDef(fname, args, body, 0, exported, [], returns);
     loc(node, ctx);
     return node;
   };
@@ -682,7 +879,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const args = isRuleCtx(argsCtx) ? asParamList(this.visit(argsCtx)) : [];
     const body = asStmtList(this.visit(ctx.local_block()));
     const exported = hasTerminal(ctx.EXPORT()) ? 1 : 0;
-    const node = functionDef(fname, args, body, 1, exported);
+    const retCtx = ctx.type_specification();
+    const returns = isRuleCtx(retCtx) ? ((this.visit(retCtx) as expr | undefined) ?? null) : null;
+    const node = functionDef(fname, args, body, 1, exported, [], returns);
     loc(node, ctx);
     return node;
   };

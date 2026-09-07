@@ -19,6 +19,32 @@ function cell(v: unknown): number | null {
   return naNum(v);
 }
 
+/** Keep UDT/string/bool slots; only coerce non-finite numbers to `na`. */
+function store(v: unknown): unknown {
+  if (v == null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  return v;
+}
+
+function parseSortArgs(order?: unknown, sortField?: unknown): { order: "asc" | "desc"; field: unknown } {
+  if (sortField !== undefined && sortField !== null) {
+    return { order: sortOrder(order), field: sortField };
+  }
+  if (order == null) return { order: "asc", field: null };
+  if (typeof order === "string") {
+    const low = order.toLowerCase();
+    if (low === "ascending" || low === "descending" || low === "asc" || low === "desc" || low.includes("desc") || low.includes("asc")) {
+      return { order: sortOrder(order), field: null };
+    }
+    return { order: "asc", field: order };
+  }
+  if (typeof order === "number" && Number.isFinite(order)) {
+    if (order === 1 || order === -1) return { order: sortOrder(order), field: null };
+    return { order: "asc", field: order };
+  }
+  return { order: sortOrder(order), field: null };
+}
+
 function asArray(id: unknown): PineArray | null {
   return id instanceof PineArray ? id : null;
 }
@@ -32,58 +58,65 @@ function asMatrix(id: unknown): PineMatrix | null {
 }
 
 function sortOrder(order: unknown): "asc" | "desc" {
+  if (typeof order === "number") return order < 0 ? "desc" : "asc";
   return String(order ?? "asc").toLowerCase().includes("desc") ? "desc" : "asc";
 }
 
-function wrapCells(cells: ReadonlyArray<number | null> | null | undefined): PineArray | null {
+function wrapCells(cells: ReadonlyArray<unknown> | null | undefined): PineArray | null {
   if (cells == null) return null;
   const out = new PineArray();
-  for (const v of cells) out.push(v);
+  for (const v of cells) out.push(store(v));
   return out;
+}
+
+function storedArrayValues(id: unknown): unknown[] | undefined {
+  const a = asArray(id);
+  if (a == null) return undefined;
+  return a.toValues().map(store);
 }
 
 export const compileArray = {
   new(size?: unknown, initial?: unknown): PineArray {
-    return new PineArray(n(size, 0), cell(initial));
+    return new PineArray(n(size, 0), store(initial));
   },
-  get(id: unknown, index?: unknown): number | null {
+  get(id: unknown, index?: unknown): unknown {
     return asArray(id)?.get(n(index, 0)) ?? null;
   },
   set(id: unknown, index?: unknown, value?: unknown): unknown {
-    asArray(id)?.set(n(index, 0), cell(value));
+    asArray(id)?.set(n(index, 0), store(value));
     return id ?? null;
   },
   push(id: unknown, value?: unknown): unknown {
-    asArray(id)?.push(cell(value));
+    asArray(id)?.push(store(value));
     return id ?? null;
   },
-  pop(id: unknown): number | null {
+  pop(id: unknown): unknown {
     return asArray(id)?.pop() ?? null;
   },
   unshift(id: unknown, value?: unknown): unknown {
-    asArray(id)?.unshift(cell(value));
+    asArray(id)?.unshift(store(value));
     return id ?? null;
   },
-  shift(id: unknown): number | null {
+  shift(id: unknown): unknown {
     return asArray(id)?.shift() ?? null;
   },
   size(id: unknown): number {
     return asArray(id)?.size() ?? 0;
   },
   includes(id: unknown, value?: unknown): boolean {
-    return asArray(id)?.includes(cell(value)) ?? false;
+    return asArray(id)?.includes(store(value)) ?? false;
   },
-  first(id: unknown): number | null {
+  first(id: unknown): unknown {
     return asArray(id)?.first() ?? null;
   },
-  last(id: unknown): number | null {
+  last(id: unknown): unknown {
     return asArray(id)?.last() ?? null;
   },
   insert(id: unknown, index?: unknown, value?: unknown): unknown {
-    asArray(id)?.insert(n(index, 0), cell(value));
+    asArray(id)?.insert(n(index, 0), store(value));
     return id ?? null;
   },
-  remove(id: unknown, index?: unknown): number | null {
+  remove(id: unknown, index?: unknown): unknown {
     return asArray(id)?.remove(n(index, 0)) ?? null;
   },
   clear(id: unknown): unknown {
@@ -91,7 +124,7 @@ export const compileArray = {
     return id ?? null;
   },
   fill(id: unknown, value?: unknown): unknown {
-    asArray(id)?.fill(cell(value));
+    asArray(id)?.fill(store(value));
     return id ?? null;
   },
   copy(id: unknown): PineArray | null {
@@ -101,9 +134,9 @@ export const compileArray = {
     asArray(id)?.reverse();
     return id ?? null;
   },
-  sort(id: unknown, order?: unknown): unknown {
-    const o = String(order ?? "asc").toLowerCase();
-    asArray(id)?.sort(o.startsWith("desc") ? "desc" : "asc");
+  sort(id: unknown, order?: unknown, sortField?: unknown): unknown {
+    const parsed = parseSortArgs(order, sortField);
+    asArray(id)?.sort(parsed.order, parsed.field);
     return id ?? null;
   },
   concat(id: unknown, other?: unknown): PineArray | null {
@@ -117,10 +150,10 @@ export const compileArray = {
     return asArray(id)?.slice(n(from, 0), to == null ? undefined : n(to, 0)) ?? null;
   },
   indexof(id: unknown, value?: unknown): number | null {
-    return asArray(id)?.indexof(cell(value)) ?? null;
+    return asArray(id)?.indexof(store(value)) ?? null;
   },
   lastindexof(id: unknown, value?: unknown): number | null {
-    return asArray(id)?.lastIndexOf(cell(value)) ?? null;
+    return asArray(id)?.lastIndexOf(store(value)) ?? null;
   },
   avg(id: unknown): number | null {
     return asArray(id)?.avg() ?? null;
@@ -174,17 +207,18 @@ export const compileArray = {
   percentrank(id: unknown, value?: unknown): number | null {
     return asArray(id)?.percentrank(cell(value)) ?? null;
   },
-  binary_search(id: unknown, value?: unknown): number | null {
-    return asArray(id)?.binarySearch(cell(value)) ?? null;
+  binary_search(id: unknown, value?: unknown, sortField?: unknown): number | null {
+    return asArray(id)?.binarySearch(store(value), sortField) ?? null;
   },
-  binary_search_leftmost(id: unknown, value?: unknown): number | null {
-    return asArray(id)?.binarySearchLeftmost(cell(value)) ?? null;
+  binary_search_leftmost(id: unknown, value?: unknown, sortField?: unknown): number | null {
+    return asArray(id)?.binarySearchLeftmost(store(value), sortField) ?? null;
   },
-  binary_search_rightmost(id: unknown, value?: unknown): number | null {
-    return asArray(id)?.binarySearchRightmost(cell(value)) ?? null;
+  binary_search_rightmost(id: unknown, value?: unknown, sortField?: unknown): number | null {
+    return asArray(id)?.binarySearchRightmost(store(value), sortField) ?? null;
   },
-  sort_indices(id: unknown, order?: unknown): PineArray | null {
-    const idx = asArray(id)?.sortIndices(sortOrder(order));
+  sort_indices(id: unknown, order?: unknown, sortField?: unknown): PineArray | null {
+    const parsed = parseSortArgs(order, sortField);
+    const idx = asArray(id)?.sortIndices(parsed.order, parsed.field);
     return wrapCells(idx);
   },
 };
@@ -232,13 +266,13 @@ export const compileMap = {
 
 export const compileMatrix = {
   new(rows?: unknown, cols?: unknown, initial?: unknown): PineMatrix {
-    return new PineMatrix(n(rows, 0), n(cols, 0), cell(initial));
+    return new PineMatrix(n(rows, 0), n(cols, 0), store(initial));
   },
-  get(id: unknown, row?: unknown, col?: unknown): number | null {
+  get(id: unknown, row?: unknown, col?: unknown): unknown {
     return asMatrix(id)?.get(n(row, 0), n(col, 0)) ?? null;
   },
   set(id: unknown, row?: unknown, col?: unknown, value?: unknown): unknown {
-    asMatrix(id)?.set(n(row, 0), n(col, 0), cell(value));
+    asMatrix(id)?.set(n(row, 0), n(col, 0), store(value));
     return id ?? null;
   },
   rows(id: unknown): number {
@@ -248,7 +282,17 @@ export const compileMatrix = {
     return asMatrix(id)?.columns() ?? 0;
   },
   fill(id: unknown, value?: unknown): unknown {
-    asMatrix(id)?.fill(cell(value));
+    asMatrix(id)?.fill(store(value));
+    return id ?? null;
+  },
+  add_row(id: unknown, index?: unknown, array?: unknown): unknown {
+    const idx = naNum(index);
+    asMatrix(id)?.addRow(idx ?? undefined, storedArrayValues(array));
+    return id ?? null;
+  },
+  add_col(id: unknown, index?: unknown, array?: unknown): unknown {
+    const idx = naNum(index);
+    asMatrix(id)?.addCol(idx ?? undefined, storedArrayValues(array));
     return id ?? null;
   },
   transpose(id: unknown): PineMatrix | null {
@@ -326,9 +370,14 @@ export const compileMatrix = {
     asMatrix(id)?.reverse();
     return id ?? null;
   },
-  sort(id: unknown, column?: unknown, order?: unknown): unknown {
-    asMatrix(id)?.sort(n(column, 0), sortOrder(order));
+  sort(id: unknown, column?: unknown, order?: unknown, sortField?: unknown): unknown {
+    asMatrix(id)?.sort(n(column, 0), sortOrder(order), sortField);
     return id ?? null;
+  },
+  sort_indices(id: unknown, column?: unknown, order?: unknown, sortField?: unknown): PineArray | null {
+    const m = asMatrix(id);
+    if (m == null) return null;
+    return wrapCells(m.sortIndices(n(column, 0), sortOrder(order), sortField));
   },
   eigenvalues(id: unknown): PineArray | null {
     return wrapCells(asMatrix(id)?.eigenvalues());

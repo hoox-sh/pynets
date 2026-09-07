@@ -55,6 +55,12 @@ interface HighestLowestState {
   window: Cell[];
 }
 
+interface AroonState {
+  length: number;
+  highs: Cell[];
+  lows: Cell[];
+}
+
 interface StdevState {
   period: number;
   window: Cell[];
@@ -249,7 +255,23 @@ interface VolIndexState {
 }
 
 interface WvadState {
-  value: number;
+  period: number;
+  vols: number[];
+  volSum: number;
+}
+
+interface CmfState {
+  period: number;
+  mf: number[];
+  vol: number[];
+  mfSum: number;
+  volSum: number;
+}
+
+interface KlingerState {
+  prev: Cell;
+  cum: number;
+  started: boolean;
 }
 
 export type PivotPoints = {
@@ -349,6 +371,9 @@ export class TaEngine {
   private readonly nviSites = new Map<string, VolIndexState>();
   private readonly pviSites = new Map<string, VolIndexState>();
   private readonly wvadSites = new Map<string, WvadState>();
+  private readonly cmfSites = new Map<string, CmfState>();
+  private readonly klingerSites = new Map<string, KlingerState>();
+  private readonly aroonSites = new Map<string, AroonState>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -1597,10 +1622,11 @@ export class TaEngine {
   }
 
   /**
-   * Williams AD. First bar 0; close>prev → +(close-low); close<prev →
-   * -(high-close). H/L/C na keeps previous (`_wad`).
+   * Williams AD (`_wad_inc_update`). First bar 0. Later: up adds
+   * vol*(close-low); down subtracts vol*(high-close). Missing H/L
+   * fallback to close; vol na → 0.
    */
-  wad(site: string, high: Cell, low: Cell, close: Cell): Cell {
+  wad(site: string, high: Cell, low: Cell, close: Cell, volume: Cell): Cell {
     let st = this.wadSites.get(site);
     if (st === undefined) {
       st = { wad: 0, prev: null, started: false };
@@ -1609,18 +1635,21 @@ export class TaEngine {
     const h = finiteCell(high);
     const l = finiteCell(low);
     const c = finiteCell(close);
-    if (h === null || l === null || c === null) return st.wad;
+    const vv = finiteCell(volume) ?? 0;
     if (!st.started) {
       st.started = true;
       st.prev = c;
-      return st.wad;
+      st.wad = 0;
+      return 0;
     }
     const prev = st.prev;
-    if (prev !== null) {
-      if (c > prev) st.wad += c - l;
-      else if (c < prev) st.wad -= h - c;
+    if (c !== null && prev !== null) {
+      const hi = h ?? c;
+      const lo = l ?? c;
+      if (c > prev) st.wad += vv * (c - lo);
+      else if (c < prev) st.wad -= vv * (hi - c);
     }
-    st.prev = c;
+    if (c !== null) st.prev = c;
     return st.wad;
   }
 
@@ -1684,24 +1713,90 @@ export class TaEngine {
   }
 
   /**
-   * Williams Variable AD: cumulative ((c-o)/(h-l))*volume. O/H/L/C na keeps
-   * previous; vol na → 0; zero range adds 0.
+   * Williams Volume AD (`_wvad_inc_update`): last WAD / rolling volume sum.
+   * period<=0 or zero vol sum → 0. Nested WAD uses `${site}:wad`.
    */
-  wvad(site: string, open: Cell, high: Cell, low: Cell, close: Cell, volume: Cell): Cell {
+  wvad(site: string, high: Cell, low: Cell, close: Cell, volume: Cell, period: number): Cell {
+    const wad = this.wad(`${site}:wad`, high, low, close, volume);
+    const n = Number.isFinite(period) ? Math.trunc(period) : 0;
+    if (n <= 0) return 0;
     let st = this.wvadSites.get(site);
-    if (st === undefined) {
-      st = { value: 0 };
+    if (st === undefined || st.period !== n) {
+      st = { period: n, vols: [], volSum: 0 };
       this.wvadSites.set(site, st);
     }
-    const o = finiteCell(open);
+    const vv = finiteCell(volume) ?? 0;
+    if (st.vols.length === n) st.volSum -= st.vols.shift()!;
+    st.vols.push(vv);
+    st.volSum += vv;
+    if (st.volSum > 0 && wad !== null) return wad / st.volSum;
+    return 0;
+  }
+
+  /**
+   * Chaikin Money Flow (`_cmf_inc_update`). CLV*vol rolling window.
+   * period<=0 → na; zero vol sum → 0; missing H/L/C → clv 0.
+   */
+  cmf(site: string, high: Cell, low: Cell, close: Cell, volume: Cell, period: number): Cell {
+    const n = Number.isFinite(period) ? Math.trunc(period) : 0;
+    if (n <= 0) return null;
+    let st = this.cmfSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, mf: [], vol: [], mfSum: 0, volSum: 0 };
+      this.cmfSites.set(site, st);
+    }
     const h = finiteCell(high);
     const l = finiteCell(low);
     const c = finiteCell(close);
-    if (o === null || h === null || l === null || c === null) return st.value;
-    const rng = h - l;
     const vv = finiteCell(volume) ?? 0;
-    if (rng !== 0) st.value += ((c - o) / rng) * vv;
-    return st.value;
+    let clv = 0;
+    if (h !== null && l !== null && c !== null) {
+      const rng = h - l;
+      clv = rng === 0 ? 0 : ((c - l) - (h - c)) / rng;
+    }
+    const mf = clv * vv;
+    if (st.mf.length === n) {
+      st.mfSum -= st.mf.shift()!;
+      st.volSum -= st.vol.shift()!;
+    }
+    st.mf.push(mf);
+    st.vol.push(vv);
+    st.mfSum += mf;
+    st.volSum += vv;
+    return st.volSum > 0 ? st.mfSum / st.volSum : 0;
+  }
+
+  /**
+   * Klinger oscillator (`_klinger_inc_update`): signed-volume cumulant,
+   * then EMA(fast)−EMA(slow) via `${site}:fast` / `${site}:slow`.
+   */
+  klinger(site: string, close: Cell, volume: Cell, fast: number, slow: number): Cell {
+    let st = this.klingerSites.get(site);
+    if (st === undefined) {
+      st = { prev: null, cum: 0, started: false };
+      this.klingerSites.set(site, st);
+    }
+    const c = finiteCell(close);
+    const vv = finiteCell(volume) ?? 0;
+    if (!st.started) {
+      st.started = true;
+      st.prev = c;
+      st.cum = 0;
+    } else {
+      const prev = st.prev;
+      let trv = 0;
+      if (c !== null && prev !== null) {
+        if (c > prev) trv = vv;
+        else if (c < prev) trv = -vv;
+      }
+      st.cum += trv;
+      if (c !== null) st.prev = c;
+    }
+    const fastV = this.ema(`${site}:fast`, st.cum, fast);
+    const slowV = this.ema(`${site}:slow`, st.cum, slow);
+    if (fastV === null || slowV === null) return null;
+    const out = fastV - slowV;
+    return Number.isFinite(out) ? out : null;
   }
 
   /**
@@ -2089,5 +2184,76 @@ export class TaEngine {
   /** Alias of `lowest`. */
   min(site: string, source: Cell, period: number): Cell {
     return this.lowest(site, source, period);
+  }
+
+  /**
+   * Awesome Oscillator: SMA(hl2, fast) − SMA(hl2, slow). Default 5 / 34.
+   * Warm-up until the slow window is full (`_builtin_ta_ao`).
+   */
+  ao(site: string, high: Cell, low: Cell, fast = 5, slow = 34): Cell {
+    const f = pinePeriod(fast);
+    const s = pinePeriod(slow);
+    if (f === null || s === null) return null;
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const hl2 = h !== null && l !== null ? (h + l) / 2 : null;
+    const fv = this.sma(`${site}:ao:fast:${f}`, hl2, f);
+    const sv = this.sma(`${site}:ao:slow:${s}`, hl2, s);
+    if (fv === null || sv === null) return null;
+    const out = fv - sv;
+    return Number.isFinite(out) ? out : null;
+  }
+
+  /**
+   * Aroon pair `{down, up}`. Window is `length + 1`; ties keep the oldest
+   * extreme (`_builtin_ta_aroon` / `numba_aroon`).
+   */
+  aroon(
+    site: string,
+    high: Cell,
+    low: Cell,
+    length = 14,
+  ): { down: Cell; up: Cell } {
+    const n = pinePeriod(length);
+    const na = { down: null, up: null };
+    if (n === null) return na;
+    const window = n + 1;
+    let st = this.aroonSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, highs: [], lows: [] };
+      this.aroonSites.set(site, st);
+    }
+    if (st.highs.length === window) {
+      st.highs.shift();
+      st.lows.shift();
+    }
+    st.highs.push(finiteCell(high));
+    st.lows.push(finiteCell(low));
+    if (st.highs.length < window) return na;
+    let hh: number | null = null;
+    let ll: number | null = null;
+    let hhK = 0;
+    let llK = 0;
+    for (let k = 0; k < window; k++) {
+      const hv = st.highs[k]!;
+      const lv = st.lows[k]!;
+      if (hv === null || lv === null) return na;
+      if (hh === null || hv > hh) {
+        hh = hv;
+        hhK = k;
+      }
+      if (ll === null || lv < ll) {
+        ll = lv;
+        llK = k;
+      }
+    }
+    const barsSinceHh = window - 1 - hhK;
+    const barsSinceLl = window - 1 - llK;
+    const up = (100 * (n - barsSinceHh)) / n;
+    const down = (100 * (n - barsSinceLl)) / n;
+    return {
+      down: Number.isFinite(down) ? down : null,
+      up: Number.isFinite(up) ? up : null,
+    };
   }
 }

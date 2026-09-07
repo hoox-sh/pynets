@@ -4,6 +4,23 @@
  */
 import { describe, expect, test } from "bun:test";
 import { PineArray } from "../src/runtime/array.ts";
+import { UdtInstance, UdtType } from "../src/runtime/udt.ts";
+
+function pointType(): UdtType {
+  return new UdtType("T", [
+    { name: "x", default: null },
+    { name: "y", default: null },
+  ]);
+}
+
+function pt(type: UdtType, x: number, y: number): UdtInstance {
+  return type.newInstance({ x, y });
+}
+
+function asUdt(v: unknown): UdtInstance {
+  expect(v).toBeInstanceOf(UdtInstance);
+  return v as UdtInstance;
+}
 
 describe("PineArray push / get / set / pop", () => {
   test("push then get", () => {
@@ -326,5 +343,101 @@ describe("PineArray remaining array.* methods", () => {
     expect(PineArray.from(3, 1, 4, 1, 5).sortIndices("desc")).toEqual([4, 2, 0, 1, 3]);
     expect(PineArray.from(2, null, 1).sortIndices()).toEqual([2, 0, 1]);
     expect(new PineArray().sortIndices()).toEqual([]);
+  });
+});
+
+describe("PineArray UDT cells + sort_field", () => {
+  test("push / set / from / get / pop preserve UDT instances", () => {
+    const T = pointType();
+    const a = new PineArray();
+    const p = pt(T, 1, 10);
+    a.push(p);
+    expect(asUdt(a.get(0))).toBe(p);
+    expect(asUdt(a.get(0)).get("x")).toBe(1);
+    const q = pt(T, 3, 30);
+    a.set(0, q);
+    expect(asUdt(a.get(0))).toBe(q);
+    const from = PineArray.from(pt(T, 5, 50), p);
+    expect(asUdt(from.get(0)).get("y")).toBe(50);
+    expect(asUdt(from.pop())).toBe(p);
+    expect(from.size()).toBe(1);
+  });
+
+  test("sized constructor fills a UDT initial value", () => {
+    const T = pointType();
+    const p = pt(T, 1, 10);
+    const a = new PineArray(2, p);
+    expect(a.size()).toBe(2);
+    expect(asUdt(a.get(0))).toBe(p);
+    expect(asUdt(a.get(1))).toBe(p);
+  });
+
+  test("numeric helpers skip non-numeric UDT slots", () => {
+    const T = pointType();
+    const a = PineArray.from(1, pt(T, 2, 20), 3);
+    expect(a.sum()).toBeNull();
+    const nums = PineArray.from(1, 2, 3);
+    expect(nums.sum()).toBe(6);
+    expect(nums.avg()).toBe(2);
+  });
+
+  test("sort + binary_search by field index 0", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 1, 10), pt(T, 3, 30), pt(T, 5, 50));
+    a.sort("asc", 0);
+    expect(asUdt(a.get(0)).get("x")).toBe(1);
+    expect(asUdt(a.get(1)).get("x")).toBe(3);
+    expect(asUdt(a.get(2)).get("x")).toBe(5);
+    expect(a.binarySearch(3, 0)).toBe(1);
+    expect(a.binarySearch(9, 0)).toBe(-1);
+  });
+
+  test("default sort_field is 0 on UDT arrays", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 1, 10), pt(T, 3, 30), pt(T, 5, 50));
+    a.sort("asc", 0);
+    expect(a.binarySearch(3)).toBe(1);
+    expect(a.binarySearch(5)).toBe(2);
+  });
+
+  test("sort_field string name \"x\"", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 5, 50), pt(T, 1, 10), pt(T, 3, 30));
+    a.sort("asc", "x");
+    expect(asUdt(a.get(0)).get("x")).toBe(1);
+    expect(a.binarySearch(3, "x")).toBe(1);
+    expect(a.binarySearch(1, "x")).toBe(0);
+  });
+
+  test("binary_search leftmost / rightmost on duplicate field values", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 1, 10), pt(T, 2, 20), pt(T, 2, 21), pt(T, 2, 22), pt(T, 3, 30));
+    expect(a.binarySearchLeftmost(2, "x")).toBe(1);
+    expect(a.binarySearchRightmost(2, "x")).toBe(3);
+    expect(a.binarySearchLeftmost(9, "x")).toBe(-1);
+    expect(a.binarySearchRightmost(9, "x")).toBe(-1);
+  });
+
+  test("binary_search of a UDT value uses the compared field", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 1, 10), pt(T, 3, 30), pt(T, 5, 50));
+    const needle = pt(T, 3, 99);
+    expect(a.binarySearch(needle, "x")).toBe(1);
+  });
+
+  test("sort_indices honors sort_field; na last", () => {
+    const T = pointType();
+    const a = PineArray.from(pt(T, 3, 1), pt(T, 1, 2), pt(T, 2, 3));
+    expect(a.sortIndices("asc", "x")).toEqual([1, 2, 0]);
+    const b = PineArray.from(pt(T, 2, 20), null, pt(T, 1, 10));
+    expect(b.sortIndices("asc", 0)).toEqual([2, 0, 1]);
+  });
+
+  test("numeric binary_search still works without sort_field", () => {
+    const a = PineArray.from(1, 2, 3, 4, 5);
+    expect(a.binarySearch(3)).toBe(2);
+    expect(a.binarySearch(9)).toBe(-1);
+    expect(a.binarySearchLeftmost(2)).toBe(1);
+    expect(a.binarySearchRightmost(2)).toBe(1);
   });
 });

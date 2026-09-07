@@ -7,8 +7,12 @@ import {
   timeframeFromSeconds,
   timeframeInSeconds,
   timeframeIsDaily,
+  timeframeIsDwm,
+  timeframeIsHours,
   timeframeIsIntraday,
+  timeframeIsMinutes,
   timeframeIsMonthly,
+  timeframeIsSeconds,
   timeframeIsWeekly,
   timeframeMultiplier,
 } from "../src/runtime/timeframe.ts";
@@ -159,6 +163,42 @@ describe("timeframeIsMonthly", () => {
     expect(timeframeIsMonthly("D")).toBe(false);
     expect(timeframeIsMonthly("60")).toBe(false);
     expect(timeframeIsMonthly(null)).toBe(false);
+  });
+});
+
+describe("timeframeIsSeconds / isminutes / ishours / isdwm", () => {
+  test("isseconds only S-suffix counts", () => {
+    expect(timeframeIsSeconds("1S")).toBe(true);
+    expect(timeframeIsSeconds("15S")).toBe(true);
+    expect(timeframeIsSeconds("1")).toBe(false);
+    expect(timeframeIsSeconds("D")).toBe(false);
+    expect(timeframeIsSeconds(null)).toBe(false);
+  });
+
+  test("isminutes is numeric < 60 or nM (not monthly)", () => {
+    expect(timeframeIsMinutes("1")).toBe(true);
+    expect(timeframeIsMinutes("5")).toBe(true);
+    expect(timeframeIsMinutes("15M")).toBe(true);
+    expect(timeframeIsMinutes("60")).toBe(false);
+    expect(timeframeIsMinutes("1H")).toBe(false);
+    expect(timeframeIsMinutes("1M")).toBe(false);
+    expect(timeframeIsMinutes("D")).toBe(false);
+  });
+
+  test("ishours is 1H or numeric >= 60", () => {
+    expect(timeframeIsHours("1H")).toBe(true);
+    expect(timeframeIsHours("4H")).toBe(true);
+    expect(timeframeIsHours("60")).toBe(true);
+    expect(timeframeIsHours("5")).toBe(false);
+    expect(timeframeIsHours("D")).toBe(false);
+  });
+
+  test("isdwm is daily / weekly / monthly", () => {
+    expect(timeframeIsDwm("D")).toBe(true);
+    expect(timeframeIsDwm("1W")).toBe(true);
+    expect(timeframeIsDwm("1M")).toBe(true);
+    expect(timeframeIsDwm("60")).toBe(false);
+    expect(timeframeIsDwm("1H")).toBe(false);
   });
 });
 

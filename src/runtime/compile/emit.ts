@@ -8,6 +8,7 @@ import { parse } from "../../ast/helper.ts";
 import type {
   Assign,
   Attribute,
+  AugAssign,
   BinOp,
   BoolOp,
   Call,
@@ -33,7 +34,7 @@ import type {
   UnaryOp,
   While,
 } from "../../ast/nodes.ts";
-import { emitCall } from "./emit_call.ts";
+import { emitCall, TA_BARE_ATTRS } from "./emit_call.ts";
 import { emitFunctionDef } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
 
@@ -267,6 +268,7 @@ function emitNode(state: State, node: expr | stmt | null | undefined): string {
   switch (node.kind) {
     case "Assign":
     case "ReAssign":
+    case "AugAssign":
     case "FunctionDef":
     case "TypeDef":
     case "EnumDef":
@@ -288,6 +290,8 @@ function emitStmt(state: State, node: stmt | expr): string {
       return emitAssign(state, node);
     case "ReAssign":
       return emitReAssign(state, node);
+    case "AugAssign":
+      return emitAugAssign(state, node);
     case "FunctionDef":
       emitFunctionDef(state.ctx, node as FunctionDef, (s) => emitStmt(state, s));
       if (state.ctx.currentFunc != null) state.ctx.currentFunc = null;
@@ -373,6 +377,12 @@ function emitExpr(state: State, node: expr | null | undefined): string {
       return iife(emitForIn(state, node), "null");
     case "While":
       return iife(emitWhile(state, node), "null");
+    case "Qualify":
+      return emitExpr(state, node.value);
+    case "Specialize":
+      return emitExpr(state, node.value);
+    case "AugAssign":
+      return emitAugAssign(state, node);
     default:
       return "null";
   }
@@ -423,9 +433,23 @@ function emitBinOp(state: State, node: BinOp): string {
       return `__h.div(${left}, ${right})`;
     case "Mod":
       return `__h.mod(${left}, ${right})`;
+    case "BitAnd":
+      return emitBitOp(left, right, "&");
+    case "BitOr":
+      return emitBitOp(left, right, "|");
+    case "BitXor":
+      return emitBitOp(left, right, "^");
+    case "LShift":
+      return emitBitOp(left, right, "<<");
+    case "RShift":
+      return emitBitOp(left, right, ">>");
     default:
       return `__h.add(${left}, ${right})`;
   }
+}
+
+function emitBitOp(left: string, right: string, op: "&" | "|" | "^" | "<<" | ">>"): string {
+  return `((__l, __r) => { if (__h.isNa(__l) || __h.isNa(__r)) return null; return (__h.nz(__l) | 0) ${op} (__h.nz(__r) | 0); })(${left}, ${right})`;
 }
 
 function emitUnaryOp(state: State, node: UnaryOp): string {
@@ -500,9 +524,13 @@ const STRATEGY_QUERY_ATTRS = new Set([
   "openprofit",
   "opentrades",
   "closedtrades",
+  "leverage",
+  "margin_liquidation_price",
+  "position_avg_price",
+  "initial_capital",
 ]);
 
-/** Namespaces used only as call receivers — not UDT field access. */
+/** Namespaces used as call receivers or dotted constants — not UDT field access. */
 const ATTR_NAMESPACES = new Set([
   "ta",
   "math",
@@ -521,7 +549,139 @@ const ATTR_NAMESPACES = new Set([
   "session",
   "chart",
   "log",
+  "order",
+  "format",
+  "text",
+  "size",
+  "barmerge",
+  "shape",
+  "location",
+  "xloc",
+  "yloc",
+  "extend",
+  "display",
+  "position",
+  "hline",
+  "dayofweek",
+  "month",
 ]);
+
+/** Dotted keys from Python `_MATH_CONSTANTS` (base.py). Unknown member → na. */
+const ATTR_CONSTANTS: Record<string, string | number | boolean> = {
+  "format.mintick": "mintick",
+  "format.percent": "percent",
+  "format.volume": "volume",
+  "format.price": "price",
+  "text.formatting.none": "",
+  "text.formatting.bold": "bold",
+  "text.formatting.italic": "italic",
+  "text.formatting.bold_italic": "bold italic",
+  "size.auto": "auto",
+  "size.tiny": 8,
+  "size.small": 10,
+  "size.normal": 12,
+  "size.large": 16,
+  "size.huge": 20,
+  "order.ascending": 1,
+  "order.descending": -1,
+  "barmerge.gaps_on": true,
+  "barmerge.gaps_off": false,
+  "barmerge.lookahead_on": true,
+  "barmerge.lookahead_off": false,
+  "shape.arrowup": "arrowup",
+  "shape.arrowdown": "arrowdown",
+  "shape.circle": "circle",
+  "shape.cross": "cross",
+  "shape.diamond": "diamond",
+  "shape.flag": "flag",
+  "shape.labelup": "labelup",
+  "shape.labeldown": "labeldown",
+  "shape.square": "square",
+  "shape.triangledown": "triangledown",
+  "shape.triangleup": "triangleup",
+  "shape.xcross": "xcross",
+  "location.abovebar": "abovebar",
+  "location.belowbar": "belowbar",
+  "location.top": "top",
+  "location.bottom": "bottom",
+  "location.absolute": "absolute",
+  "xloc.bar_index": "bar_index",
+  "xloc.bar_time": "bar_time",
+  "yloc.price": "price",
+  "yloc.abovebar": "abovebar",
+  "yloc.belowbar": "belowbar",
+  "extend.none": "none",
+  "extend.left": "left",
+  "extend.right": "right",
+  "extend.both": "both",
+  "display.none": "none",
+  "display.all": "all",
+  "display.data_window": "data_window",
+  "display.price_scale": "price_scale",
+  "display.status_line": "status_line",
+  "position.top_left": "top_left",
+  "position.top_center": "top_center",
+  "position.top_right": "top_right",
+  "position.middle_left": "middle_left",
+  "position.middle_center": "middle_center",
+  "position.middle_right": "middle_right",
+  "position.bottom_left": "bottom_left",
+  "position.bottom_center": "bottom_center",
+  "position.bottom_right": "bottom_right",
+  "hline.style_solid": "solid",
+  "hline.style_dashed": "dashed",
+  "hline.style_dotted": "dotted",
+  "dayofweek.sunday": 1,
+  "dayofweek.monday": 2,
+  "dayofweek.tuesday": 3,
+  "dayofweek.wednesday": 4,
+  "dayofweek.thursday": 5,
+  "dayofweek.friday": 6,
+  "dayofweek.saturday": 7,
+  "month.january": 1,
+  "month.february": 2,
+  "month.march": 3,
+  "month.april": 4,
+  "month.may": 5,
+  "month.june": 6,
+  "month.july": 7,
+  "month.august": 8,
+  "month.september": 9,
+  "month.october": 10,
+  "month.november": 11,
+  "month.december": 12,
+};
+
+const ATTR_CONST_NS = new Set([
+  "order",
+  "format",
+  "text",
+  "size",
+  "barmerge",
+  "shape",
+  "location",
+  "xloc",
+  "yloc",
+  "extend",
+  "display",
+  "position",
+  "hline",
+  "dayofweek",
+  "month",
+]);
+
+function attrQualifiedName(node: Attribute): string | null {
+  const parts: string[] = [node.attr];
+  let cur: expr = node.value;
+  while (cur.kind === "Attribute") {
+    parts.push(cur.attr);
+    cur = cur.value;
+  }
+  if (cur.kind !== "Name") return null;
+  parts.push(cur.id);
+  parts.reverse();
+  return parts.join(".");
+}
 
 function emitBarstate(attr: string): string {
   switch (attr) {
@@ -635,10 +795,22 @@ function emitAttribute(state: State, node: Attribute): string {
   if (node.value.kind === "Name" && node.value.id === "color") {
     return `__h.colorByName(${JSON.stringify(node.attr)})`;
   }
+  if (node.value.kind === "Name" && node.value.id === "ta") {
+    // Bare `ta.<attr>` auto-calls only for the whitelist interpret's
+    // evalTaAttr supports; everything else is na on both backends.
+    if (!TA_BARE_ATTRS.has(node.attr)) return "null";
+    return emitCall(state.ctx, { kind: "Call", func: node, args: [] }, visitOf(state));
+  }
   if (node.value.kind === "Name" && node.value.id === "strategy") {
     const attr = node.attr;
     if (attr === "long") return `"long"`;
     if (attr === "short") return `"short"`;
+    if (attr === "avg_price_stock") return `"stock"`;
+    if (attr === "avg_price_futures") return `"futures"`;
+    if (attr === "avg_price_inverse") return `"inverse"`;
+    if (attr === "cash") return `"cash"`;
+    if (attr === "fixed") return `"fixed"`;
+    if (attr === "percent_of_equity") return `"percent_of_equity"`;
     if (STRATEGY_QUERY_ATTRS.has(attr)) {
       state.ctx.usesStrategy = true;
       return `__h.strategy.${attr}()`;
@@ -648,6 +820,15 @@ function emitAttribute(state: State, node: Attribute): string {
     const members = state.ctx.enumTypes.get(node.value.id);
     if (members != null && members.includes(node.attr)) {
       return JSON.stringify(node.attr);
+    }
+  }
+  const qn = attrQualifiedName(node);
+  if (qn != null) {
+    const dot = qn.indexOf(".");
+    const root = dot < 0 ? qn : qn.slice(0, dot);
+    if (ATTR_CONST_NS.has(root)) {
+      const lit = ATTR_CONSTANTS[qn];
+      return lit === undefined ? "null" : JSON.stringify(lit);
     }
   }
   const obj = emitExpr(state, node.value);
@@ -770,6 +951,21 @@ function emitAssign(state: State, node: Assign): string {
 
 function emitReAssign(state: State, node: ReAssign): string {
   return emitStore(state, node.target, emitExpr(state, node.value), false);
+}
+
+function emitAugAssign(state: State, node: AugAssign): string {
+  // Attribute targets store the raw rhs — the old field is discarded
+  // (quirk preserved from Python visit_AugAssign and interpret evalAugAssign).
+  if (node.target.kind === "Attribute") {
+    return emitStore(state, node.target, emitExpr(state, node.value), false);
+  }
+  const rhs = emitBinOp(state, {
+    kind: "BinOp",
+    left: node.target,
+    op: node.op,
+    right: node.value,
+  });
+  return emitStore(state, node.target, rhs, false);
 }
 
 function emitStore(state: State, target: expr, rhs: string, isVar: boolean): string {

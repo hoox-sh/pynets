@@ -73,6 +73,112 @@ describe("interpret strategy", () => {
     expect(fills.some((ev) => ev.id === "L" || String(ev.comment ?? "").includes("L"))).toBe(true);
   });
 
+  test("trail_points=0 + valid trail_offset still trails", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+    strategy.exit("XT", trail_points=0, trail_offset=100)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 109.5, high: 110, low: 109.2, close: 109.8, volume: 1000, time: 1_700_000_060_000 },
+      { open: 109.5, high: 109.6, low: 109.1, close: 109.2, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots.at(-1)).toBe(1);
+    expect(out.events?.some((e) => e.type === "exit" && e.id === "XT")).toBe(true);
+  });
+
+  test("trail_points wins over trail_offset when both > 0", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 2)
+    strategy.exit("XT", trail_points=100, trail_offset=500)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 109.5, high: 110, low: 109.2, close: 109.8, volume: 1000, time: 1_700_000_060_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    // $1 trail (points) keeps the position; $5 trail (offset) would have filled at 105
+    expect(out.plots.at(-1)).toBe(2);
+  });
+
+  test("profit ticks close at expected price", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+    strategy.exit("X", profit=100)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 100.2, high: 100.5, low: 100, close: 100.4, volume: 1000, time: 1_700_000_060_000 },
+      { open: 100.4, high: 101.5, low: 100.2, close: 101.2, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots).toEqual([1, 1, 0]);
+    const xFill = (out.fills ?? []).find((f) => f.id === "X");
+    expect(xFill?.price).toBeCloseTo(101);
+  });
+
+  test("loss ticks close at expected price", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 1)
+    strategy.exit("X", loss=50)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 100, high: 100.2, low: 99.6, close: 99.8, volume: 1000, time: 1_700_000_060_000 },
+      { open: 99.8, high: 99.9, low: 99, close: 99.2, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots.at(-1)).toBe(0);
+    const xFill = (out.fills ?? []).find((f) => f.id === "X");
+    expect(xFill?.price).toBeCloseTo(99.5);
+  });
+
+  test("qty_percent sizes the exit", () => {
+    const src = `strategy("t")
+if bar_index == 0
+    strategy.entry("L", strategy.long, 10)
+    strategy.exit("X", qty_percent=50)
+plot(strategy.position_size)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_060_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots.at(-1)).toBe(5);
+    expect(out.events?.some((e) => e.type === "exit" && e.id === "X" && e.qty === 5)).toBe(true);
+  });
+
+  test("from_entry targets that entry id", () => {
+    const src = `strategy("t", pyramiding=1)
+if bar_index == 0
+    strategy.entry("A", strategy.long, 2)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 3)
+if bar_index == 2
+    strategy.exit("XA", from_entry="A")
+plot(strategy.position_size, "size")`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 110, high: 110, low: 110, close: 110, volume: 1000, time: 1_700_000_060_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    const size = out.series["size"] ?? out.plots;
+    expect(size).toEqual([2, 5, 3]);
+    expect(out.events?.some((e) => e.type === "exit" && e.id === "XA" && e.qty === 2)).toBe(true);
+  });
+
   test.skipIf(!parseOk(`strategy("t")\nstrategy.entry("L", strategy.long)\nstrategy.close_all()`))(
     "close_all emits a close_all event and flattens",
     () => {
@@ -88,5 +194,76 @@ if bar_index == 3
       expect(events.some((e) => String(e.type ?? "").includes("close_all"))).toBe(true);
     },
   );
+
+  test("stock (default): two adds then partial close reweights FIFO avg", () => {
+    const src = `strategy("t", pyramiding=1)
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots[1]).toBeCloseTo(110);
+    expect(out.plots[2]).toBeCloseTo(120);
+  });
+
+  test("futures: two adds then partial close keeps sticky avg", () => {
+    const src = `strategy("t", pyramiding=1, avg_price_model="futures")
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots[1]).toBeCloseTo(110);
+    expect(out.plots[2]).toBeCloseTo(110);
+  });
+
+  test("plot(strategy.leverage) reads back leverage=10", () => {
+    const src = `strategy("t", leverage=10)
+plot(strategy.leverage)`;
+    const out = new Runtime("TEST").run(src, [
+      { close: 100 },
+      { close: 101 },
+    ]);
+    expect(out.error).toBeUndefined();
+    expect(out.plots[0]).toBe(10);
+    expect(out.plots[1]).toBe(10);
+  });
+
+  test("strategy.avg_price_futures token selects sticky avg", () => {
+    const src = `strategy("t", pyramiding=1, avg_price_model=strategy.avg_price_futures)
+if bar_index == 0
+    strategy.entry("A", strategy.long, 1)
+if bar_index == 1
+    strategy.entry("B", strategy.long, 1)
+if bar_index == 2
+    strategy.close("A", qty=1)
+plot(strategy.position_avg_price)`;
+    const ohlcv = [
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
+      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
+      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+    ];
+    const out = new Runtime("TEST").run(src, ohlcv);
+    expect(out.error).toBeUndefined();
+    expect(out.plots[2]).toBeCloseTo(110);
+  });
 });
 

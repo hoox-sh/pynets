@@ -1,4 +1,4 @@
-// Generated from /mnt/data/home/jango/Git/pynescript/src/pynescript/ast/grammar/antlr4/resource/PinescriptLexer.g4 by ANTLR 4.13.2
+// Generated from /home/jango/Git/pynescript/src/pynescript/ast/grammar/antlr4/resource/PinescriptLexer.g4 by ANTLR 4.13.2
 // noinspection ES6UnusedImports,JSUnusedGlobalSymbols,JSUnusedLocalSymbols
 import {
 	ATN,

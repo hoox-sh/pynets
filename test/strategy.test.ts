@@ -592,7 +592,189 @@ describe("StrategyBook summary stats", () => {
     expect(book.maxContractsHeldAll()).toBe(2);
     expect(book.maxContractsHeldLong()).toBe(2);
   });
+});
 
+describe("StrategyBook exit / trail / qty_percent", () => {
+  test("trail_points=0 + valid trail_offset still trails", () => {
+    const book = new StrategyBook();
+    book.mintick = 0.01;
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.placeExit(0, "XT", { trail_points: 0, trail_offset: 100 });
+    expect(book.position.qty).toBe(1);
+    expect(book.pending).toHaveLength(1);
+    expect(book.pending[0]?.trail_offset).toBeCloseTo(1);
+    expect(book.pending[0]?.kind).toBe("exit");
+    book.processPending(1, { open: 109.5, high: 110, low: 109.2, close: 109.8 });
+    expect(book.position.qty).toBe(1);
+    expect(book.pending[0]?.stop).toBeCloseTo(109);
+  });
+
+  test("trail_points wins over trail_offset when both > 0", () => {
+    const book = new StrategyBook();
+    book.mintick = 0.01;
+    book.fillEntry(0, "L", "long", 2, 100);
+    // points=100 → $1; offset=500 would be $5 if it won
+    book.placeExit(0, "XT", { trail_points: 100, trail_offset: 500 });
+    expect(book.pending[0]?.trail_offset).toBeCloseTo(1);
+    book.processPending(1, { open: 109.5, high: 110, low: 109.2, close: 109.8 });
+    expect(book.position.qty).toBe(2);
+    expect(book.pending[0]?.stop).toBeCloseTo(109);
+  });
+
+  test("profit ticks close at entry + ticks*mintick", () => {
+    const book = new StrategyBook();
+    book.mintick = 0.01;
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.placeExit(0, "X", { profit: 100 });
+    expect(book.position.qty).toBe(1);
+    expect(book.pending[0]?.limit).toBeCloseTo(101);
+    expect(book.processPending(1, { open: 100.2, high: 100.5, low: 100, close: 100.4 })).toEqual([]);
+    expect(book.position.qty).toBe(1);
+    expect(book.processPending(2, { open: 100.4, high: 101.5, low: 100.2, close: 101.2 })).toEqual(["X"]);
+    expect(book.position.qty).toBe(0);
+    expect(book.closedTrades[0]?.exitPrice).toBeCloseTo(101);
+  });
+
+  test("loss ticks close at entry − ticks*mintick", () => {
+    const book = new StrategyBook();
+    book.mintick = 0.01;
+    book.fillEntry(0, "L", "long", 1, 100);
+    book.placeExit(0, "X", { loss: 50 });
+    expect(book.pending[0]?.stop).toBeCloseTo(99.5);
+    expect(book.processPending(1, { open: 100, high: 100.2, low: 99.6, close: 99.8 })).toEqual([]);
+    expect(book.processPending(2, { open: 99.8, high: 99.9, low: 99, close: 99.2 })).toEqual(["X"]);
+    expect(book.position.qty).toBe(0);
+    expect(book.closedTrades[0]?.exitPrice).toBeCloseTo(99.5);
+  });
+
+  test("qty_percent sizes the exit and wins over qty", () => {
+    const half = new StrategyBook();
+    half.fillEntry(0, "L", "long", 10, 100);
+    half.placeExit(0, "X", { from_entry: "L", qty_percent: 50, price: 100 });
+    expect(half.position.qty).toBe(5);
+    expect(half.closedTrades[0]?.qty).toBe(5);
+    expect(half.events.some((e) => e.type === "exit" && e.qty === 5)).toBe(true);
+
+    const wins = new StrategyBook();
+    wins.fillEntry(0, "L", "long", 10, 100);
+    wins.placeExit(0, "X", { qty: 1, qty_percent: 40, price: 100 });
+    expect(wins.position.qty).toBe(6);
+  });
+
+  test("from_entry targets that entry id", () => {
+    const book = new StrategyBook({ pyramiding: 1 });
+    book.fillEntry(0, "A", "long", 2, 100);
+    book.fillEntry(1, "B", "long", 3, 110);
+    expect(book.position.qty).toBe(5);
+    expect(book.opentrades).toBe(2);
+    book.placeExit(2, "XA", { from_entry: "A", price: 120 });
+    expect(book.position.qty).toBe(3);
+    expect(book.opentrades).toBe(1);
+    expect(book.openId(0)).toBe("B");
+    expect(book.openSize(0)).toBe(3);
+    expect(book.closedTrades).toHaveLength(1);
+    expect(book.closedId(0)).toBe("A");
+    expect(book.events.some((e) => e.type === "exit" && e.id === "XA" && e.qty === 2)).toBe(true);
+  });
+
+  test("unknown from_entry is a soft no-op after the exit event", () => {
+    const book = new StrategyBook();
+    book.fillEntry(0, "L", "long", 4, 100);
+    book.placeExit(1, "X", { from_entry: "NOPE", price: 110 });
+    expect(book.position.qty).toBe(4);
+    expect(book.closedtrades).toBe(0);
+    expect(book.pending).toHaveLength(0);
+    expect(book.events.some((e) => e.type === "exit" && e.id === "X")).toBe(true);
+  });
+});
+
+describe("StrategyBook avg_price_model + leverage", () => {
+  test("default avg_price_model is stock; unknown falls back", () => {
+    expect(new StrategyBook().avg_price_model).toBe("stock");
+    const book = new StrategyBook({ avg_price_model: "not_a_real_model" });
+    expect(book.avg_price_model).toBe("stock");
+    book.configure({ avg_price_model: "futures" });
+    expect(book.avg_price_model).toBe("futures");
+    book.configure({ avg_price_model: "strategy.avg_price_inverse" });
+    expect(book.avg_price_model).toBe("inverse");
+  });
+
+  test("add VWAP is the same for stock and futures", () => {
+    const expected = (2 * 100 + 4 * 110) / 6;
+    for (const model of ["stock", "futures"] as const) {
+      const book = new StrategyBook({ pyramiding: 1, avg_price_model: model });
+      book.fillEntry(0, "A", "long", 2, 100);
+      book.fillEntry(1, "B", "long", 4, 110);
+      expect(book.position.qty).toBe(6);
+      expect(book.position.avgPrice).toBeCloseTo(expected);
+    }
+  });
+
+  test("stock (default): two adds then partial close reweights FIFO", () => {
+    const book = new StrategyBook({ pyramiding: 1 });
+    expect(book.avg_price_model).toBe("stock");
+    book.fillEntry(0, "A", "long", 1, 100);
+    book.fillEntry(1, "B", "long", 1, 120);
+    expect(book.position).toEqual({ qty: 2, avgPrice: 110 });
+    book.placeExit(2, "X", { qty: 1, price: 130 });
+    expect(book.position.qty).toBe(1);
+    expect(book.position.avgPrice).toBeCloseTo(120);
+    expect(book.netprofit()).toBeCloseTo(30);
+    expect(book.closedTrades[0]?.entryPrice).toBeCloseTo(100);
+  });
+
+  test("futures: two adds then partial close keeps sticky avg", () => {
+    const book = new StrategyBook({ pyramiding: 1, avg_price_model: "futures" });
+    book.fillEntry(0, "A", "long", 1, 100);
+    book.fillEntry(1, "B", "long", 1, 120);
+    expect(book.position.avgPrice).toBeCloseTo(110);
+    book.placeExit(2, "X", { qty: 1, price: 130 });
+    expect(book.position.qty).toBe(1);
+    expect(book.position.avgPrice).toBeCloseTo(110);
+    expect(book.netprofit()).toBeCloseTo(20);
+    expect(book.closedTrades[0]?.entryPrice).toBeCloseTo(110);
+  });
+
+  test("leverage=10 cash default qty is margin * leverage / price", () => {
+    const book = new StrategyBook({
+      leverage: 10,
+      default_qty_type: "cash",
+      default_qty_value: 1000,
+    });
+    expect(book.leverage).toBe(10);
+    expect(book.margin_long).toBeCloseTo(10);
+    expect(book.resolveDefaultQty(100)).toBeCloseTo(100);
+    book.fillEntry(0, "L", "long", book.resolveDefaultQty(100), 100);
+    expect(book.position.qty).toBeCloseTo(100);
+    expect(book.marginLiquidationPrice()).toBeCloseTo(90);
+  });
+
+  test("percent_of_equity default qty scales by leverage; fixed ignores it", () => {
+    const pct = new StrategyBook({
+      leverage: 5,
+      default_qty_type: "percent_of_equity",
+      default_qty_value: 100,
+    });
+    pct.initialCapital = 10_000;
+    expect(pct.resolveDefaultQty(100)).toBeCloseTo(500);
+    const fixed = new StrategyBook({
+      leverage: 20,
+      default_qty_type: "fixed",
+      default_qty_value: 3,
+    });
+    expect(fixed.resolveDefaultQty(100)).toBe(3);
+    const lev1 = new StrategyBook();
+    lev1.fillEntry(0, "L", "long", 1, 100);
+    expect(lev1.marginLiquidationPrice()).toBeNull();
+  });
+
+  test("margin_long derives leverage", () => {
+    const book = new StrategyBook({ margin_long: 20 });
+    expect(book.leverage).toBeCloseTo(5);
+  });
+});
+
+describe("StrategyBook summary extras", () => {
   test("percents are 100 * x / 1e6 default capital", () => {
     const book = new StrategyBook();
     expect(book.initialCapital).toBe(1_000_000);

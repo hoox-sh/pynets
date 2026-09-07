@@ -71,6 +71,39 @@ export function timeframeIsMonthly(period: string | null): boolean {
   return p === "M" || p === "1M" || p === "MO" || p === "MONTH" || p === "MONTHS" || /^\d+MO$/.test(p);
 }
 
+/** Pine `timeframe.isseconds` / `isinseconds` — `"1S"` / `"15S"`. */
+export function timeframeIsSeconds(period: string | null): boolean {
+  const p = norm(period);
+  if (p == null) return false;
+  return p.endsWith("S") && /^\d+$/.test(p.slice(0, -1));
+}
+
+/**
+ * Pine `timeframe.isminutes`. Numeric `"1"`/`"5"` (not `"60"` hours);
+ * `"15M"` minutes, not monthly `"1M"` / `"M"`.
+ */
+export function timeframeIsMinutes(period: string | null): boolean {
+  if (timeframeIsHours(period) || timeframeIsDwm(period) || timeframeIsSeconds(period)) return false;
+  const p = norm(period);
+  if (p == null) return false;
+  if (/^\d+$/.test(p)) return true;
+  return p.endsWith("M") && /^\d+$/.test(p.slice(0, -1)) && p !== "1M";
+}
+
+/** Pine `timeframe.ishours` — `"1H"` / numeric minutes ≥ 60. */
+export function timeframeIsHours(period: string | null): boolean {
+  if (timeframeIsDaily(period) || timeframeIsWeekly(period) || timeframeIsMonthly(period)) return false;
+  const p = norm(period);
+  if (p == null) return false;
+  if (p.endsWith("H")) return true;
+  return /^\d+$/.test(p) && Number(p) >= 60;
+}
+
+/** Pine `timeframe.isdwm` — daily / weekly / monthly. */
+export function timeframeIsDwm(period: string | null): boolean {
+  return timeframeIsDaily(period) || timeframeIsWeekly(period) || timeframeIsMonthly(period);
+}
+
 /** Leading integer, or 1 when missing / empty / na. */
 export function timeframeMultiplier(period: string | null): number {
   if (period == null || period === "") return 1;

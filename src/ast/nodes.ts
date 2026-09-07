@@ -10,6 +10,7 @@ export type ASTKind =
   | "Expr"
   | "Assign"
   | "ReAssign"
+  | "AugAssign"
   | "FunctionDef"
   | "TypeDef"
   | "EnumDef"
@@ -32,6 +33,8 @@ export type ASTKind =
   | "Switch"
   | "Case"
   | "BoolOp"
+  | "Qualify"
+  | "Specialize"
   | "And"
   | "Or"
   | "Break"
@@ -50,12 +53,21 @@ export type ASTKind =
   | "Mult"
   | "Div"
   | "Mod"
+  | "BitAnd"
+  | "BitOr"
+  | "BitXor"
+  | "LShift"
+  | "RShift"
   | "UAdd"
   | "USub"
   | "Not"
   | "Invert"
   | "Var"
-  | "VarIp";
+  | "VarIp"
+  | "Const"
+  | "Input"
+  | "Simple"
+  | "Series";
 
 export interface AST {
   readonly kind: ASTKind;
@@ -97,6 +109,13 @@ export interface ReAssign extends AST {
   value: expr;
 }
 
+export interface AugAssign extends AST {
+  kind: "AugAssign";
+  target: expr;
+  op: operator;
+  value: expr;
+}
+
 export interface Var extends AST {
   kind: "Var";
 }
@@ -107,6 +126,20 @@ export interface VarIp extends AST {
 
 export type decl_mode = Var | VarIp;
 
+export interface Const extends AST {
+  kind: "Const";
+}
+export interface Input extends AST {
+  kind: "Input";
+}
+export interface Simple extends AST {
+  kind: "Simple";
+}
+export interface Series extends AST {
+  kind: "Series";
+}
+export type type_qual = Const | Input | Simple | Series;
+
 export interface Import extends AST {
   kind: "Import";
   namespace: string;
@@ -115,13 +148,25 @@ export interface Import extends AST {
   alias: string | null;
 }
 
-export type stmt = Expr | Assign | ReAssign | FunctionDef | TypeDef | EnumDef | Import | Break | Continue;
+export type stmt =
+  | Expr
+  | Assign
+  | ReAssign
+  | AugAssign
+  | FunctionDef
+  | TypeDef
+  | EnumDef
+  | Import
+  | Break
+  | Continue;
 
 export interface FunctionDef extends AST {
   kind: "FunctionDef";
   name: string;
   args: Param[];
   body: stmt[];
+  /** Return type spec (`int ilog2(...)`), not a value. Engines must not eval it. */
+  returns: expr | null;
   method: number | null;
   export: number | null;
   annotations: string[];
@@ -292,7 +337,10 @@ export type expr =
   | ForIn
   | While
   | Switch
-  | BoolOp;
+  | BoolOp
+  | Qualify
+  | Specialize
+  | AugAssign;
 
 export interface Load extends AST {
   kind: "Load";
@@ -316,7 +364,34 @@ export interface Div extends AST {
 export interface Mod extends AST {
   kind: "Mod";
 }
-export type operator = Add | Sub | Mult | Div | Mod;
+export interface BitAnd extends AST {
+  kind: "BitAnd";
+}
+export interface BitOr extends AST {
+  kind: "BitOr";
+}
+export interface BitXor extends AST {
+  kind: "BitXor";
+}
+export interface LShift extends AST {
+  kind: "LShift";
+}
+export interface RShift extends AST {
+  kind: "RShift";
+}
+export type operator = Add | Sub | Mult | Div | Mod | BitAnd | BitOr | BitXor | LShift | RShift;
+
+export interface Qualify extends AST {
+  kind: "Qualify";
+  qualifier: type_qual;
+  value: expr;
+}
+
+export interface Specialize extends AST {
+  kind: "Specialize";
+  value: expr;
+  args: expr | null;
+}
 
 export interface UAdd extends AST {
   kind: "UAdd";
@@ -369,6 +444,15 @@ export const Sub: Sub = { kind: "Sub" };
 export const Mult: Mult = { kind: "Mult" };
 export const Div: Div = { kind: "Div" };
 export const Mod: Mod = { kind: "Mod" };
+export const BitAnd: BitAnd = { kind: "BitAnd" };
+export const BitOr: BitOr = { kind: "BitOr" };
+export const BitXor: BitXor = { kind: "BitXor" };
+export const LShift: LShift = { kind: "LShift" };
+export const RShift: RShift = { kind: "RShift" };
+export const Const: Const = { kind: "Const" };
+export const Input: Input = { kind: "Input" };
+export const Simple: Simple = { kind: "Simple" };
+export const Series: Series = { kind: "Series" };
 export const UAdd: UAdd = { kind: "UAdd" };
 export const USub: USub = { kind: "USub" };
 export const NotOp: Not = { kind: "Not" };
@@ -449,6 +533,18 @@ export function reAssign(target: expr, value: expr): ReAssign {
   return { kind: "ReAssign", target, value };
 }
 
+export function augAssign(target: expr, op: operator, value: expr): AugAssign {
+  return { kind: "AugAssign", target, op, value };
+}
+
+export function qualify(qualifier: type_qual, value: expr): Qualify {
+  return { kind: "Qualify", qualifier, value };
+}
+
+export function specialize(value: expr, args: expr | null = null): Specialize {
+  return { kind: "Specialize", value, args };
+}
+
 export function functionDef(
   name: string,
   args: Param[] = [],
@@ -456,12 +552,14 @@ export function functionDef(
   method: number | null = null,
   exported: number | null = null,
   annotations: string[] = [],
+  returns: expr | null = null,
 ): FunctionDef {
   return {
     kind: "FunctionDef",
     name,
     args,
     body,
+    returns,
     method,
     export: exported,
     annotations,

@@ -13,6 +13,7 @@ export { Runtime, RuntimeStream, interpret, interpretTree } from "./runtime/inte
 export type {
   DrawingEvent,
   InputOverrides,
+  LibrarySourceSpec,
   OHLCVBar,
   RuntimeFill,
   RuntimeOptions,

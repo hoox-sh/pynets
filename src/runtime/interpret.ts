@@ -16,6 +16,7 @@ import type {
   Arg,
   Assign,
   Attribute,
+  AugAssign,
   BoolOp,
   Call,
   Conditional,
@@ -60,8 +61,12 @@ import {
   timeframeFromSeconds,
   timeframeInSeconds,
   timeframeIsDaily,
+  timeframeIsDwm,
+  timeframeIsHours,
   timeframeIsIntraday,
+  timeframeIsMinutes,
   timeframeIsMonthly,
+  timeframeIsSeconds,
   timeframeIsWeekly,
   timeframeMultiplier as tfMultiplier,
 } from "./timeframe.ts";
@@ -164,13 +169,23 @@ export interface OHLCVBar {
 
 export type InputOverrides = Record<string, number | string | boolean>;
 
+/** One library source, same shape as Python `Runtime.run(..., libraries=[{...}])`. */
+export type LibrarySourceSpec = {
+  namespace: string;
+  name: string;
+  version?: number;
+  source: string;
+};
+
 export interface RuntimeOptions {
   inputs?: InputOverrides;
   broker?: BrokerSettings;
   timeframe?: string | null;
-  libraries?: LibraryRegistry;
+  libraries?: LibraryRegistry | LibrarySourceSpec[];
   /** interpret (default) | compile (JS emit) | auto (compile, fallback interpret). */
   mode?: RuntimeMode;
+  /** Wall-clock budget in seconds. Interpret only; checked every 32 bars. */
+  timeout_seconds?: number | null;
 }
 
 export interface RuntimeFill {
@@ -200,6 +215,8 @@ export interface RuntimeResult {
   plot_data?: Record<string, { data: Array<{ value: number | null; time?: number }> }>;
   /** Book-level strategy scalars when the script is a strategy (or any fills ran). */
   strategy?: StrategySummary;
+  /** True when interpret stopped after `timeout_seconds`. */
+  timed_out?: boolean;
   error?: string;
   error_kind?: string;
 }
@@ -302,6 +319,7 @@ export class Runtime {
   readonly timeframe: string | null;
   readonly libraries: LibraryRegistry;
   readonly mode: RuntimeMode;
+  readonly timeout_seconds: number | null;
 
   constructor(
     public readonly symbol = "AAPL",
@@ -310,8 +328,9 @@ export class Runtime {
     this.inputs = options?.inputs ?? {};
     this.broker = options?.broker ?? {};
     this.timeframe = options?.timeframe ?? null;
-    this.libraries = options?.libraries ?? new LibraryRegistry();
+    this.libraries = resolveLibraries(options?.libraries);
     this.mode = options?.mode ?? "interpret";
+    this.timeout_seconds = options?.timeout_seconds ?? null;
   }
 
   /** Store Pine source for `import namespace/name/version`. */
@@ -348,7 +367,8 @@ export class Runtime {
       inputs,
       broker: extraOpts?.broker ?? this.broker,
       timeframe: extraOpts?.timeframe ?? this.timeframe,
-      libraries: extraOpts?.libraries ?? this.libraries,
+      libraries: extraOpts?.libraries != null ? resolveLibraries(extraOpts.libraries) : this.libraries,
+      timeout_seconds: extraOpts?.timeout_seconds ?? this.timeout_seconds,
     };
     if (mode === "compile") {
       return runCompiled(source, ohlcv, host);
@@ -456,6 +476,7 @@ export function interpretTree(
     broker?: BrokerSettings;
     timeframe?: string | null;
     libraries?: LibraryRegistry;
+    timeout_seconds?: number | null;
   },
 ): RuntimeResult {
   const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
@@ -495,8 +516,18 @@ export function interpretTree(
 
   const n = ohlcv.length;
   let runError: { error: string; error_kind: string } | undefined;
+  let timedOut = false;
+  let barsDone = n;
+  const timeoutSec = host?.timeout_seconds;
+  const deadline =
+    timeoutSec != null && Number.isFinite(timeoutSec) ? performance.now() + timeoutSec * 1000 : null;
   try {
     for (let i = 0; i < n; i++) {
+      if (deadline != null && (i & 31) === 0 && performance.now() > deadline) {
+        timedOut = true;
+        barsDone = i;
+        break;
+      }
       beginBar(env, ohlcv[i]!, i);
       env.book.processPending(i, {
         open: num(env.ctx.open) ?? undefined,
@@ -548,7 +579,7 @@ export function interpretTree(
     series: plots,
     plots: firstTitle ? (plots[firstTitle] ?? []) : [],
     plot_meta,
-    count: n,
+    count: timedOut ? barsDone : n,
     script_name,
     script_type,
     mode: "interpret",
@@ -561,6 +592,9 @@ export function interpretTree(
       ? { strategy: env.book.summary(num(env.ctx.close) ?? 0) }
       : {}),
     ...(runError ?? {}),
+    ...(timedOut
+      ? { timed_out: true, error: "Script execution timed out", error_kind: "runtime" }
+      : {}),
   };
 }
 
@@ -645,17 +679,23 @@ function bindDerived(env: Env, id: string, value: Cell): void {
   }
 }
 
+function unwrapSpecialize(node: expr): expr {
+  let cur = node;
+  while (cur.kind === "Specialize") cur = cur.value;
+  return cur;
+}
+
 function attrPath(node: expr): string | null {
-  if (node.kind === "Name") return node.id;
-  if (node.kind === "Attribute") {
-    const base = attrPath(node.value);
-    return base ? `${base}.${node.attr}` : node.attr;
+  const n = unwrapSpecialize(node);
+  if (n.kind === "Name") return n.id;
+  if (n.kind === "Attribute") {
+    const base = attrPath(n.value);
+    return base ? `${base}.${n.attr}` : n.attr;
   }
   return null;
 }
 
 function callName(node: Call): string | null {
-  if (node.func.kind === "Name") return node.func.id;
   return attrPath(node.func);
 }
 
@@ -894,6 +934,56 @@ function evalAssign(stmt: Assign, env: Env): Value {
   return value;
 }
 
+function applyBinOp(kind: string, leftV: Value, rightV: Value): Value {
+  if (kind === "Add" && (typeof leftV === "string" || typeof rightV === "string")) {
+    return stringifyVal(leftV) + stringifyVal(rightV);
+  }
+  const l = unwrap(leftV);
+  const r = unwrap(rightV);
+  if (l == null || r == null) return NA;
+  switch (kind) {
+    case "Add":
+      return l + r;
+    case "Sub":
+      return l - r;
+    case "Mult":
+      return l * r;
+    case "Div":
+      return r === 0 ? NA : l / r;
+    case "Mod":
+      return r === 0 ? NA : l % r;
+    case "BitAnd":
+      return Math.trunc(l) & Math.trunc(r);
+    case "BitOr":
+      return Math.trunc(l) | Math.trunc(r);
+    case "BitXor":
+      return Math.trunc(l) ^ Math.trunc(r);
+    case "LShift":
+      return Math.trunc(l) << Math.trunc(r);
+    case "RShift":
+      return Math.trunc(l) >> Math.trunc(r);
+  }
+  return NA;
+}
+
+function evalAugAssign(stmt: AugAssign, env: Env): Value {
+  if (stmt.target.kind === "Attribute") {
+    const obj = evalExpr(stmt.target.value, env);
+    const value = evalExpr(stmt.value, env);
+    if (obj instanceof UdtInstance) {
+      obj.set(stmt.target.attr, value);
+      return value;
+    }
+    return NA;
+  }
+  if (stmt.target.kind !== "Name") return NA;
+  const current = ctxGet(env, stmt.target.id);
+  if (current === undefined) return NA;
+  const result = applyBinOp(stmt.op.kind, current, evalExpr(stmt.value, env));
+  bindName(env, stmt.target.id, result);
+  return result;
+}
+
 function evalReAssign(stmt: ReAssign, env: Env): Value {
   if (stmt.target.kind === "Tuple") {
     const packed = evalExpr(stmt.value, env);
@@ -924,6 +1014,18 @@ function applyStrategyDecl(stmt: { kind: string; value?: expr | null }, env: Env
   if (comm != null) settings.commission = comm;
   if (slip != null) settings.slippage = slip;
   if (pyr != null) settings.pyramiding = Math.trunc(pyr);
+  const apm = evalExpr(callArg(stmt.value.args, -1, ["avg_price_model"]), env);
+  if (typeof apm === "string") settings.avg_price_model = apm;
+  const lev = unwrap(evalExpr(callArg(stmt.value.args, -1, ["leverage"]), env));
+  if (lev != null) settings.leverage = lev;
+  const ml = unwrap(evalExpr(callArg(stmt.value.args, -1, ["margin_long"]), env));
+  if (ml != null) settings.margin_long = ml;
+  const ms = unwrap(evalExpr(callArg(stmt.value.args, -1, ["margin_short"]), env));
+  if (ms != null) settings.margin_short = ms;
+  const dqt = evalExpr(callArg(stmt.value.args, -1, ["default_qty_type"]), env);
+  if (typeof dqt === "string") settings.default_qty_type = dqt;
+  const dqv = unwrap(evalExpr(callArg(stmt.value.args, -1, ["default_qty_value"]), env));
+  if (dqv != null) settings.default_qty_value = dqv;
   if (Object.keys(settings).length) env.book.configure(settings);
   const capital = unwrap(evalExpr(callArg(stmt.value.args, -1, ["initial_capital"]), env));
   if (capital != null && Number.isFinite(capital)) env.book.initialCapital = capital;
@@ -978,6 +1080,9 @@ function execStmt(
   if (stmt.kind === "ReAssign") {
     return evalReAssign(stmt as ReAssign, env);
   }
+  if (stmt.kind === "AugAssign") {
+    return evalAugAssign(stmt as AugAssign, env);
+  }
   if (stmt.kind === "Break") throw LOOP_BREAK;
   if (stmt.kind === "Continue") throw LOOP_CONTINUE;
   if (stmt.kind === "Switch" || stmt.kind === "While" || stmt.kind === "If") {
@@ -1024,7 +1129,10 @@ function evalExpr(node: expr | undefined, env: Env): Value {
   switch (node.kind) {
     case "Name": {
       const v = ctxGet(env, node.id);
-      return v === undefined ? NA : v;
+      if (v !== undefined) return v;
+      // Python `_MATH_CONSTANTS`: omitted 1T quotes stay na.
+      if (node.id === "bid" || node.id === "ask") return NA;
+      return NA;
     }
     case "Constant": {
       const v = node.value;
@@ -1034,29 +1142,8 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       if (v === false) return 0;
       return NA;
     }
-    case "BinOp": {
-      const leftV = evalExpr(node.left, env);
-      const rightV = evalExpr(node.right, env);
-      if (node.op.kind === "Add" && (typeof leftV === "string" || typeof rightV === "string")) {
-        return stringifyVal(leftV) + stringifyVal(rightV);
-      }
-      const l = unwrap(leftV);
-      const r = unwrap(rightV);
-      if (l == null || r == null) return NA;
-      switch (node.op.kind) {
-        case "Add":
-          return l + r;
-        case "Sub":
-          return l - r;
-        case "Mult":
-          return l * r;
-        case "Div":
-          return r === 0 ? NA : l / r;
-        case "Mod":
-          return r === 0 ? NA : l % r;
-      }
-      return NA;
-    }
+    case "BinOp":
+      return applyBinOp(node.op.kind, evalExpr(node.left, env), evalExpr(node.right, env));
     case "UnaryOp": {
       const v = unwrap(evalExpr(node.operand, env));
       if (node.op.kind === "Not") return isTruthy(v) ? 0 : 1;
@@ -1113,6 +1200,12 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       return evalSwitch(node, env);
     case "BoolOp":
       return evalBoolOp(node, env);
+    case "Qualify":
+      return evalExpr(node.value, env);
+    case "Specialize":
+      return evalExpr(node.value, env);
+    case "AugAssign":
+      return evalAugAssign(node, env);
   }
 }
 
@@ -1253,8 +1346,110 @@ function evalForIn(node: ForIn, env: Env): Value {
   return last;
 }
 
-/** `strategy.long` / `strategy.short` → "long"/"short"; other attrs are na. */
+/**
+ * Python `_MATH_CONSTANTS` static dotted keys (base.py).
+ * Bools are 1/0 like other interpret flags (`session.ismarket`).
+ * Dynamic series (`timeframe.*` flags, `syminfo.ticker`, `bid`/`ask`) stay in Name blocks.
+ */
+const MATH_CONSTANTS: Record<string, Value> = {
+  "math.pi": Math.PI,
+  "math.e": Math.E,
+  "math.phi": (1 + Math.sqrt(5)) / 2,
+  "math.rphi": 2 / (1 + Math.sqrt(5)),
+  "format.mintick": "mintick",
+  "format.percent": "percent",
+  "format.volume": "volume",
+  "format.price": "price",
+  "text.formatting.none": "",
+  "text.formatting.bold": "bold",
+  "text.formatting.italic": "italic",
+  "text.formatting.bold_italic": "bold italic",
+  "size.auto": "auto",
+  "size.tiny": 8,
+  "size.small": 10,
+  "size.normal": 12,
+  "size.large": 16,
+  "size.huge": 20,
+  "order.ascending": 1,
+  "order.descending": -1,
+  "barmerge.gaps_on": 1,
+  "barmerge.gaps_off": 0,
+  "barmerge.lookahead_on": 1,
+  "barmerge.lookahead_off": 0,
+  "shape.arrowup": "arrowup",
+  "shape.arrowdown": "arrowdown",
+  "shape.circle": "circle",
+  "shape.cross": "cross",
+  "shape.diamond": "diamond",
+  "shape.flag": "flag",
+  "shape.labelup": "labelup",
+  "shape.labeldown": "labeldown",
+  "shape.square": "square",
+  "shape.triangledown": "triangledown",
+  "shape.triangleup": "triangleup",
+  "shape.xcross": "xcross",
+  "location.abovebar": "abovebar",
+  "location.belowbar": "belowbar",
+  "location.top": "top",
+  "location.bottom": "bottom",
+  "location.absolute": "absolute",
+  "xloc.bar_index": "bar_index",
+  "xloc.bar_time": "bar_time",
+  "yloc.price": "price",
+  "yloc.abovebar": "abovebar",
+  "yloc.belowbar": "belowbar",
+  "extend.none": "none",
+  "extend.left": "left",
+  "extend.right": "right",
+  "extend.both": "both",
+  "display.none": "none",
+  "display.all": "all",
+  "display.data_window": "data_window",
+  "display.price_scale": "price_scale",
+  "display.status_line": "status_line",
+  "position.top_left": "top_left",
+  "position.top_center": "top_center",
+  "position.top_right": "top_right",
+  "position.middle_left": "middle_left",
+  "position.middle_center": "middle_center",
+  "position.middle_right": "middle_right",
+  "position.bottom_left": "bottom_left",
+  "position.bottom_center": "bottom_center",
+  "position.bottom_right": "bottom_right",
+  "hline.style_solid": "solid",
+  "hline.style_dashed": "dashed",
+  "hline.style_dotted": "dotted",
+  "dayofweek.sunday": 1,
+  "dayofweek.monday": 2,
+  "dayofweek.tuesday": 3,
+  "dayofweek.wednesday": 4,
+  "dayofweek.thursday": 5,
+  "dayofweek.friday": 6,
+  "dayofweek.saturday": 7,
+  "month.january": 1,
+  "month.february": 2,
+  "month.march": 3,
+  "month.april": 4,
+  "month.may": 5,
+  "month.june": 6,
+  "month.july": 7,
+  "month.august": 8,
+  "month.september": 9,
+  "month.october": 10,
+  "month.november": 11,
+  "month.december": 12,
+};
+
+function mathConstant(node: Attribute): Value | undefined {
+  const path = attrPath(node);
+  if (path == null || !Object.prototype.hasOwnProperty.call(MATH_CONSTANTS, path)) return undefined;
+  return MATH_CONSTANTS[path];
+}
+
+/** `strategy.long` / `strategy.short` → "long"/"short"; dotted `_MATH_CONSTANTS`; other attrs are na. */
 function evalAttribute(node: Attribute, env: Env): Value {
+  const constant = mathConstant(node);
+  if (constant !== undefined) return constant;
   if (node.value.kind === "Name") {
     if (node.value.id === "strategy") {
       if (node.attr === "long" || node.attr === "short") return node.attr;
@@ -1305,6 +1500,11 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "cash") return "cash";
       if (node.attr === "fixed") return "fixed";
       if (node.attr === "percent_of_equity") return "percent_of_equity";
+      if (node.attr === "leverage") return env.book.leverage;
+      if (node.attr === "margin_liquidation_price") return env.book.marginLiquidationPrice();
+      if (node.attr === "avg_price_stock") return "stock";
+      if (node.attr === "avg_price_futures") return "futures";
+      if (node.attr === "avg_price_inverse") return "inverse";
     }
     if (node.value.id === "syminfo") {
       if (node.attr === "ticker" || node.attr === "tickerid") return env.symbol;
@@ -1312,14 +1512,24 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "currency") return "USD";
       if (node.attr === "mintick") return 0.01;
       if (node.attr === "type") return "stock";
+      if (node.attr === "isin") return "";
+      if (node.attr === "current_contract") return NA;
+      if (node.attr === "main_tickerid") return env.symbol;
     }
     if (node.value.id === "timeframe") {
       if (node.attr === "period") return env.timeframe ?? "";
+      if (node.attr === "main_period") return env.timeframe ?? "D";
       if (node.attr === "multiplier") return tfMultiplier(env.timeframe);
       if (node.attr === "isintraday") return timeframeIsIntraday(env.timeframe) ? 1 : 0;
       if (node.attr === "isdaily") return timeframeIsDaily(env.timeframe) ? 1 : 0;
       if (node.attr === "isweekly") return timeframeIsWeekly(env.timeframe) ? 1 : 0;
       if (node.attr === "ismonthly") return timeframeIsMonthly(env.timeframe) ? 1 : 0;
+      if (node.attr === "isseconds" || node.attr === "isinseconds") {
+        return timeframeIsSeconds(env.timeframe) ? 1 : 0;
+      }
+      if (node.attr === "isminutes") return timeframeIsMinutes(env.timeframe) ? 1 : 0;
+      if (node.attr === "ishours") return timeframeIsHours(env.timeframe) ? 1 : 0;
+      if (node.attr === "isdwm") return timeframeIsDwm(env.timeframe) ? 1 : 0;
     }
     if (node.value.id === "color") {
       const named = colorByName(node.attr);
@@ -1357,6 +1567,10 @@ function evalAttribute(node: Attribute, env: Env): Value {
     if (node.value.id === "ta") {
       const taAttr = evalTaAttr(node.attr, env);
       if (taAttr !== undefined) return taAttr;
+    }
+    if (node.value.id === "order") {
+      if (node.attr === "ascending") return 1;
+      if (node.attr === "descending") return -1;
     }
   }
   const obj = evalExpr(node.value, env);
@@ -1411,7 +1625,7 @@ function evalTaAttr(attr: string, env: Env): Value | undefined {
     const src = h != null && l != null && c != null ? (h + l + c) / 3 : c;
     return (ta.vwap as TaEngine["vwap"]).call(env.ta, site, src, num(env.ctx.volume));
   }
-  if (attr === "pvt" && typeof ta.pvt === "function") {
+  if ((attr === "pvt" || attr === "vpt") && typeof ta.pvt === "function") {
     return (ta.pvt as TaEngine["pvt"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
   }
   if (attr === "nvi" && typeof ta.nvi === "function") {
@@ -1419,6 +1633,41 @@ function evalTaAttr(attr: string, env: Env): Value | undefined {
   }
   if (attr === "pvi" && typeof ta.pvi === "function") {
     return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
+  }
+  if (attr === "wad" && typeof ta.wad === "function") {
+    return (ta.wad as TaEngine["wad"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+    );
+  }
+  if (attr === "wvad" && typeof ta.wvad === "function") {
+    return (ta.wvad as TaEngine["wvad"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+      20,
+    );
+  }
+  if (attr === "cmf" && typeof ta.cmf === "function") {
+    return (ta.cmf as TaEngine["cmf"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+      20,
+    );
+  }
+  if (attr === "ao") {
+    return env.ta.ao(site, num(env.ctx.high), num(env.ctx.low), 5, 34);
   }
   return undefined;
 }
@@ -1492,20 +1741,27 @@ function cmp(left: Value, op: string, right: Value): boolean | null {
 }
 
 function evalCall(node: Call, env: Env): Value {
-  if (node.func.kind === "Attribute") {
-    const obj = evalExpr(node.func.value, env);
+  const callee = unwrapSpecialize(node.func);
+  if (callee.kind === "Attribute") {
+    const obj = evalExpr(callee.value, env);
     if (obj instanceof LibraryModule) {
-      return evalLibraryMemberCall(obj, node.func.attr, node, env);
+      return evalLibraryMemberCall(obj, callee.attr, node, env);
     }
     if (obj instanceof UdtInstance) {
-      const meth = obj.getMethod(node.func.attr);
+      const meth = obj.getMethod(callee.attr);
       if (meth && isUdfDef(meth.body)) return evalUdf(meth.body, node, env, obj);
     }
-    if (obj instanceof UdtType && node.func.attr === "new") {
+    if (obj instanceof UdtType && callee.attr === "new") {
       const overrides: Record<string, unknown> = {};
+      let pos = 0;
       for (const a of asArgs(node.args)) {
         const key = argKeyword(a);
-        if (key) overrides[key] = evalExpr(a.value, env);
+        if (key) {
+          overrides[key] = evalExpr(a.value, env);
+          continue;
+        }
+        const field = obj.fields[pos++];
+        if (field) overrides[field.name] = evalExpr(a.value, env);
       }
       return obj.newInstance(overrides);
     }
@@ -1670,11 +1926,16 @@ function evalCall(node: Call, env: Env): Value {
     const id = evalId(callArg(node.args, 0, ["id"]));
     const dir = evalDirection(callArg(node.args, 1, ["direction"]), env);
     const qtyArg = callArg(node.args, 2, ["qty"]);
-    const qtyRaw = qtyArg == null ? 1 : unwrap(evalExpr(qtyArg, env));
-    const qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? Number.NaN : qtyRaw;
+    const mark = num(env.ctx.close);
+    let qty: number;
+    if (qtyArg == null) {
+      qty = env.book.resolveDefaultQty(mark ?? 0);
+    } else {
+      const qtyRaw = unwrap(evalExpr(qtyArg, env));
+      qty = qtyRaw == null || !Number.isFinite(qtyRaw) ? Number.NaN : qtyRaw;
+    }
     const limit = unwrap(evalExpr(callArg(node.args, -1, ["limit"]), env));
     const stop = unwrap(evalExpr(callArg(node.args, -1, ["stop"]), env));
-    const mark = num(env.ctx.close);
     env.book.placeEntry(env.barIndex, id, dir, qty, {
       limit,
       stop,
@@ -1688,13 +1949,40 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "strategy.close") {
     const id = evalId(callArg(node.args, 0, ["id"]));
     const mark = num(env.ctx.close);
+    const qtyExpr = callArg(node.args, 1, ["qty"]);
+    const qtyRaw = qtyExpr == null ? undefined : unwrap(evalExpr(qtyExpr, env));
     if (env.book.position.qty !== 0 && mark != null) {
-      env.book.fillClose(env.barIndex, id, mark, { time: num(env.ctx.time) ?? undefined });
+      env.book.fillClose(env.barIndex, id, mark, {
+        time: num(env.ctx.time) ?? undefined,
+        qty: qtyRaw ?? undefined,
+      });
     } else env.book.close(env.barIndex, id);
     return NA;
   }
   if (fname === "strategy.exit") {
-    env.book.exit(env.barIndex, evalId(callArg(node.args, 0, ["id"])));
+    const id = evalId(callArg(node.args, 0, ["id"]));
+    const fromStr = evalAsString(callArg(node.args, 1, ["from_entry"]), env);
+    const fromEntry = fromStr != null && fromStr !== "" ? fromStr : null;
+    env.book.placeExit(env.barIndex, id, {
+      from_entry: fromEntry,
+      qty: unwrap(evalExpr(callArg(node.args, 2, ["qty"]), env)),
+      qty_percent: unwrap(evalExpr(callArg(node.args, 3, ["qty_percent"]), env)),
+      profit: unwrap(evalExpr(callArg(node.args, 4, ["profit"]), env)),
+      limit: unwrap(evalExpr(callArg(node.args, 5, ["limit"]), env)),
+      loss: unwrap(evalExpr(callArg(node.args, 6, ["loss"]), env)),
+      stop: unwrap(evalExpr(callArg(node.args, 7, ["stop"]), env)),
+      trail_price: unwrap(evalExpr(callArg(node.args, 8, ["trail_price"]), env)),
+      trail_points: unwrap(evalExpr(callArg(node.args, 9, ["trail_points"]), env)),
+      trail_offset: unwrap(evalExpr(callArg(node.args, 10, ["trail_offset"]), env)),
+      price: num(env.ctx.close) ?? undefined,
+      time: num(env.ctx.time) ?? undefined,
+      ohlc: {
+        open: num(env.ctx.open) ?? undefined,
+        high: num(env.ctx.high) ?? undefined,
+        low: num(env.ctx.low) ?? undefined,
+        close: num(env.ctx.close) ?? undefined,
+      },
+    });
     return NA;
   }
   if (fname === "strategy.close_all") {
@@ -1874,6 +2162,63 @@ function unwrap(value: Value): Cell {
   return NA;
 }
 
+/** Store array slots as-is; only coerce non-finite numbers to `na`. */
+function storeValue(value: Value): unknown {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  return value;
+}
+
+function asArrayValue(value: unknown): Value {
+  return value as Value;
+}
+
+/** Python `_parse_sort_args` — `(id)`, `(id, order)`, `(id, order, sort_field)`, or bare field. */
+function parseSortArgs(node: Call, env: Env): { order: "asc" | "desc"; sortField: unknown } {
+  const orderExpr = callArg(node.args, 1, ["order"]);
+  const fieldExpr = callArg(node.args, 2, ["sort_field"]);
+  const second = orderExpr == null ? undefined : evalExpr(orderExpr, env);
+  const third = fieldExpr == null ? undefined : evalExpr(fieldExpr, env);
+  if (fieldExpr != null) {
+    return { order: isDescendingOrder(second) ? "desc" : "asc", sortField: sortFieldValue(third) };
+  }
+  if (orderExpr == null) return { order: "asc", sortField: null };
+  if (second == null) return { order: "asc", sortField: null };
+  if (typeof second === "string") {
+    const low = second.toLowerCase();
+    if (low === "ascending" || low === "descending" || low === "asc" || low === "desc") {
+      return { order: isDescendingOrder(second) ? "desc" : "asc", sortField: null };
+    }
+    return { order: "asc", sortField: second };
+  }
+  if (typeof second === "number" && Number.isFinite(second)) {
+    if (second === 1 || second === -1) {
+      return { order: isDescendingOrder(second) ? "desc" : "asc", sortField: null };
+    }
+    return { order: "asc", sortField: second };
+  }
+  return { order: isDescendingOrder(second) ? "desc" : "asc", sortField: null };
+}
+
+function isDescendingOrder(orderArg: Value | undefined): boolean {
+  if (orderArg == null) return false;
+  if (typeof orderArg === "number") return orderArg < 0;
+  if (typeof orderArg === "string") return orderArg.toLowerCase().includes("desc");
+  return false;
+}
+
+function sortFieldValue(value: Value | undefined): unknown {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
+}
+
+function evalSortField(node: Call, env: Env): unknown {
+  const raw = evalExpr(callArg(node.args, 2, ["sort_field"]), env);
+  return sortFieldValue(raw);
+}
+
 function formatRunError(err: unknown): string {
   if (err instanceof Error) {
     const msg = (err.message || err.name || "runtime error").split("\n")[0]!.trim();
@@ -1892,8 +2237,25 @@ function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOv
     !("broker" in extra) &&
     !("timeframe" in extra) &&
     !("libraries" in extra) &&
-    !("mode" in extra)
+    !("mode" in extra) &&
+    !("timeout_seconds" in extra)
   );
+}
+
+function resolveLibraries(libs?: LibraryRegistry | LibrarySourceSpec[] | null): LibraryRegistry {
+  if (libs instanceof LibraryRegistry) return libs;
+  const reg = new LibraryRegistry();
+  if (libs == null) return reg;
+  for (const lib of libs) {
+    if (lib == null || typeof lib !== "object") continue;
+    const ns = String(lib.namespace ?? "");
+    const name = String(lib.name ?? "");
+    const source = String(lib.source ?? "");
+    const rawVer = lib.version;
+    const ver = typeof rawVer === "number" && Number.isFinite(rawVer) ? Math.trunc(rawVer) : 1;
+    if (ns && name && source) reg.registerSource(ns, name, ver, source);
+  }
+  return reg;
 }
 
 function emptyCompileResult(
@@ -2028,6 +2390,7 @@ function runAuto(
     broker?: BrokerSettings;
     timeframe?: string | null;
     libraries?: LibraryRegistry;
+    timeout_seconds?: number | null;
   },
 ): RuntimeResult {
   const elig = compileEligible(source);
@@ -2833,18 +3196,30 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       num(env.ctx.volume),
     );
   }
-  if (fname === "ta.pvt" || fname === "pvt") {
+  if (fname === "ta.pvt" || fname === "pvt" || fname === "ta.vpt" || fname === "vpt") {
     if (typeof ta.pvt !== "function") return NA;
     return (ta.pvt as TaEngine["pvt"]).call(env.ta, site, num(env.ctx.close), num(env.ctx.volume));
   }
   if (fname === "ta.wad" || fname === "wad") {
     if (typeof ta.wad !== "function") return NA;
+    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
+    if (positional.length >= 4) {
+      return (ta.wad as TaEngine["wad"]).call(
+        env.ta,
+        site,
+        unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
+        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
+        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
+        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
+      );
+    }
     return (ta.wad as TaEngine["wad"]).call(
       env.ta,
       site,
       num(env.ctx.high),
       num(env.ctx.low),
       num(env.ctx.close),
+      num(env.ctx.volume),
     );
   }
   if (fname === "ta.nvi" || fname === "nvi") {
@@ -2868,15 +3243,80 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.wvad" || fname === "wvad") {
     if (typeof ta.wvad !== "function") return NA;
+    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
+    if (positional.length >= 4) {
+      return (ta.wvad as TaEngine["wvad"]).call(
+        env.ta,
+        site,
+        unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
+        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
+        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
+        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
+        lenOrDefault(node, env, 4, ["length", "period"], 20),
+      );
+    }
     return (ta.wvad as TaEngine["wvad"]).call(
       env.ta,
       site,
-      num(env.ctx.open),
       num(env.ctx.high),
       num(env.ctx.low),
       num(env.ctx.close),
       num(env.ctx.volume),
+      lenOrDefault(node, env, 0, ["length", "period"], 20),
     );
+  }
+  if (fname === "ta.cmf" || fname === "cmf") {
+    if (typeof ta.cmf !== "function") return NA;
+    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
+    if (positional.length >= 5) {
+      return (ta.cmf as TaEngine["cmf"]).call(
+        env.ta,
+        site,
+        unwrap(evalExpr(callArg(node.args, 1, ["high"]), env)),
+        unwrap(evalExpr(callArg(node.args, 2, ["low"]), env)),
+        unwrap(evalExpr(callArg(node.args, 0, ["close", "source"]), env)),
+        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
+        lenOrDefault(node, env, 4, ["length", "period"], 20),
+      );
+    }
+    return (ta.cmf as TaEngine["cmf"]).call(
+      env.ta,
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      num(env.ctx.volume),
+      lenOrDefault(node, env, 0, ["length", "period"], 20),
+    );
+  }
+  if (fname === "ta.klinger" || fname === "klinger") {
+    if (typeof ta.klinger !== "function") return NA;
+    return (ta.klinger as TaEngine["klinger"]).call(
+      env.ta,
+      site,
+      unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
+      unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
+      lenOrDefault(node, env, 4, ["fast_period", "fast", "fastlen"], 0),
+      lenOrDefault(node, env, 5, ["slow_period", "slow", "slowlen"], 0),
+    );
+  }
+  if (fname === "ta.ao") {
+    return env.ta.ao(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      lenOrDefault(node, env, 0, ["fast", "fastlen"], 5),
+      lenOrDefault(node, env, 1, ["slow", "slowlen"], 34),
+    );
+  }
+  if (fname === "ta.aroon") {
+    const r = env.ta.aroon(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      lenOrDefault(node, env, 0, ["length"], 14),
+    );
+    return tupleOf([r.down, r.up]);
   }
   if (fname === "ta.pivot_point_levels") {
     if (typeof ta.pivotPoints !== "function") return NA;
@@ -2905,37 +3345,54 @@ function asArray(value: Value): PineArray | null {
   if (value && typeof value === "object" && "__array" in value) {
     const elts = (value as ArrayVal).elts;
     const arr = new PineArray();
-    for (const e of elts) arr.push(unwrap(e));
+    for (const e of elts) arr.push(storeValue(e));
     return arr;
   }
   return null;
 }
 
+function isArrayNew(fname: string | null): boolean {
+  if (fname == null || !fname.startsWith("array.new")) return false;
+  const name = arrayBuiltin(fname);
+  return (
+    name === "array.new" ||
+    name === "array.new_float" ||
+    name === "array.new_int" ||
+    name === "array.new_bool" ||
+    name === "array.new_string" ||
+    name === "array.new_color"
+  );
+}
+
+function arrayBuiltin(fname: string | null): string | null {
+  if (fname == null || !fname.startsWith("array.")) return null;
+  const lt = fname.indexOf("<");
+  return lt >= 0 ? fname.slice(0, lt) : fname;
+}
+
 function evalArrayCall(fname: string | null, node: Call, env: Env): Value | undefined {
-  if (
-    fname === "array.new_float" ||
-    fname === "array.new" ||
-    fname === "array.new_int"
-  ) {
+  const aname = arrayBuiltin(fname);
+  if (isArrayNew(fname)) {
     const size = unwrap(evalExpr(callArg(node.args, 0, ["size"]), env)) ?? 0;
-    const initial = unwrap(evalExpr(callArg(node.args, 1, ["initial_value"]), env));
+    const initialArg = callArg(node.args, 1, ["initial_value"]);
+    const initial = initialArg == null ? undefined : storeValue(evalExpr(initialArg, env));
     return new PineArray(size, initial);
   }
-  if (fname === "array.push") {
+  if (aname === "array.push") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const v = unwrap(evalExpr(callArg(node.args, 1, ["value"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
     arr?.push(v);
     return NA;
   }
-  if (fname === "array.get") {
+  if (aname === "array.get") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
     const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
-    return arr ? arr.get(i ?? 0) : NA;
+    return arr ? asArrayValue(arr.get(i ?? 0)) : NA;
   }
-  if (fname === "array.set") {
+  if (aname === "array.set") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
     const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
-    const v = unwrap(evalExpr(callArg(node.args, 2, ["value"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 2, ["value"]), env));
     if (arr && i != null) arr.set(i, v);
     return NA;
   }
@@ -2945,7 +3402,7 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   }
   if (fname === "array.pop") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.pop() : NA;
+    return arr ? asArrayValue(arr.pop()) : NA;
   }
   if (fname === "array.clear") {
     asArray(evalExpr(callArg(node.args, 0, ["id"]), env))?.clear();
@@ -2953,40 +3410,40 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   }
   if (fname === "array.unshift") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    arr?.unshift(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env)));
+    arr?.unshift(storeValue(evalExpr(callArg(node.args, 1, ["value"]), env)));
     return NA;
   }
   if (fname === "array.shift") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.shift() : NA;
+    return arr ? asArrayValue(arr.shift()) : NA;
   }
   if (fname === "array.includes") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr?.includes(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) ? 1 : 0;
+    return arr?.includes(storeValue(evalExpr(callArg(node.args, 1, ["value"]), env))) ? 1 : 0;
   }
   if (fname === "array.first") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.first() : NA;
+    return arr ? asArrayValue(arr.first()) : NA;
   }
   if (fname === "array.last") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.last() : NA;
+    return arr ? asArrayValue(arr.last()) : NA;
   }
   if (fname === "array.insert") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
     const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
-    const v = unwrap(evalExpr(callArg(node.args, 2, ["value"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 2, ["value"]), env));
     if (arr && i != null) arr.insert(i, v);
     return NA;
   }
   if (fname === "array.remove") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
     const i = unwrap(evalExpr(callArg(node.args, 1, ["index"]), env));
-    return arr && i != null ? arr.remove(i) : NA;
+    return arr && i != null ? asArrayValue(arr.remove(i)) : NA;
   }
   if (fname === "array.fill") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    arr?.fill(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env)));
+    arr?.fill(storeValue(evalExpr(callArg(node.args, 1, ["value"]), env)));
     return NA;
   }
   if (fname === "array.slice") {
@@ -3006,14 +3463,13 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   }
   if (fname === "array.sort") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const orderRaw = evalExpr(callArg(node.args, 1, ["order"]), env);
-    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
-    arr?.sort(order);
+    const parsed = parseSortArgs(node, env);
+    arr?.sort(parsed.order, parsed.sortField);
     return NA;
   }
   if (fname === "array.indexof") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.indexof(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+    return arr ? arr.indexof(storeValue(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
   }
   if (fname === "array.avg") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
@@ -3036,19 +3492,14 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
     const sep = evalAsString(callArg(node.args, 1, ["separator", "sep"]), env);
     return arr ? arr.join(sep ?? ",") : NA;
   }
-  if (fname === "array.new_bool" || fname === "array.new_string") {
-    const size = unwrap(evalExpr(callArg(node.args, 0, ["size"]), env)) ?? 0;
-    const initial = unwrap(evalExpr(callArg(node.args, 1, ["initial_value"]), env));
-    return new PineArray(size, initial);
-  }
   if (fname === "array.from") {
     const arr = new PineArray();
-    for (const a of asArgs(node.args)) arr.push(unwrap(evalExpr(a.value, env)));
+    for (const a of asArgs(node.args)) arr.push(storeValue(evalExpr(a.value, env)));
     return arr;
   }
   if (fname === "array.lastindexof") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.lastIndexOf(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+    return arr ? arr.lastIndexOf(storeValue(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
   }
   if (fname === "array.concat") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
@@ -3081,15 +3532,18 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   }
   if (fname === "array.binary_search") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.binarySearch(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+    const value = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
+    return arr ? arr.binarySearch(value, evalSortField(node, env)) : NA;
   }
   if (fname === "array.binary_search_leftmost") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.binarySearchLeftmost(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+    const value = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
+    return arr ? arr.binarySearchLeftmost(value, evalSortField(node, env)) : NA;
   }
   if (fname === "array.binary_search_rightmost") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return arr ? arr.binarySearchRightmost(unwrap(evalExpr(callArg(node.args, 1, ["value"]), env))) : NA;
+    const value = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
+    return arr ? arr.binarySearchRightmost(value, evalSortField(node, env)) : NA;
   }
   if (fname === "array.stdev") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
@@ -3125,10 +3579,9 @@ function evalArrayCall(fname: string | null, node: Call, env: Env): Value | unde
   }
   if (fname === "array.sort_indices") {
     const arr = asArray(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const orderRaw = evalExpr(callArg(node.args, 1, ["order"]), env);
-    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
+    const parsed = parseSortArgs(node, env);
     if (!arr) return NA;
-    const idx = arr.sortIndices(order);
+    const idx = arr.sortIndices(parsed.order, parsed.sortField);
     if (idx == null) return NA;
     const out = new PineArray();
     for (const i of idx) out.push(i);
@@ -3230,20 +3683,20 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     const rows = unwrap(evalExpr(callArg(node.args, 0, ["rows"]), env)) ?? 0;
     const cols = unwrap(evalExpr(callArg(node.args, 1, ["columns", "cols"]), env)) ?? 0;
     const initialArg = callArg(node.args, 2, ["initial_value", "initial"]);
-    const initial = initialArg == null ? undefined : unwrap(evalExpr(initialArg, env));
+    const initial = initialArg == null ? undefined : storeValue(evalExpr(initialArg, env));
     return new PineMatrix(rows, cols, initial);
   }
   if (name === "matrix.get") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     const row = unwrap(evalExpr(callArg(node.args, 1, ["row"]), env));
     const col = unwrap(evalExpr(callArg(node.args, 2, ["column", "col"]), env));
-    return m ? m.get(row ?? 0, col ?? 0) : NA;
+    return m ? asArrayValue(m.get(row ?? 0, col ?? 0)) : NA;
   }
   if (name === "matrix.set") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     const row = unwrap(evalExpr(callArg(node.args, 1, ["row"]), env));
     const col = unwrap(evalExpr(callArg(node.args, 2, ["column", "col"]), env));
-    const v = unwrap(evalExpr(callArg(node.args, 3, ["value"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 3, ["value"]), env));
     if (m && row != null && col != null) m.set(row, col, v);
     return NA;
   }
@@ -3257,7 +3710,7 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
   }
   if (name === "matrix.fill") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const v = unwrap(evalExpr(callArg(node.args, 1, ["value"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
     m?.fill(v);
     return NA;
   }
@@ -3456,9 +3909,22 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     const col = unwrap(evalExpr(callArg(node.args, 1, ["column", "col"]), env)) ?? 0;
     const orderRaw = evalExpr(callArg(node.args, 2, ["order"]), env);
-    const order = typeof orderRaw === "string" && orderRaw.toLowerCase().includes("desc") ? "desc" : "asc";
-    m?.sort(col, order);
+    const order = isDescendingOrder(orderRaw) ? "desc" : "asc";
+    const sortField = sortFieldValue(evalExpr(callArg(node.args, 3, ["sort_field"]), env));
+    m?.sort(col, order, sortField);
     return NA;
+  }
+  if (name === "matrix.sort_indices") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
+    if (!m) return NA;
+    const col = unwrap(evalExpr(callArg(node.args, 1, ["column", "col"]), env)) ?? 0;
+    const orderRaw = evalExpr(callArg(node.args, 2, ["order"]), env);
+    const order = isDescendingOrder(orderRaw) ? "desc" : "asc";
+    const sortField = sortFieldValue(evalExpr(callArg(node.args, 3, ["sort_field"]), env));
+    const idx = m.sortIndices(col, order, sortField);
+    const out = new PineArray();
+    for (const i of idx) out.push(i);
+    return out;
   }
   if (name === "matrix.median") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));

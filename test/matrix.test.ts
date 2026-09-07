@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { PineMatrix } from "../src/runtime/matrix.ts";
+import { UdtType } from "../src/runtime/udt.ts";
 
 describe("PineMatrix construct / get / set", () => {
   test("sized constructor fills initial / na", () => {
@@ -662,6 +663,21 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
     expect(m.get(2, 0)).toBeNull();
     m.sort(99);
     expect(m.get(0, 0)).toBe(1);
+  });
+
+  test("sort / sortIndices by UDT sort_field", () => {
+    const T = new UdtType("T", [
+      { name: "x", default: 0 },
+      { name: "y", default: 0 },
+    ]);
+    const m = new PineMatrix(3, 1);
+    m.set(0, 0, T.newInstance({ x: 3, y: 30 }));
+    m.set(1, 0, T.newInstance({ x: 1, y: 10 }));
+    m.set(2, 0, T.newInstance({ x: 2, y: 20 }));
+    expect(m.sortIndices(0, "asc", 0)).toEqual([1, 2, 0]);
+    m.sort(0, "asc", "x");
+    expect((m.get(0, 0) as unknown as { get: (n: string) => unknown }).get("x")).toBe(1);
+    expect((m.get(2, 0) as unknown as { get: (n: string) => unknown }).get("x")).toBe(3);
   });
 
   test("reverse flips element order (rows then each row)", () => {

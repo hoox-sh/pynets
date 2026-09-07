@@ -3,9 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * Tiny Pine `array.*` value. `null` is `na`. Get is na-safe (OOB / non-finite → na).
- * Set OOB is a no-op. Python `ArrayBuiltinsMixin` remains the source of truth.
+ * Set OOB is a no-op. Slots may hold numbers, na, UDT instances, strings, or bools.
+ * Python `ArrayBuiltinsMixin` remains the source of truth.
  */
 
+import { UdtInstance } from "./udt.ts";
+
+/** Numeric/na cell. Arrays may also store UDT instances, strings, and bools. */
 export type Cell = number | null;
 
 /** Python `array.set` grows only while index < 1_000_000; same bound here. */
@@ -19,26 +23,116 @@ function resolveIndex(index: number, length: number): number | null {
   return i;
 }
 
-function isFiniteCell(v: Cell): v is number {
-  return v !== null && Number.isFinite(v);
+function isFiniteCell(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
 }
 
 /** Python `bool` on array cells: only `na` and `0` are false (`NaN` is true). */
-function pineTruthy(v: Cell): boolean {
+function pineTruthy(v: unknown): boolean {
   return v !== null && v !== 0;
 }
 
-/** Binary-search order: comparable values first, `na` last. */
-function keyLt(left: Cell, right: Cell): boolean {
-  if (left === null) return false;
-  if (right === null) return true;
-  return left < right;
+function isSortNa(v: unknown): boolean {
+  if (v == null) return true;
+  if (typeof v === "number") return !Number.isFinite(v);
+  return false;
 }
 
-function keyEq(left: Cell, right: Cell): boolean {
-  if (left === null && right === null) return true;
-  if (left === null || right === null) return false;
+/** Python `_looks_like_udt` — ObjectInstance or compile-path `{__type__}` dict. */
+function looksLikeUdt(item: unknown): boolean {
+  if (item == null || typeof item !== "object") return false;
+  if (item instanceof UdtInstance) return true;
+  return !Array.isArray(item) && Object.prototype.hasOwnProperty.call(item, "__type__");
+}
+
+function udtFieldNames(item: object): string[] | null {
+  if (item instanceof UdtInstance) return item.type.fields.map((f) => f.name);
+  const rec = item as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(rec, "__type__")) {
+    return Object.keys(rec).filter((k) => k !== "__type__");
+  }
+  const udt = (item as { udt?: { fields?: Record<string, unknown> | Array<{ name: string }> } }).udt;
+  const fields = udt?.fields;
+  if (fields == null) return null;
+  if (Array.isArray(fields)) return fields.map((f) => f.name);
+  return Object.keys(fields);
+}
+
+function readUdtField(item: object, name: string): unknown {
+  if (item instanceof UdtInstance) return item.get(name);
+  const getField = (item as { get_field?: (n: string) => unknown }).get_field;
+  if (typeof getField === "function") {
+    try {
+      return getField.call(item, name);
+    } catch {
+      return item;
+    }
+  }
+  return (item as Record<string, unknown>)[name];
+}
+
+/** Python `_udt_field_key` — field name or int index; missing field → item. */
+function udtFieldKey(item: unknown, sortField: unknown): unknown {
+  if (item == null || sortField == null) return item;
+  if (typeof item !== "object") return item;
+  if (typeof sortField === "string") {
+    const names = udtFieldNames(item);
+    if (names != null && !names.includes(sortField)) return item;
+    return readUdtField(item, sortField);
+  }
+  if (typeof sortField === "number" && Number.isFinite(sortField)) {
+    const names = udtFieldNames(item);
+    if (names == null) return item;
+    const idx = Math.trunc(sortField);
+    if (idx < 0 || idx >= names.length) return item;
+    return readUdtField(item, names[idx]!);
+  }
+  return item;
+}
+
+/** Python `_resolve_search_field` — default `0` (first field) on UDT arrays. */
+function resolveSearchField(seq: readonly unknown[], sortField: unknown): unknown {
+  if (sortField != null) return sortField;
+  for (const item of seq) {
+    if (item == null) continue;
+    if (looksLikeUdt(item)) return 0;
+    break;
+  }
+  return null;
+}
+
+function searchElemKey(item: unknown, sortField: unknown): unknown {
+  if (sortField == null) return item;
+  return udtFieldKey(item, sortField);
+}
+
+function searchTargetKey(value: unknown, sortField: unknown): unknown {
+  if (sortField == null) return value;
+  if (looksLikeUdt(value)) return udtFieldKey(value, sortField);
+  return value;
+}
+
+/** Python `_key_lt`: `na` sorts last (never less). */
+function keyLt(left: unknown, right: unknown): boolean {
+  if (left == null) return false;
+  if (right == null) return true;
+  try {
+    return (left as never) < (right as never);
+  } catch {
+    return `${String(Object.prototype.toString.call(left))}${String(left)}` <
+      `${String(Object.prototype.toString.call(right))}${String(right)}`;
+  }
+}
+
+function keyEq(left: unknown, right: unknown): boolean {
+  if (left == null && right == null) return true;
+  if (left == null || right == null) return false;
   return left === right;
+}
+
+function cmpKeys(a: unknown, b: unknown): number {
+  if (keyEq(a, b)) return 0;
+  return keyLt(a, b) ? -1 : 1;
 }
 
 function meanOf(nums: number[]): number {
@@ -48,13 +142,13 @@ function meanOf(nums: number[]): number {
 }
 
 export class PineArray {
-  private readonly cells: Cell[] = [];
+  private readonly cells: unknown[] = [];
 
-  constructor(size?: number, initial?: Cell) {
+  constructor(size?: number, initial?: unknown) {
     if (size === undefined) return;
     if (!Number.isFinite(size) || size < 0) return;
     const n = Math.min(Math.trunc(size), MAX_ARRAY_SIZE);
-    const fill: Cell = initial === undefined ? null : initial;
+    const fill = initial === undefined ? null : initial;
     for (let i = 0; i < n; i++) this.cells.push(fill);
   }
 
@@ -65,17 +159,17 @@ export class PineArray {
   /** `array.get` — OOB / non-finite index → `na`. Negative counts from the end. */
   get(index: number): Cell {
     const i = resolveIndex(index, this.cells.length);
-    return i === null ? null : this.cells[i]!;
+    return (i === null ? null : this.cells[i]) as Cell;
   }
 
   /** `array.set` — OOB / non-finite index is a no-op. */
-  set(index: number, value: Cell): void {
+  set(index: number, value: unknown): void {
     const i = resolveIndex(index, this.cells.length);
     if (i === null) return;
     this.cells[i] = value;
   }
 
-  push(value: Cell): void {
+  push(value: unknown): void {
     if (this.cells.length >= MAX_ARRAY_SIZE) return;
     this.cells.push(value);
   }
@@ -83,10 +177,10 @@ export class PineArray {
   /** Last element, or `na` if empty. */
   pop(): Cell {
     if (this.cells.length === 0) return null;
-    return this.cells.pop()!;
+    return this.cells.pop() as Cell;
   }
 
-  unshift(value: Cell): void {
+  unshift(value: unknown): void {
     if (this.cells.length >= MAX_ARRAY_SIZE) return;
     this.cells.unshift(value);
   }
@@ -94,26 +188,26 @@ export class PineArray {
   /** First element, or `na` if empty. */
   shift(): Cell {
     if (this.cells.length === 0) return null;
-    return this.cells.shift()!;
+    return this.cells.shift() as Cell;
   }
 
   clear(): void {
     this.cells.length = 0;
   }
 
-  includes(value: Cell): boolean {
+  includes(value: unknown): boolean {
     return this.cells.includes(value);
   }
 
   first(): Cell {
-    return this.cells.length === 0 ? null : this.cells[0]!;
+    return (this.cells.length === 0 ? null : this.cells[0]) as Cell;
   }
 
   last(): Cell {
-    return this.cells.length === 0 ? null : this.cells[this.cells.length - 1]!;
+    return (this.cells.length === 0 ? null : this.cells[this.cells.length - 1]) as Cell;
   }
 
-  insert(index: number, value: Cell): void {
+  insert(index: number, value: unknown): void {
     if (this.cells.length >= MAX_ARRAY_SIZE) return;
     if (!Number.isFinite(index)) return;
     let i = Math.trunc(index);
@@ -126,10 +220,10 @@ export class PineArray {
   remove(index: number): Cell {
     const i = resolveIndex(index, this.cells.length);
     if (i === null) return null;
-    return this.cells.splice(i, 1)[0]!;
+    return this.cells.splice(i, 1)[0] as Cell;
   }
 
-  fill(value: Cell): void {
+  fill(value: unknown): void {
     for (let i = 0; i < this.cells.length; i++) this.cells[i] = value;
   }
 
@@ -155,17 +249,14 @@ export class PineArray {
     this.cells.reverse();
   }
 
-  sort(order: "asc" | "desc" = "asc"): void {
-    this.cells.sort((a, b) => {
-      if (a === null && b === null) return 0;
-      if (a === null) return 1;
-      if (b === null) return -1;
-      return order === "desc" ? b - a : a - b;
-    });
+  /** In-place; `na` last. Optional *sortField* keys UDT cells (name or index). */
+  sort(order: "asc" | "desc" = "asc", sortField?: unknown): void {
+    const reverse = order === "desc";
+    this.cells.splice(0, this.cells.length, ...sortWithNaLast(this.cells, reverse, sortField));
   }
 
   /** `array.indexof` — miss is `-1` (Python `ArrayBuiltinsMixin`). */
-  indexof(value: Cell): Cell {
+  indexof(value: unknown): Cell {
     for (let i = 0; i < this.cells.length; i++) {
       if (Object.is(this.cells[i], value)) return i;
     }
@@ -210,7 +301,7 @@ export class PineArray {
   }
 
   /** `array.from(...)` — collect args; capped at `MAX_ARRAY_SIZE`. */
-  static from(...values: Cell[]): PineArray {
+  static from(...values: unknown[]): PineArray {
     const out = new PineArray();
     const n = Math.min(values.length, MAX_ARRAY_SIZE);
     for (let i = 0; i < n; i++) out.push(values[i]!);
@@ -218,7 +309,7 @@ export class PineArray {
   }
 
   /** `array.lastindexof` — miss is `-1`. */
-  lastIndexOf(value: Cell): Cell {
+  lastIndexOf(value: unknown): Cell {
     for (let i = this.cells.length - 1; i >= 0; i--) {
       if (Object.is(this.cells[i], value)) return i;
     }
@@ -234,10 +325,14 @@ export class PineArray {
     return this;
   }
 
-  /** Element-wise `abs`; `na` stays `na`. */
+  /** Element-wise `abs`; `na` stays `na`. Non-numeric slots become `na`. */
   abs(): PineArray | null {
     const out = new PineArray();
-    for (const v of this.cells) out.push(v === null ? null : Math.abs(v));
+    for (const v of this.cells) {
+      if (v == null) out.push(null);
+      else if (typeof v === "number") out.push(Math.abs(v));
+      else out.push(null);
+    }
     return out;
   }
 
@@ -293,24 +388,32 @@ export class PineArray {
   }
 
   /** Index of `value` in an ascending array (`na` last), or `-1`. */
-  binarySearch(value: Cell): number {
-    return this.binarySearchBy(value, "any");
+  binarySearch(value: unknown, sortField?: unknown): number {
+    return this.binarySearchBy(value, "any", sortField);
   }
 
-  binarySearchLeftmost(value: Cell): number {
-    if (value === null || this.cells.some((x) => x === null)) {
+  binarySearchLeftmost(value: unknown, sortField?: unknown): number {
+    if (
+      sortField == null &&
+      !this.cells.some((x) => x != null && looksLikeUdt(x)) &&
+      (value == null || this.cells.some((x) => x == null))
+    ) {
       const i = this.indexof(value);
       return typeof i === "number" ? i : -1;
     }
-    return this.binarySearchBy(value, "left");
+    return this.binarySearchBy(value, "left", sortField);
   }
 
-  binarySearchRightmost(value: Cell): number {
-    if (value === null || this.cells.some((x) => x === null)) {
+  binarySearchRightmost(value: unknown, sortField?: unknown): number {
+    if (
+      sortField == null &&
+      !this.cells.some((x) => x != null && looksLikeUdt(x)) &&
+      (value == null || this.cells.some((x) => x == null))
+    ) {
       const i = this.lastIndexOf(value);
       return typeof i === "number" ? i : -1;
     }
-    return this.binarySearchBy(value, "right");
+    return this.binarySearchBy(value, "right", sortField);
   }
 
   /** Default `biased=true` is population (`n`); `false` is sample (`n-1`). Skips `na`. */
@@ -377,7 +480,7 @@ export class PineArray {
     return sorted[Math.min(rank, n) - 1]!;
   }
 
-  percentrank(value: Cell): Cell {
+  percentrank(value: unknown): Cell {
     if (!isFiniteCell(value)) return null;
     const nums = this.finiteSkip();
     if (nums.length === 0) return null;
@@ -404,38 +507,52 @@ export class PineArray {
   }
 
   /** Indices that would sort this array; `na` indices last. */
-  sortIndices(order: "asc" | "desc" = "asc"): number[] | null {
-    const nonNa: { key: number; idx: number }[] = [];
+  sortIndices(order: "asc" | "desc" = "asc", sortField?: unknown): number[] | null {
+    const reverse = order === "desc";
+    const nonNa: { key: unknown; idx: number }[] = [];
     const naIdx: number[] = [];
     for (let i = 0; i < this.cells.length; i++) {
-      const v = this.cells[i]!;
-      if (!isFiniteCell(v)) {
+      const v = this.cells[i];
+      if (isSortNa(v)) {
         naIdx.push(i);
         continue;
       }
-      nonNa.push({ key: v, idx: i });
+      const key = sortField != null ? udtFieldKey(v, sortField) : v;
+      if (isSortNa(key)) naIdx.push(i);
+      else nonNa.push({ key, idx: i });
     }
-    const reverse = order === "desc";
-    nonNa.sort((a, b) => {
-      const cmp = a.key - b.key;
-      if (cmp !== 0) return reverse ? -cmp : cmp;
-      return a.idx - b.idx;
-    });
+    try {
+      nonNa.sort((a, b) => {
+        const cmp = cmpKeys(a.key, b.key);
+        if (cmp !== 0) return reverse ? -cmp : cmp;
+        return a.idx - b.idx;
+      });
+    } catch {
+      nonNa.sort((a, b) => {
+        const ka = `${String(Object.prototype.toString.call(a.key))}${String(a.key)}`;
+        const kb = `${String(Object.prototype.toString.call(b.key))}${String(b.key)}`;
+        const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+        if (cmp !== 0) return reverse ? -cmp : cmp;
+        return a.idx - b.idx;
+      });
+    }
     return nonNa.map((x) => x.idx).concat(naIdx);
   }
 
-  private binarySearchBy(value: Cell, side: "any" | "left" | "right"): number {
+  private binarySearchBy(value: unknown, side: "any" | "left" | "right", sortField?: unknown): number {
     const seq = this.cells;
+    const field = resolveSearchField(seq, sortField ?? null);
+    const target = searchTargetKey(value, field);
     const n = seq.length;
     if (side === "left") {
       let left = 0;
       let right = n;
       while (left < right) {
         const mid = Math.trunc((left + right) / 2);
-        if (keyLt(seq[mid]!, value)) left = mid + 1;
+        if (keyLt(searchElemKey(seq[mid], field), target)) left = mid + 1;
         else right = mid;
       }
-      if (left < n && keyEq(seq[left]!, value)) return left;
+      if (left < n && keyEq(searchElemKey(seq[left], field), target)) return left;
       return -1;
     }
     if (side === "right") {
@@ -443,19 +560,19 @@ export class PineArray {
       let right = n;
       while (left < right) {
         const mid = Math.trunc((left + right) / 2);
-        if (keyLt(value, seq[mid]!)) right = mid;
+        if (keyLt(target, searchElemKey(seq[mid], field))) right = mid;
         else left = mid + 1;
       }
-      if (left > 0 && keyEq(seq[left - 1]!, value)) return left - 1;
+      if (left > 0 && keyEq(searchElemKey(seq[left - 1], field), target)) return left - 1;
       return -1;
     }
     let lo = 0;
     let hi = n - 1;
     while (lo <= hi) {
       const mid = Math.trunc((lo + hi) / 2);
-      const midK = seq[mid]!;
-      if (keyEq(midK, value)) return mid;
-      if (keyLt(midK, value)) lo = mid + 1;
+      const midK = searchElemKey(seq[mid], field);
+      if (keyEq(midK, target)) return mid;
+      if (keyLt(midK, target)) lo = mid + 1;
       else hi = mid - 1;
     }
     return -1;
@@ -481,6 +598,59 @@ export class PineArray {
   }
 
   toValues(): Cell[] {
-    return this.cells.slice();
+    return this.cells.slice() as Cell[];
   }
+}
+
+/** Python `_sort_with_na_last`. */
+function sortWithNaLast(sequence: readonly unknown[], reverse: boolean, sortField?: unknown): unknown[] {
+  if (sortField == null) {
+    const nonNa: unknown[] = [];
+    let naCount = 0;
+    for (const x of sequence) {
+      if (isSortNa(x)) naCount += 1;
+      else nonNa.push(x);
+    }
+    try {
+      nonNa.sort((a, b) => {
+        const cmp = cmpKeys(a, b);
+        return reverse ? -cmp : cmp;
+      });
+    } catch {
+      nonNa.sort((a, b) => {
+        const ka = `${String(Object.prototype.toString.call(a))}${String(a)}`;
+        const kb = `${String(Object.prototype.toString.call(b))}${String(b)}`;
+        const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+        return reverse ? -cmp : cmp;
+      });
+    }
+    const out = nonNa.slice();
+    for (let i = 0; i < naCount; i++) out.push(null);
+    return out;
+  }
+  const keyed: { key: unknown; item: unknown }[] = [];
+  const naItems: unknown[] = [];
+  for (const item of sequence) {
+    if (isSortNa(item)) {
+      naItems.push(item);
+      continue;
+    }
+    const key = udtFieldKey(item, sortField);
+    if (isSortNa(key)) naItems.push(item);
+    else keyed.push({ key, item });
+  }
+  try {
+    keyed.sort((a, b) => {
+      const cmp = cmpKeys(a.key, b.key);
+      return reverse ? -cmp : cmp;
+    });
+  } catch {
+    keyed.sort((a, b) => {
+      const ka = `${String(Object.prototype.toString.call(a.key))}${String(a.key)}`;
+      const kb = `${String(Object.prototype.toString.call(b.key))}${String(b.key)}`;
+      const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+      return reverse ? -cmp : cmp;
+    });
+  }
+  return keyed.map((x) => x.item).concat(naItems);
 }

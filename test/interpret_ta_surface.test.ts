@@ -26,6 +26,32 @@ describe("interpret TA surface", () => {
     expect(since.plots[7]).toBe(3);
   });
 
+  test("ta.vpt aliases ta.pvt and bar 0 is 0", () => {
+    const pvt = interpret(`indicator("t")\nplot(ta.pvt)`, BARS);
+    const vpt = interpret(`indicator("t")\nplot(ta.vpt)`, BARS);
+    expect(pvt.plots[0]).toBe(0);
+    expect(vpt.plots).toEqual(pvt.plots);
+  });
+
+  test("ta.ao attribute and ta.aroon unpack", () => {
+    const long = Array.from({ length: 40 }, (_, i) => ({
+      open: 100 + i,
+      high: 101 + i,
+      low: 99 + i,
+      close: 100 + i,
+      volume: 1,
+    }));
+    const ao = interpret(`indicator("t")\nplot(ta.ao)`, long);
+    expect(ao.plots.slice(0, 33).every((v) => v == null)).toBe(true);
+    expect(typeof ao.plots[33]).toBe("number");
+    const aroon = interpret(
+      `indicator("t")\n[adown, aup] = ta.aroon(14)\nplot(aup)`,
+      long,
+    );
+    expect(aroon.plots.slice(0, 14).every((v) => v == null)).toBe(true);
+    expect(typeof aroon.plots[14]).toBe("number");
+  });
+
   test("ta.accdist attribute and ta.wpr", () => {
     const ad = interpret(`indicator("t")\nplot(ta.accdist)`, BARS);
     expect(typeof ad.plots[7]).toBe("number");
