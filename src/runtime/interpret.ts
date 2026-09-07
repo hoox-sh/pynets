@@ -1802,7 +1802,10 @@ function evalCall(node: Call, env: Env): Value {
     return env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1));
   }
   if (fname === "ta.atr" || fname === "atr") {
-    const period = lenArg(node, env, 0);
+    // Python 1-arg period-only form gates the length on _is_period_like
+    // (volatility.py ~54 / basic.py ~420): non-period-like → ignored → same
+    // as the arg being absent (na period 0 → na kernel).
+    const period = periodLikeArg(node, env, 0, ["length"]) ?? 0;
     return env.ta.atr(site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close), period);
   }
   if (fname === "ta.kc" || fname === "kc") {
@@ -2061,7 +2064,11 @@ function evalKc(node: Call, env: Env, site: string): Value {
   let high = num(env.ctx.high);
   let low = num(env.ctx.low);
   let close = srcArg(node, env);
-  let length = lenArg(node, env, 1);
+  // Python 3-arg reference form dispatches on _is_period_like(args[1])
+  // (volatility.py ~250 / basic.py ~451): a non-period-like length is ignored
+  // → same as absent (na period 0). The legacy 4-arg form below coerces via
+  // _expect_int (fractional floors) and stays ungated.
+  let length = periodLikeArg(node, env, 1, ["length"]) ?? 0;
   let mult = numArg(node, env, 2, ["mult", "multiplier"], 1);
   if (positional.length >= 4) {
     high = unwrap(evalExpr(positional[0]!.value, env));
@@ -2689,6 +2696,24 @@ function allCellArgs(node: Call, env: Env): Cell[] {
   return asArgs(node.args).map((a) => unwrap(evalExpr(a.value, env)));
 }
 
+/**
+ * Python `_is_period_like` (pynescript core.py ~3427) at the cell level: only
+ * whole numbers are period-like (7.0 → 7; 7.5 / na / non-numbers fail). TA
+ * handlers gate period-only / period-first overload forms on this check — a
+ * non-period-like length arg is IGNORED and the call behaves exactly as if
+ * the arg were absent (builtin default or na-period path; same call-site
+ * state key/reset behavior). Returns null when the arg must be treated as
+ * absent; a passing whole number is returned as-is.
+ */
+function periodLikeCell(v: Cell): number | null {
+  return typeof v === "number" && Number.isInteger(v) ? v : null;
+}
+
+/** `periodLikeCell` over call arg *index* (positional or kwarg *names*). */
+function periodLikeArg(node: Call, env: Env, index: number, names: string[]): number | null {
+  return periodLikeCell(unwrap(evalExpr(callArg(node.args, index, names), env)));
+}
+
 function lenOrDefault(
   node: Call,
   env: Env,
@@ -2814,13 +2839,15 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.wpr" || fname === "wpr") {
     if (typeof ta.willr !== "function") return NA;
+    // Python 1-arg period-only form gates length via _is_period_like
+    // (oscillators.py ~198): non-period-like → ignored → na period 0.
     return (ta.willr as TaEngine["willr"]).call(
       env.ta,
       site,
       num(env.ctx.high),
       num(env.ctx.low),
       num(env.ctx.close),
-      lenArg(node, env, 0),
+      periodLikeArg(node, env, 0, ["length"]) ?? 0,
     );
   }
   if (fname === "ta.willr" || fname === "willr") {
@@ -2831,7 +2858,7 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       num(env.ctx.high),
       num(env.ctx.low),
       num(env.ctx.close),
-      lenArg(node, env, 0),
+      periodLikeArg(node, env, 0, ["length"]) ?? 0,
     );
   }
   if (fname === "ta.stoch" || fname === "stoch") {
@@ -2839,13 +2866,15 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
     const highArg = callArg(node.args, 1, ["high"]);
     if (highArg == null && positional.length <= 1) {
+      // Python 1-arg period-only form gates length via _is_period_like
+      // (oscillators.py ~58): non-period-like → ignored → na period 0.
       return (ta.stoch as TaEngine["stoch"]).call(
         env.ta,
         site,
         num(env.ctx.close),
         num(env.ctx.high),
         num(env.ctx.low),
-        lenArg(node, env, 0),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
       );
     }
     return (ta.stoch as TaEngine["stoch"]).call(
@@ -3011,6 +3040,8 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     if (typeof ta.mfi !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => a.name == null);
     if (positional.length <= 1) {
+      // Python 1-arg period-only form gates length via _is_period_like
+      // (volume.py ~108): non-period-like → ignored → na period 0.
       return (ta.mfi as TaEngine["mfi"]).call(
         env.ta,
         site,
@@ -3018,7 +3049,7 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
         num(env.ctx.low),
         num(env.ctx.close),
         num(env.ctx.volume),
-        lenArg(node, env, 0),
+        periodLikeArg(node, env, 0, ["length"]) ?? 0,
       );
     }
     if (positional.length === 2) {
@@ -3069,13 +3100,15 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.adx" || fname === "adx") {
     if (typeof ta.adx !== "function") return NA;
+    // Python 1-arg period-only form gates length via _is_period_like
+    // (common.py ~701): non-period-like → ignored → default 14 (as absent).
     return (ta.adx as TaEngine["adx"]).call(
       env.ta,
       site,
       num(env.ctx.high),
       num(env.ctx.low),
       num(env.ctx.close),
-      lenOrDefault(node, env, 0, ["length"], 14),
+      periodLikeArg(node, env, 0, ["length"]) ?? 14,
     );
   }
   if (fname === "ta.correlation" || fname === "correlation") {
@@ -3106,12 +3139,15 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     if (typeof ta.tsi !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => a.name == null);
     if (positional.length === 2) {
+      // Python 2-arg period-first form gates BOTH slots via _is_period_like
+      // (oscillators.py ~299): args[0]=short, args[1]=long; a non-period-like
+      // slot is ignored → TS default (13/25), as if the slot were absent.
       return (ta.tsi as TaEngine["tsi"]).call(
         env.ta,
         site,
         num(env.ctx.close),
-        lenOrDefault(node, env, 1, ["long", "long_length"], 25),
-        lenOrDefault(node, env, 0, ["short", "short_length"], 13),
+        periodLikeArg(node, env, 1, ["long", "long_length"]) ?? 25,
+        periodLikeArg(node, env, 0, ["short", "short_length"]) ?? 13,
       );
     }
     return (ta.tsi as TaEngine["tsi"]).call(
@@ -3294,7 +3330,10 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       num(env.ctx.low),
       num(env.ctx.close),
       num(env.ctx.volume),
-      lenOrDefault(node, env, 0, ["length", "period"], 20),
+      // Python 1-arg period-only form gates length via _is_period_like
+      // (volume.py ~586/~620): non-period-like → ignored → default 20 (0-arg
+      // fallback), exactly as if the arg were absent.
+      periodLikeArg(node, env, 0, ["length", "period"]) ?? 20,
     );
   }
   if (fname === "ta.cmf" || fname === "cmf") {
@@ -3318,7 +3357,10 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
       num(env.ctx.low),
       num(env.ctx.close),
       num(env.ctx.volume),
-      lenOrDefault(node, env, 0, ["length", "period"], 20),
+      // Python 1-arg period-only form gates length via _is_period_like
+      // (volume.py ~659/~681): non-period-like → ignored → default 20, as
+      // if the arg were absent.
+      periodLikeArg(node, env, 0, ["length", "period"]) ?? 20,
     );
   }
   if (fname === "ta.klinger" || fname === "klinger") {
@@ -3351,8 +3393,7 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     // Python handlers gate each length slot on _is_period_like (core.py ~3427):
     // only whole numbers pass (7.0 → 7; 7.5 / bool / na / non-numbers fail).
     // A non-period-like arg is IGNORED and the builtin default is used.
-    const periodLike = (v: Cell): number | null =>
-      typeof v === "number" && Number.isInteger(v) ? v : null;
+    const periodLike = periodLikeCell;
     if (fname === "ta.ao") {
       const fast = merged.length >= 1 ? periodLike(merged[0]!) : null;
       const slow = merged.length >= 2 ? periodLike(merged[1]!) : null;
