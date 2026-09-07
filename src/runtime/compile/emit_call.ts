@@ -19,6 +19,12 @@ const HLC3 =
   "((high_arr[__bar_idx] != null && low_arr[__bar_idx] != null && close_arr[__bar_idx] != null)" +
   " ? (high_arr[__bar_idx] + low_arr[__bar_idx] + close_arr[__bar_idx]) / 3" +
   " : close_arr[__bar_idx])";
+// Interpret `hlc3(env)` for the ta.cci period-only form: falls back through
+// close → high → low when any component is na (interpret.ts hlc3).
+const TP =
+  "((high_arr[__bar_idx] != null && low_arr[__bar_idx] != null && close_arr[__bar_idx] != null)" +
+  " ? (high_arr[__bar_idx] + low_arr[__bar_idx] + close_arr[__bar_idx]) / 3" +
+  " : (close_arr[__bar_idx] ?? high_arr[__bar_idx] ?? low_arr[__bar_idx]))";
 
 const NS = new Set([
   "ta",
@@ -154,8 +160,6 @@ const SRC_LEN = new Set([
   "sum",
   "dema",
   "tema",
-  "highestbars",
-  "lowestbars",
   "dev",
   "variance",
   "median",
@@ -468,6 +472,30 @@ function hasArg(args: CallArgs, index: number, names: string[]): boolean {
     if (Object.hasOwn(args.kw, n)) return true;
   }
   return index >= 0 && index < args.pos.length;
+}
+
+/** True when a keyword argument named one of *names* is present (interpret hasKwarg). */
+function hasAnyKw(args: CallArgs, names: string[]): boolean {
+  return names.some((n) => Object.hasOwn(args.kw, n));
+}
+
+/**
+ * Runtime-safe `_is_period_like` gate (interpret `periodLikeCell`): only whole
+ * numbers pass and are returned as-is; everything else (na, fractional,
+ * series samples) collapses to *fb* — mirroring `periodLikeArg(...) ?? fb`.
+ * Constant args could be decided at emit time, but the runtime form is
+ * equally exact and keeps one code path for constants and series alike.
+ */
+function periodGate(expr: string, fb: string): string {
+  return `((__p) => (Number.isInteger(__p) ? __p : ${fb}))(${expr})`;
+}
+
+/**
+ * Interpret `lenArg` / `lenOrDefault` analog: a null (na) or non-finite slot
+ * collapses to *fb* instead of reaching the kernel raw.
+ */
+function finiteOr(expr: string, fb: string): string {
+  return `((__v) => (__v != null && Number.isFinite(__v) ? __v : ${fb}))(${expr})`;
 }
 
 const DRAW_KINDS = new Set(["label", "line", "box", "table", "polyline", "linefill"]);
@@ -1263,8 +1291,27 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (SRC_LEN1.has(method)) {
     return taCall(method, site, [src(), len(1, "1")]);
   }
-  if (method === "highest" || method === "lowest" || method === "max" || method === "min") {
-    const defSrc = method === "lowest" || method === "min" ? LOW : HIGH;
+  if (method === "highest" || method === "lowest") {
+    const defSrc = method === "lowest" ? LOW : HIGH;
+    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:222-246): source defaults to
+      // the context high/low series and the length gates on _is_period_like
+      // → non-period-like → na period 0 (interpret evalExtraTa).
+      return taCall(method, site, [defSrc, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+    }
+    return taCall(method, site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+  }
+  if (method === "highestbars" || method === "lowestbars") {
+    const defSrc = method === "lowestbars" ? LOW : HIGH;
+    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
+      // Python 1-arg period-only form (basic.py:248-291): context high/low
+      // source, length gated like ta.highest (interpret evalExtraTa).
+      return taCall(method, site, [defSrc, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+    }
+    return taCall(method, site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+  }
+  if (method === "max" || method === "min") {
+    const defSrc = method === "min" ? LOW : HIGH;
     if (args.pos.length >= 2 || Object.hasOwn(args.kw, "source") || Object.hasOwn(args.kw, "series")) {
       return taCall(method, site, [src(), len(1, "14")]);
     }
@@ -1300,10 +1347,24 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `(() => { const __r = ${call}; return [__r.macd, __r.signal, __r.hist]; })()`;
   }
   if (method === "bb") {
+    if (args.pos.length === 2 && !hasAnyKw(args, ["source", "series"])) {
+      // Python period-first form (basic.py:394-401): (length, mult) with the
+      // series defaulting to the context close. Dispatch gates slot 0 on
+      // _is_period_like per bar (kwarg-first resolution, like interpret
+      // callArg) — a non-period-like slot falls through to the series arm on
+      // the raw slot-0 value, exactly like interpret.
+      const p0Expr = pick(args, 0, ["source", "series", "length"], "null");
+      const multPf = finiteOr(pick(args, 1, ["mult", "multiplier"], "null"), "NaN");
+      const lenFt = finiteOr(pick(args, 1, ["length"], "null"), "0");
+      const multFt = finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2");
+      const pf = `(() => { const __r = __h.ta.bb(${site}, close_arr[__bar_idx], __p0, ${multPf}); return [__r.mid, __r.up, __r.lo]; })()`;
+      const ft = `(() => { const __r = __h.ta.bb(${site}, __s0, ${lenFt}, ${multFt}); return [__r.mid, __r.up, __r.lo]; })()`;
+      return `((__p0, __s0) => (Number.isInteger(__p0) ? ${pf} : ${ft}))(${p0Expr}, ${pick(args, 0, ["source", "series"], "null")})`;
+    }
     const call = taCall("bb", site, [
       src(),
-      len(1, "20"),
-      pick(args, 2, ["mult", "multiplier"], "2"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+      finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2"),
     ]);
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }
@@ -1321,21 +1382,52 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }
   if (method === "stoch") {
-    if (args.pos.length <= 1 && args.kw.high == null) {
-      return taCall("stoch", site, [CLOSE, HIGH, LOW, len(0, "14")]);
+    if (args.kw.high == null && args.pos.length <= 2) {
+      // Python period-only / community forms (oscillators.py:58-78): %K over
+      // the context close/high/low. Both slots gate on _is_period_like; in
+      // the 2-arg (kLength, dPeriod) form dPeriod is ignored (Python quirk).
+      const length =
+        args.pos.length === 2
+          ? `(((__k, __d) => ((Number.isInteger(__k) && Number.isInteger(__d)) ? __k : 0))(${pick(args, 0, ["length"], "null")}, ${pick(args, 1, ["d", "smooth"], "null")}))`
+          : periodGate(pick(args, 0, ["length"], "null"), "0");
+      return taCall("stoch", site, [CLOSE, HIGH, LOW, length]);
     }
     return taCall("stoch", site, [
       src(),
       pick(args, 1, ["high"], HIGH),
       pick(args, 2, ["low"], LOW),
-      len(3, "14"),
+      finiteOr(pick(args, 3, ["length"], "null"), "0"),
     ]);
   }
   if (method === "vwma") {
-    return taCall("vwma", site, [src(), pick(args, 2, ["volume"], VOL), len(1, "14")]);
+    if (args.pos.length <= 1 && !hasAnyKw(args, ["volume"])) {
+      // Python 1-arg period-only form (basic.py:80-88): close + volume from
+      // the chart context; length gates on _is_period_like → na period 0.
+      return taCall("vwma", site, [CLOSE, VOL, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+    }
+    if (args.pos.length >= 3 || hasAnyKw(args, ["volume"])) {
+      // Python 3-arg community form (basic.py:89-100): (source, volume,
+      // length). A period-like middle slot swaps volume back to the context
+      // series (basic.py:93/97) — mirror interpret's per-bar swap.
+      const vol = `((__v) => (Number.isInteger(__v) ? ${VOL} : __v))(${pick(args, 1, ["volume"], "null")})`;
+      return taCall("vwma", site, [src(), vol, finiteOr(pick(args, 2, ["length", "period"], "null"), "0")]);
+    }
+    return taCall("vwma", site, [src(), VOL, finiteOr(pick(args, 1, ["length"], "null"), "0")]);
   }
   if (method === "cci") {
-    return taCall("cci", site, [src(), len(1, "14")]);
+    if (args.pos.length >= 4) {
+      // Python legacy 4-arg form (oscillators.py:178-187): typical price of
+      // the given (high, low, close) series. Slots resolve kwarg-first.
+      const tp = `((__h, __l, __c) => ((__h != null && __l != null && __c != null) ? (__h + __l + __c) / 3 : __c))(${pick(args, 0, ["high"], "null")}, ${pick(args, 1, ["low"], "null")}, ${pick(args, 2, ["close"], "null")})`;
+      return taCall("cci", site, [tp, finiteOr(pick(args, 3, ["length"], "null"), "0")]);
+    }
+    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
+      // Python 1-arg period-only form (oscillators.py:159-171): typical price
+      // from the context high/low/close; length gates on _is_period_like.
+      return taCall("cci", site, [TP, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+    }
+    // Python 2-arg form (oscillators.py:172-177): CCI over the source alone.
+    return taCall("cci", site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
   }
   if (method === "mfi") {
     if (args.pos.length <= 1) {
@@ -1412,10 +1504,27 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "pivothigh" || method === "pivotlow") {
+    if (args.pos.length === 2 && !hasAnyKw(args, ["source", "series"])) {
+      // Python period-first form (basic.py:1007-1039): both slots gate on
+      // _is_period_like and the source defaults to the context high/low
+      // series. A non-period-like slot falls through to the series arm on
+      // the raw slot values (never confirms on a scalar) — mirror interpret.
+      // Slots resolve kwarg-first (leftbars/rightbars), like interpret callArg.
+      const defSrc = method === "pivotlow" ? LOW : HIGH;
+      const lExpr = pick(args, 0, ["leftbars", "left"], "null");
+      const rExpr = pick(args, 1, ["rightbars", "right"], "null");
+      const leftFt = finiteOr(pick(args, 1, ["leftbars", "left"], "null"), "5");
+      const rightFt = finiteOr(pick(args, 2, ["rightbars", "right"], "null"), "5");
+      const pf = taCall(method, site, [defSrc, "__l", "__r"]);
+      const ft = taCall(method, site, ["__s", leftFt, rightFt]);
+      return `((__l, __r, __s) => (((Number.isInteger(__l) && Number.isInteger(__r))) ? ${pf} : ${ft}))(${lExpr}, ${rExpr}, ${pick(args, 0, ["source", "series"], "null")})`;
+    }
+    // Interpret srcArg: source slot names ["source", "series"], missing → na
+    // (a bare ta.pivothigh() never confirms, like interpret).
     return taCall(method, site, [
-      src(),
-      pick(args, 1, ["leftbars", "left"], "5"),
-      pick(args, 2, ["rightbars", "right"], "5"),
+      pick(args, 0, ["source", "series"], "null"),
+      finiteOr(pick(args, 1, ["leftbars", "left"], "null"), "5"),
+      finiteOr(pick(args, 2, ["rightbars", "right"], "null"), "5"),
     ]);
   }
   if (method === "swma") {
@@ -1446,7 +1555,27 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "adx") {
-    return taCall("adx", site, [HIGH, LOW, CLOSE, len(0, "14")]);
+    if (args.pos.length >= 4) {
+      // Python legacy 4-arg form (common.py:718-726): (high, low, close,
+      // length) with explicit series. Slots resolve kwarg-first.
+      return taCall("adx", site, [
+        pick(args, 0, ["source", "series"], "null"),
+        pick(args, 1, ["low"], "null"),
+        pick(args, 2, ["close"], "null"),
+        finiteOr(pick(args, 3, ["length"], "null"), "0"),
+      ]);
+    }
+    if (args.pos.length === 2 && !hasAnyKw(args, ["high", "low", "close"])) {
+      // Python 2-arg form (diLength, adxSmoothing) (common.py:709-717): both
+      // slots gate on _is_period_like (kwarg-first resolution) and the ADX
+      // period is the SECOND slot — diLength is accepted but unused. A
+      // non-period-like slot → default 14.
+      const period = `(((__di, __sm) => ((Number.isInteger(__di) && Number.isInteger(__sm)) ? __sm : 14))(${pick(args, 0, ["diLength", "length"], "null")}, ${pick(args, 1, ["adxSmoothing", "adxlen"], "null")}))`;
+      return taCall("adx", site, [HIGH, LOW, CLOSE, period]);
+    }
+    // Python 1-arg period-only form gates length via _is_period_like
+    // (common.py ~701): non-period-like → ignored → default 14 (as absent).
+    return taCall("adx", site, [HIGH, LOW, CLOSE, periodGate(pick(args, 0, ["length"], "null"), "14")]);
   }
   if (method === "correlation") {
     return taCall("correlation", site, [
