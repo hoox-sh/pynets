@@ -1,6 +1,10 @@
 # PyneTS
 
+[![CI](https://img.shields.io/github/actions/workflow/status/hoox-sh/pynets/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/hoox-sh/pynets/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/hoox-sh/pynets/graph/badge.svg)](https://codecov.io/gh/hoox-sh/pynets)
+[![npm](https://img.shields.io/npm/v/@hoox-sh/pynets?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pynets)
+[![License](https://img.shields.io/github/license/hoox-sh/pynets?style=flat-square)](LICENSE)
+[![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh)
 
 TypeScript / Bun library for **Pine Script**: parse, unparse, and interpret.
 
