@@ -6,26 +6,33 @@ import { describe, expect, test } from "bun:test";
 import { interpret, Runtime } from "../src/index.ts";
 import { MATH_CONSTANTS } from "../src/runtime/interpret.ts";
 
-const PYNE_ROOT = "/home/jango/Git/pynescript";
+const PYNE_ROOT = process.env.PYNESCRIPT_ROOT ?? "/home/jango/Git/pynescript";
 
 function pythonPlots(src: string): number[] | null {
-  const proc = Bun.spawnSync(
-    [
-      "python3",
-      "-c",
-      `from pynescript.runtime import Runtime
+  // Parity probe against the Python SoT. Skips cleanly when PYNE is not
+  // available (CI / fresh clones): spawnSync throws ENOENT when the cwd
+  // or interpreter is missing, so guard instead of relying on exitCode.
+  try {
+    const proc = Bun.spawnSync(
+      [
+        "python3",
+        "-c",
+        `from pynescript.runtime import Runtime
 import json
 src = ${JSON.stringify(src)}
 bars = [{"close": 1}, {"close": 2}, {"close": 3}]
 out = Runtime("TEST").run(src, bars)
 print(json.dumps(out.get("plots") if isinstance(out, dict) else list(out.plots)))`,
-    ],
-    { cwd: PYNE_ROOT, stdout: "pipe", stderr: "pipe" },
-  );
-  if (proc.exitCode !== 0) return null;
-  try {
-    const parsed = JSON.parse(proc.stdout.toString().trim());
-    return Array.isArray(parsed) ? parsed : null;
+      ],
+      { cwd: PYNE_ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    if (proc.exitCode !== 0) return null;
+    try {
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
   } catch {
     return null;
   }
