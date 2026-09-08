@@ -1,0 +1,29 @@
+# Codecov configuration — hoox-sh/pynets
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+    patch:
+      default:
+        target: 80%
+
+flags:
+  unit:
+    carryforward: true
+
+ignore:
+  - "src/generated/"
+  - "dist/"
+  - "docs/"
+  - "scripts/"
+  - "**/coverage/"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false

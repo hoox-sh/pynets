@@ -1,5 +1,7 @@
 # PyneTS
 
+[![codecov](https://codecov.io/gh/hoox-sh/pynets/graph/badge.svg)](https://codecov.io/gh/hoox-sh/pynets)
+
 TypeScript / Bun library for **Pine Script**: parse, unparse, and interpret.
 
 <p align="center">

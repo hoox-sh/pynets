@@ -32,11 +32,19 @@ jobs:
         run: bun run typecheck
         timeout-minutes: 5
 
-      - name: Test
-        run: bun test
+      - name: Test (coverage)
+        run: bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage
         timeout-minutes: 10
         env:
           NO_COLOR: "1"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          flags: unit
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build Node / browser bundles
         run: bun run build
