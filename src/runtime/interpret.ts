@@ -26,6 +26,7 @@ import type {
   TypeDef,
   EnumDef,
   Import,
+  Once,
   Param,
   ReAssign,
   Script,
@@ -60,6 +61,7 @@ import {
 import {
   timeframeFromSeconds,
   timeframeInSeconds,
+  timeframePeriodChanged,
   timeframeIsDaily,
   timeframeIsDwm,
   timeframeIsHours,
@@ -70,7 +72,7 @@ import {
   timeframeIsWeekly,
   timeframeMultiplier as tfMultiplier,
 } from "./timeframe.ts";
-import { DrawingBook, type DrawingEvent } from "./drawings.ts";
+import { DrawingBook, type DrawingEvent, type DrawingKind } from "./drawings.ts";
 import { LogBook, formatLogParts, runtimeError, type LogRecord } from "./log.ts";
 import { MemoryProvider, type BarProvider } from "./provider.ts";
 import {
@@ -143,10 +145,18 @@ import {
   strTrim,
   strUpper,
 } from "./str.ts";
-import { StrategyBook, type BrokerSettings, type StrategyEvent, type StrategySummary } from "./strategy.ts";
+import {
+  StrategyBook,
+  isStrategyCashAmount,
+  strategyCashAmount,
+  type BrokerSettings,
+  type StrategyCashAmount,
+  type StrategyEvent,
+  type StrategySummary,
+} from "./strategy.ts";
 import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
-import { TaEngine } from "./ta.ts";
+import { TaEngine, type TaRecord } from "./ta.ts";
 import {
   CompileError,
   compileEligible,
@@ -165,6 +175,7 @@ export interface OHLCVBar {
   close?: number;
   volume?: number;
   time?: number;
+  time_close?: number;
 }
 
 export type InputOverrides = Record<string, number | string | boolean>;
@@ -224,6 +235,14 @@ export interface RuntimeResult {
 /** Eval-only: Cell, tagged tuple/array, color, or strategy.long/short strings. */
 type TupleVal = { __tuple: true; elts: Value[] };
 type ArrayVal = { __array: true; elts: Value[] };
+type ChartPointVal = {
+  __chartPoint: true;
+  index: number | null;
+  time: number | null;
+  x: number | null;
+  y: number | null;
+  price: number | null;
+};
 type Value =
   | Cell
   | boolean // Python True/False (e.g. `barmerge.*`); coerces to 1/0 via unwrap/valuesEq
@@ -240,7 +259,10 @@ type Value =
   | LibraryModule
   | UdfDef
   | EnumType
-  | EnumMember;
+  | EnumMember
+  | TaRecord
+  | ChartPointVal
+  | StrategyCashAmount;
 
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
@@ -312,6 +334,11 @@ interface Env {
   barTimes: number[];
   libraries: LibraryRegistry;
   pendingExports: Map<string, Value>;
+  onceFired: WeakSet<object>;
+  /** Python `_max_bars_back_decls` — recorded only; evaluation is unbounded. */
+  maxBarsBackDecls: Array<{ var: Value; num: Value }>;
+  /** Python `_alert_fire_bars` keys for `alertcondition` once_per_bar. */
+  alertFireBars: Map<string, number>;
 }
 
 export class Runtime {
@@ -513,6 +540,9 @@ export function interpretTree(
     barTimes: ohlcv.map((b, i) => b.time ?? i * 60_000),
     libraries: host?.libraries ?? new LibraryRegistry(),
     pendingExports: new Map(),
+    onceFired: new WeakSet(),
+    maxBarsBackDecls: [],
+    alertFireBars: new Map(),
   };
 
   const n = ohlcv.length;
@@ -639,9 +669,24 @@ function beginBar(env: Env, bar: OHLCVBar, i: number): void {
   pushNamedSeries(env, "close", c);
   pushNamedSeries(env, "volume", vol);
   pushNamedSeries(env, "time", t);
+  // Explicit `time_close` wins. Otherwise Python's host: next bar open
+  // (0 counts as missing), and the last bar is this open + 1 day.
+  const explicitClose = bar.time_close;
+  let tClose = t;
+  if (typeof explicitClose === "number" && Number.isFinite(explicitClose)) {
+    tClose = explicitClose;
+  } else if (i + 1 < env.barCount) {
+    const next = env.barTimes[i + 1] ?? 0;
+    tClose = next !== 0 ? next : t;
+  } else {
+    tClose = Math.trunc(t) + 86_400_000;
+  }
+  pushNamedSeries(env, "time_close", tClose);
   env.ctx.bar_index = i;
   env.ctx.last_bar_index = env.barCount - 1;
   env.ctx.last_bar_time = env.lastBarTime;
+  // Python `_builtin_timenow`: host ctx, else dataset last bar time (no wall-clock).
+  env.ctx.timenow = env.lastBarTime;
 
   bindDerived(env, "hl2", (h + l) / 2);
   bindDerived(env, "hlc3", (h + l + c) / 3);
@@ -779,6 +824,8 @@ function callArg(
 
 function defaultPlotTitle(fname: string): string {
   if (fname === "hline") return "hline";
+  if (fname === "plotcandle") return "candles";
+  if (fname === "plotbar") return "bars";
   if (fname === "plotshape") return "shape";
   if (fname === "plotchar") return "char";
   if (fname === "plotarrow") return "arrow";
@@ -1030,8 +1077,11 @@ function applyStrategyDecl(stmt: { kind: string; value?: expr | null }, env: Env
   if (ms != null) settings.margin_short = ms;
   const dqt = evalExpr(callArg(stmt.value.args, -1, ["default_qty_type"]), env);
   if (typeof dqt === "string") settings.default_qty_type = dqt;
+  else if (isStrategyCashAmount(dqt)) settings.default_qty_type = "cash";
   const dqv = unwrap(evalExpr(callArg(stmt.value.args, -1, ["default_qty_value"]), env));
   if (dqv != null) settings.default_qty_value = dqv;
+  const cur = evalExpr(callArg(stmt.value.args, -1, ["currency"]), env);
+  if (typeof cur === "string" && cur !== "") settings.currency = cur;
   if (Object.keys(settings).length) env.book.configure(settings);
   const capital = unwrap(evalExpr(callArg(stmt.value.args, -1, ["initial_capital"]), env));
   if (capital != null && Number.isFinite(capital)) env.book.initialCapital = capital;
@@ -1091,7 +1141,7 @@ function execStmt(
   }
   if (stmt.kind === "Break") throw LOOP_BREAK;
   if (stmt.kind === "Continue") throw LOOP_CONTINUE;
-  if (stmt.kind === "Switch" || stmt.kind === "While" || stmt.kind === "If") {
+  if (stmt.kind === "Switch" || stmt.kind === "While" || stmt.kind === "If" || stmt.kind === "Once") {
     return evalExpr(stmt as unknown as expr, env);
   }
   if (stmt.kind !== "Expr" || !("value" in stmt) || stmt.value == null) return NA;
@@ -1106,12 +1156,18 @@ function execStmt(
       fname === "plotchar" ||
       fname === "plotarrow" ||
       fname === "bgcolor" ||
-      fname === "barcolor"
+      fname === "barcolor" ||
+      fname === "plotcandle" ||
+      fname === "plotbar"
     ) {
       const plotArgs = asArgs(value.args);
+      const ohlc = fname === "plotcandle" || fname === "plotbar";
       const title = resolvePlotTitle(plotArgs, fname);
       const key = uniquifyPlotKey(env, value, title);
-      const seriesExpr = callArg(value.args, 0, ["series", "source"]) ?? plotArgs[0]?.value;
+      // Python primary column is close (arg 3), not open.
+      const seriesExpr = ohlc
+        ? callArg(value.args, 3, ["close"])
+        : (callArg(value.args, 0, ["series", "source"]) ?? plotArgs[0]?.value);
       const cell = unwrap(evalExpr(seriesExpr, env));
       if (!env.plots[key]) {
         env.plots[key] = [];
@@ -1204,6 +1260,15 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       return evalWhile(node, env);
     case "Switch":
       return evalSwitch(node, env);
+    case "Once": {
+      const onceNode = node as Once;
+      if (env.onceFired.has(onceNode)) return NA;
+      const t = onceNode.test == null ? 1 : unwrap(evalExpr(onceNode.test, env));
+      if (!isTruthy(t)) return NA;
+      for (const s of onceNode.body) execStmt(s, env);
+      env.onceFired.add(onceNode);
+      return NA;
+    }
     case "BoolOp":
       return evalBoolOp(node, env);
     case "Qualify":
@@ -1288,14 +1353,25 @@ function evalSwitch(node: Switch, env: Env): Value {
   const subject = subjectPresent ? evalExpr(node.subject!, env) : null;
   for (const c of cases) {
     if (c.pattern == null) return execBlock(c.body, env);
-    if (subjectPresent) {
-      const pat = evalExpr(c.pattern, env);
-      if (valuesEq(pat, subject)) return execBlock(c.body, env);
-    } else if (isTruthy(unwrap(evalExpr(c.pattern, env)))) {
-      return execBlock(c.body, env);
-    }
+    if (switchArmMatches(subjectPresent, subject, c.pattern, env)) return execBlock(c.body, env);
   }
   return NA;
+}
+
+/** Python `_switch_case_matches`: multi-value arms (`1, 2 =>`) match any element. */
+function switchArmMatches(
+  subjectPresent: boolean,
+  subject: Value | null,
+  pattern: expr,
+  env: Env,
+): boolean {
+  const pat = evalExpr(pattern, env);
+  if (isTuple(pat)) {
+    if (!subjectPresent) return pat.elts.some((p) => isTruthy(unwrap(p)));
+    return pat.elts.some((p) => valuesEq(p, subject as Value));
+  }
+  if (subjectPresent) return valuesEq(pat, subject as Value);
+  return isTruthy(unwrap(pat));
 }
 
 function execBlock(body: stmt[] | stmt | null | undefined, env: Env): Value {
@@ -1430,6 +1506,10 @@ export const MATH_CONSTANTS: Record<string, Value> = {
   "hline.style_solid": "solid",
   "hline.style_dashed": "dashed",
   "hline.style_dotted": "dotted",
+  // Python plotting.py PlotStyle / `_builtin_plot_linestyle_*`.
+  "plot.linestyle_solid": "linestyle_solid",
+  "plot.linestyle_dashed": "linestyle_dashed",
+  "plot.linestyle_dotted": "linestyle_dotted",
   "dayofweek.sunday": 1,
   "dayofweek.monday": 2,
   "dayofweek.tuesday": 3,
@@ -1461,64 +1541,12 @@ function mathConstant(node: Attribute): Value | undefined {
 function evalAttribute(node: Attribute, env: Env): Value {
   const constant = mathConstant(node);
   if (constant !== undefined) return constant;
+  const strat = evalStrategyAttr(node, env);
+  if (strat !== undefined) return strat;
   if (node.value.kind === "Name") {
-    if (node.value.id === "strategy") {
-      if (node.attr === "long" || node.attr === "short") return node.attr;
-      if (node.attr === "position_size") return env.book.position.qty;
-      if (node.attr === "position_avg_price") return env.book.position.avgPrice;
-      if (node.attr === "netprofit") return env.book.realizedPnl;
-      if (node.attr === "openprofit") {
-        const q = env.book.position.qty;
-        const avg = env.book.position.avgPrice;
-        const mark = num(env.ctx.close);
-        if (q === 0 || avg == null || mark == null) return 0;
-        return q * (mark - avg);
-      }
-      if (node.attr === "equity") return env.book.equity(num(env.ctx.close) ?? 0);
-      if (node.attr === "opentrades") return env.book.opentrades;
-      if (node.attr === "closedtrades") return env.book.closedtrades;
-      if (node.attr === "wintrades") return env.book.wintrades;
-      if (node.attr === "losstrades") return env.book.losstrades;
-      if (node.attr === "eventrades") return env.book.eventrades;
-      if (node.attr === "grossprofit") return env.book.grossprofit;
-      if (node.attr === "grossloss") return env.book.grossloss;
-      if (node.attr === "avg_trade") return env.book.avgTrade();
-      if (node.attr === "avg_winning_trade") return env.book.avgWinningTrade();
-      if (node.attr === "avg_losing_trade") return env.book.avgLosingTrade();
-      if (node.attr === "netprofit_percent") {
-        return env.book.netprofitPercent(num(env.ctx.close) ?? 0);
-      }
-      if (node.attr === "openprofit_percent") {
-        return env.book.openprofitPercent(num(env.ctx.close) ?? 0);
-      }
-      if (node.attr === "grossprofit_percent") return env.book.grossprofitPercent();
-      if (node.attr === "grossloss_percent") return env.book.grosslossPercent();
-      if (node.attr === "avg_trade_percent") return env.book.avgTradePercent();
-      if (node.attr === "avg_winning_trade_percent") return env.book.avgWinningTradePercent();
-      if (node.attr === "avg_losing_trade_percent") return env.book.avgLosingTradePercent();
-      if (node.attr === "max_drawdown") return env.book.maxDrawdown();
-      if (node.attr === "max_drawdown_percent") return env.book.maxDrawdownPercent();
-      if (node.attr === "max_runup") return env.book.maxRunup();
-      if (node.attr === "max_runup_percent") return env.book.maxRunupPercent();
-      if (node.attr === "percent_profitable" || node.attr === "winrate") {
-        return env.book.percentProfitable();
-      }
-      if (node.attr === "profitfactor" || node.attr === "profit_factor") {
-        return env.book.profitFactor();
-      }
-      if (node.attr === "initial_capital") return env.book.initialCapital;
-      if (node.attr === "commission") return 0;
-      if (node.attr === "cash") return "cash";
-      if (node.attr === "fixed") return "fixed";
-      if (node.attr === "percent_of_equity") return "percent_of_equity";
-      if (node.attr === "leverage") return env.book.leverage;
-      if (node.attr === "margin_liquidation_price") return env.book.marginLiquidationPrice();
-      if (node.attr === "avg_price_stock") return "stock";
-      if (node.attr === "avg_price_futures") return "futures";
-      if (node.attr === "avg_price_inverse") return "inverse";
-    }
     if (node.value.id === "syminfo") {
       if (node.attr === "ticker" || node.attr === "tickerid") return env.symbol;
+      if (node.attr === "prefix") return extractPrefix(env.symbol);
       if (node.attr === "timezone") return "Etc/UTC";
       if (node.attr === "currency") return "USD";
       if (node.attr === "mintick") return 0.01;
@@ -1590,6 +1618,10 @@ function evalAttribute(node: Attribute, env: Env): Value {
       if (node.attr === "ascending") return 1;
       if (node.attr === "descending") return -1;
     }
+    if (node.attr === "all") {
+      const kind = drawingAllKind(node.value.id);
+      if (kind != null) return drawingAllArray(env, kind);
+    }
   }
   const obj = evalExpr(node.value, env);
   if (obj instanceof UdtInstance) {
@@ -1609,6 +1641,33 @@ function evalAttribute(node: Attribute, env: Env): Value {
     if (typeof exp === "function") return NA;
     return exp as Value;
   }
+  if (isTaRecord(obj)) return taRecordField(obj, node.attr);
+  if (isChartPoint(obj)) return chartPointField(obj, node.attr);
+  return NA;
+}
+
+function isTaRecord(value: Value): value is TaRecord {
+  return typeof value === "object" && value !== null && (value as TaRecord).__taRecord === true;
+}
+
+/** Brand-gated field read. Booleans plot as 1/0. Class instances never reach here. */
+function taRecordField(obj: TaRecord, attr: string): Value {
+  if (
+    obj instanceof UdtInstance ||
+    obj instanceof EnumType ||
+    obj instanceof LibraryModule ||
+    obj instanceof PineArray ||
+    obj instanceof PineMap ||
+    obj instanceof PineMatrix
+  ) {
+    return NA;
+  }
+  if (!Object.prototype.hasOwnProperty.call(obj, attr)) return NA;
+  const v = obj[attr];
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : NA;
+  if (v === null) return NA;
+  if (typeof v === "string") return v;
   return NA;
 }
 
@@ -1822,7 +1881,12 @@ function evalCall(node: Call, env: Env): Value {
   const mathVal = evalMathCall(fname, node, env);
   if (mathVal !== undefined) return mathVal;
   if (isInputBuiltin(fname)) return evalInput(node, env, fname!);
-  if (isRequestBuiltin(fname) || fname === "request.security") {
+  if (
+    isRequestBuiltin(fname) ||
+    fname === "request.security" ||
+    fname === "security" ||
+    fname === "security_lower_tf"
+  ) {
     return evalRequestCall(fname!, node, env);
   }
   const arrVal = evalArrayCall(fname, node, env);
@@ -1875,6 +1939,37 @@ function evalCall(node: Call, env: Env): Value {
   }
   const timeVal = evalTimeCall(fname, node, env);
   if (timeVal !== undefined) return timeVal;
+  if (fname === "max_bars_back") {
+    const varExpr = callArg(node.args, 0, ["var"]);
+    const numExpr = callArg(node.args, 1, ["num"]);
+    env.maxBarsBackDecls.push({
+      var: varExpr == null ? NA : evalExpr(varExpr, env),
+      num: numExpr == null ? 0 : evalExpr(numExpr, env),
+    });
+    return NA;
+  }
+  if (fname === "alertcondition") {
+    const condExpr = callArg(node.args, 0, ["condition"]);
+    if (condExpr == null) runtimeError("alertcondition() requires at least a condition argument");
+    const raw = evalExpr(condExpr, env);
+    const condition = isTruthy(unwrap(raw));
+    let title = "Alert";
+    let message = "Alert";
+    const titleExpr = callArg(node.args, 1, ["title"]);
+    const msgExpr = callArg(node.args, 2, ["message"]);
+    if (titleExpr != null) {
+      const t = evalExpr(titleExpr, env);
+      if (t != null) title = typeof t === "string" ? t : unwrap(t) == null ? title : String(unwrap(t));
+    }
+    if (msgExpr != null) {
+      const m = evalExpr(msgExpr, env);
+      if (m != null) message = typeof m === "string" ? m : unwrap(m) == null ? message : String(unwrap(m));
+    }
+    if (condition) fireAlertCondition(env, title, message);
+    return NA;
+  }
+  if (fname === "timeframe.change") return timeframeChange(node, env);
+  if (fname === "syminfo.prefix") return syminfoPrefix(node, env);
   if (fname === "timeframe.in_seconds") {
     // Python SoT (timeframe.py:189-190): None / "" map to "D" (daily 86400)
     // before parsing — same default compile applies (runtime.ts
@@ -2042,6 +2137,8 @@ function evalCall(node: Call, env: Env): Value {
   }
   const riskVal = evalStrategyRiskCall(fname, node, env);
   if (riskVal !== undefined) return riskVal;
+  const seriesVal = evalStrategySeriesCall(fname, node, env);
+  if (seriesVal !== undefined) return seriesVal;
   const tradeVal = evalStrategyTradeCall(fname, node, env);
   if (tradeVal !== undefined) return tradeVal;
   if (fname != null && fname.endsWith(".new")) {
@@ -2193,6 +2290,7 @@ function unwrap(value: Value): Cell {
   // (True == 1) — the interpret Value pipeline is number-centric.
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : NA;
+  if (isStrategyCashAmount(value)) return Number.isFinite(value.value) ? value.value : NA;
   // Objects (PineArray / Matrix / Color / tuples) are not cells — not na.
   return NA;
 }
@@ -2479,6 +2577,16 @@ function packDrawings(book: DrawingBook): DrawingEvent[] | undefined {
   return book.items.length === 0 ? undefined : book.items;
 }
 
+/** Python `_emit_alert(..., source="alertcondition", freq=once_per_bar)`. */
+function fireAlertCondition(env: Env, title: string, message: string): void {
+  const key = `alertcondition|${title}|${message}|once_per_bar`;
+  if (env.alertFireBars.get(key) === env.barIndex) return;
+  env.alertFireBars.set(key, env.barIndex);
+  env.drawings.alert(env.barIndex, message);
+  const ev = env.drawings.items[env.drawings.items.length - 1];
+  if (ev != null) ev.extra = { source: "alertcondition", title, freq: "once_per_bar" };
+}
+
 function inputTitle(node: Call): string | null {
   const named = namedStringArg(node.args, "title");
   if (named != null) return named;
@@ -2566,6 +2674,153 @@ function evalStrategyRiskCall(fname: string | null, node: Call, env: Env): Value
   return undefined;
 }
 
+function evalStrategyAttr(node: Attribute, env: Env): Value | undefined {
+  const path = attrPath(node);
+  if (path == null || !path.startsWith("strategy.")) return undefined;
+  return strategySeriesValue(path, env);
+}
+
+/** Zero-arg `strategy.*` series / constants, plus identity FX stubs. */
+function evalStrategySeriesCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname == null || !fname.startsWith("strategy.")) return undefined;
+  if (fname === "strategy.convert_to_account" || fname === "strategy.convert_to_symbol") {
+    const arg = callArg(node.args, 0, ["value"]);
+    if (arg == null) return 1;
+    return unwrap(evalExpr(arg, env));
+  }
+  if (fname === "strategy.default_entry_qty") {
+    const arg = callArg(node.args, 0, ["percent_equity"]);
+    const pct = arg == null ? 100 : unwrap(evalExpr(arg, env));
+    if (pct == null || !Number.isFinite(pct)) return NA;
+    return (env.book.initialCapital * (pct / 100)) / 100;
+  }
+  if (fname === "strategy.opentrades.capital_held") return env.book.capitalHeld();
+  return strategySeriesValue(fname, env);
+}
+
+function strategySeriesValue(path: string, env: Env): Value | undefined {
+  const book = env.book;
+  const mark = num(env.ctx.close) ?? 0;
+  switch (path) {
+    case "strategy.long":
+    case "strategy.direction.long":
+      return "long";
+    case "strategy.short":
+    case "strategy.direction.short":
+      return "short";
+    case "strategy.direction.all":
+      return "all";
+    case "strategy.position_size":
+      return book.position.qty;
+    case "strategy.position_avg_price":
+      return book.position.avgPrice;
+    case "strategy.position_entry_name":
+      return book.position_entry_name;
+    case "strategy.netprofit":
+      return book.netprofit();
+    case "strategy.openprofit":
+      return book.openprofit(mark);
+    case "strategy.equity":
+      return book.equity(mark);
+    case "strategy.opentrades":
+      return book.opentrades;
+    case "strategy.closedtrades":
+      return book.closedtrades;
+    case "strategy.closedtrades.first_index":
+      return book.closedtrades_first_index;
+    case "strategy.wintrades":
+      return book.wintrades;
+    case "strategy.losstrades":
+      return book.losstrades;
+    case "strategy.eventrades":
+      return book.eventrades;
+    case "strategy.grossprofit":
+      return book.grossprofit;
+    case "strategy.grossloss":
+      return book.grossloss;
+    case "strategy.avg_trade":
+      return book.avgTrade();
+    case "strategy.avg_winning_trade":
+      return book.avgWinningTrade();
+    case "strategy.avg_losing_trade":
+      return book.avgLosingTrade();
+    case "strategy.netprofit_percent":
+      return book.netprofitPercent(mark);
+    case "strategy.openprofit_percent":
+      return book.openprofitPercent(mark);
+    case "strategy.grossprofit_percent":
+      return book.grossprofitPercent();
+    case "strategy.grossloss_percent":
+      return book.grosslossPercent();
+    case "strategy.avg_trade_percent":
+      return book.avgTradePercent();
+    case "strategy.avg_winning_trade_percent":
+      return book.avgWinningTradePercent();
+    case "strategy.avg_losing_trade_percent":
+      return book.avgLosingTradePercent();
+    case "strategy.max_drawdown":
+      return book.maxDrawdown();
+    case "strategy.max_drawdown_percent":
+      return book.maxDrawdownPercent();
+    case "strategy.max_runup":
+      return book.maxRunup();
+    case "strategy.max_runup_percent":
+      return book.maxRunupPercent();
+    case "strategy.percent_profitable":
+    case "strategy.winrate":
+      return book.percentProfitable();
+    case "strategy.profitfactor":
+    case "strategy.profit_factor":
+      return book.profitFactor();
+    case "strategy.initial_capital":
+      return book.initialCapital;
+    case "strategy.commission":
+      return 0;
+    case "strategy.cash":
+      return strategyCashAmount(book.cash(mark));
+    case "strategy.fixed":
+      return "fixed";
+    case "strategy.percent_of_equity":
+      return "percent_of_equity";
+    case "strategy.leverage":
+      return book.leverage;
+    case "strategy.margin_liquidation_price":
+      return book.marginLiquidationPrice();
+    case "strategy.avg_price_stock":
+      return "stock";
+    case "strategy.avg_price_futures":
+      return "futures";
+    case "strategy.avg_price_inverse":
+      return "inverse";
+    case "strategy.account_currency":
+      return book.account_currency;
+    case "strategy.default_entry_qty":
+      return (book.initialCapital * (100 / 100)) / 100;
+    case "strategy.max_contracts_held_all":
+      return book.maxContractsHeldAll();
+    case "strategy.max_contracts_held_long":
+      return book.maxContractsHeldLong();
+    case "strategy.max_contracts_held_short":
+      return book.maxContractsHeldShort();
+    case "strategy.opentrades.capital_held":
+      return book.capitalHeld();
+    case "strategy.oca.none":
+      return "none";
+    case "strategy.oca.cancel":
+      return "cancel";
+    case "strategy.oca.reduce":
+      return "reduce";
+    case "strategy.commission.percent":
+      return "percent";
+    case "strategy.commission.cash_per_order":
+      return "cash_per_order";
+    case "strategy.commission.cash_per_contract":
+      return "cash_per_contract";
+    default:
+      return undefined;
+  }
+}
+
 function evalStrategyTradeCall(fname: string | null, node: Call, env: Env): Value | undefined {
   if (fname == null || !fname.startsWith("strategy.")) return undefined;
   const idx = unwrap(evalExpr(callArg(node.args, 0, ["trade_num", "trade_index", "index"]), env));
@@ -2574,32 +2829,54 @@ function evalStrategyTradeCall(fname: string | null, node: Call, env: Env): Valu
   const book = env.book;
   switch (fname) {
     case "strategy.closedtrades.entry_bar_index":
-      return book.closedEntryBar(i);
+      return book.closedEntryBar(i) ?? 0;
     case "strategy.closedtrades.entry_price":
-      return book.closedEntryPrice(i);
+      return book.closedEntryPrice(i) ?? 0;
     case "strategy.closedtrades.exit_bar_index":
-      return book.closedExitBar(i);
+      return book.closedExitBar(i) ?? 0;
     case "strategy.closedtrades.exit_price":
-      return book.closedExitPrice(i);
+      return book.closedExitPrice(i) ?? 0;
     case "strategy.closedtrades.profit":
-      return book.closedProfit(i);
+      return book.closedProfit(i) ?? 0;
     case "strategy.closedtrades.size":
-      return book.closedSize(i);
+      return book.closedSize(i) ?? 0;
     case "strategy.closedtrades.entry_id":
     case "strategy.closedtrades.exit_id":
-      return book.closedId(i);
+      return book.closedId(i) ?? "";
     case "strategy.closedtrades.commission":
-      return book.closedCommission(i);
+      return book.closedCommission(i) ?? 0;
+    case "strategy.closedtrades.entry_time":
+      return book.closedEntryTime(i);
+    case "strategy.closedtrades.exit_time":
+      return book.closedExitTime(i);
+    case "strategy.closedtrades.entry_comment":
+      return book.closedEntryComment(i);
+    case "strategy.closedtrades.exit_comment":
+      return book.closedExitComment(i);
+    case "strategy.closedtrades.max_drawdown":
+      return book.closedMaxDrawdown(i);
+    case "strategy.closedtrades.max_runup":
+      return book.closedMaxRunup(i);
     case "strategy.opentrades.entry_bar_index":
-      return book.openEntryBar(i);
+      return book.openEntryBar(i) ?? 0;
     case "strategy.opentrades.entry_price":
-      return book.openEntryPrice(i);
+      return book.openEntryPrice(i) ?? 0;
     case "strategy.opentrades.size":
-      return book.openSize(i);
+      return book.openSize(i) ?? 0;
     case "strategy.opentrades.entry_id":
-      return book.openId(i);
+      return book.openId(i) ?? "";
     case "strategy.opentrades.profit":
-      return book.openProfit(i, mark);
+      return book.openProfit(i, mark) ?? 0;
+    case "strategy.opentrades.entry_time":
+      return book.openEntryTime(i);
+    case "strategy.opentrades.entry_comment":
+      return book.openEntryComment(i);
+    case "strategy.opentrades.commission":
+      return book.openCommission(i);
+    case "strategy.opentrades.max_drawdown":
+      return book.openMaxDrawdown(i);
+    case "strategy.opentrades.max_runup":
+      return book.openMaxRunup(i);
     default:
       return undefined;
   }
@@ -2619,7 +2896,12 @@ function evalRequestSecurity(node: Call, env: Env): Cell {
 }
 
 function evalRequestCall(fname: string, node: Call, env: Env): Cell {
-  if (fname === "request.security" || fname === "request.security_lower_tf") {
+  if (
+    fname === "request.security" ||
+    fname === "request.security_lower_tf" ||
+    fname === "security" ||
+    fname === "security_lower_tf"
+  ) {
     return evalRequestSecurity(node, env);
   }
   const host = { symbol: env.symbol, timeframe: env.timeframe };
@@ -2677,7 +2959,7 @@ function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefi
   if (fname === "math.todegrees") return mathToDegrees(cellArg(node, env, 0, ["radians", "x"]));
   if (fname === "math.toradians") return mathToRadians(cellArg(node, env, 0, ["degrees", "x"]));
   if (fname === "math.isfinite") return mathIsFinite(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.random") {
+  if (fname === "math.random" || fname === "random") {
     const a0 = callArg(node.args, 0, ["min"]);
     const a1 = callArg(node.args, 1, ["max"]);
     return mathRandom(
@@ -2685,7 +2967,7 @@ function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefi
       a1 == null ? undefined : unwrap(evalExpr(a1, env)),
     );
   }
-  if (fname === "math.round_to_mintick") {
+  if (fname === "math.round_to_mintick" || fname === "round_to_mintick") {
     const tick = typeof env.ctx["syminfo.mintick"] === "number" ? (env.ctx["syminfo.mintick"] as number) : 0.01;
     return mathRoundToMintick(cellArg(node, env, 0, ["number", "x"]), tick);
   }
@@ -3595,6 +3877,80 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     );
     return tupleOf([r.pp, r.r1, r.s1, r.r2, r.s2]);
   }
+  if (fname === "ta.uo" || fname === "uo") {
+    return env.ta.uo(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.close),
+      lenArg(node, env, 0),
+      lenArg(node, env, 1),
+      lenArg(node, env, 2),
+    );
+  }
+  if (fname === "ta.rci" || fname === "rci") {
+    return env.ta.rci(site, srcArg(node, env), lenArg(node, env, 1));
+  }
+  if (fname === "ta.dpo" || fname === "dpo") {
+    return env.ta.dpo(site, num(env.ctx.close), lenArg(node, env, 0));
+  }
+  if (fname === "ta.kst" || fname === "kst") {
+    return env.ta.kst(
+      site,
+      num(env.ctx.close),
+      lenArg(node, env, 0),
+      lenArg(node, env, 1),
+      lenArg(node, env, 2),
+      lenArg(node, env, 3),
+    );
+  }
+  if (fname === "ta.stochrsi" || fname === "stochrsi") {
+    return env.ta.stochRsi(site, num(env.ctx.close), lenArg(node, env, 0), lenArg(node, env, 1));
+  }
+  if (fname === "ta.donchian" || fname === "donchian") {
+    return env.ta.donchian(site, num(env.ctx.high), num(env.ctx.low), lenArg(node, env, 0));
+  }
+  if (fname === "ta.ichimoku" || fname === "ichimoku") {
+    return env.ta.ichimoku(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      lenArg(node, env, 0),
+      lenArg(node, env, 1),
+    );
+  }
+  if (fname === "ta.bb_pct" || fname === "bb_pct") {
+    return env.ta.bbPct(
+      site,
+      num(env.ctx.close),
+      lenArg(node, env, 0),
+      numArg(node, env, 1, ["std_dev", "mult", "std"], 2),
+    );
+  }
+  if (fname === "ta.emv" || fname === "emv") {
+    return env.ta.emv(
+      site,
+      num(env.ctx.high),
+      num(env.ctx.low),
+      num(env.ctx.volume),
+      lenArg(node, env, 0),
+    );
+  }
+  if (fname === "ta.fractal" || fname === "fractal") {
+    return env.ta.fractal(site, num(env.ctx.high), num(env.ctx.low), lenArg(node, env, 0));
+  }
+  if (fname === "ta.atr_stop" || fname === "atr_stop") {
+    const atr = unwrap(evalExpr(callArg(node.args, 0, ["atr", "atr_value"]), env));
+    const multRaw = unwrap(evalExpr(callArg(node.args, 1, ["multiplier", "mult"]), env));
+    const mult = multRaw == null || !Number.isFinite(multRaw) ? 2 : multRaw;
+    return env.ta.atrStop(num(env.ctx.close), atr, mult);
+  }
+  if (fname === "ta.zigzag" || fname === "zigzag") {
+    const thRaw = unwrap(evalExpr(callArg(node.args, 1, ["threshold", "percent", "deviation"]), env));
+    const th = thRaw == null || !Number.isFinite(thRaw) ? 5 : thRaw;
+    const z = env.ta.zigzag(site, srcArg(node, env), th);
+    return tupleOf([z.high, z.low, z.dir]);
+  }
   return undefined;
 }
 
@@ -3617,17 +3973,37 @@ function asArray(value: Value): PineArray | null {
   return null;
 }
 
+/** Every `array.new*` alias Python registers in `_array_builtin_map`. */
+const ARRAY_NEW_FNS = new Set([
+  "array.new",
+  "array.new_bool",
+  "array.new_int",
+  "array.new_float",
+  "array.new_string",
+  "array.new_color",
+  "array.newbool",
+  "array.newint",
+  "array.newfloat",
+  "array.newstring",
+  "array.newcolor",
+  "array.newlabel",
+  "array.newline",
+  "array.newbox",
+  "array.newtable",
+  "array.newpolyline",
+  "array.newlinefill",
+  "array.new_label",
+  "array.new_line",
+  "array.new_box",
+  "array.new_table",
+  "array.new_polyline",
+  "array.new_linefill",
+  "array.new_chart.point",
+]);
+
 function isArrayNew(fname: string | null): boolean {
-  if (fname == null || !fname.startsWith("array.new")) return false;
   const name = arrayBuiltin(fname);
-  return (
-    name === "array.new" ||
-    name === "array.new_float" ||
-    name === "array.new_int" ||
-    name === "array.new_bool" ||
-    name === "array.new_string" ||
-    name === "array.new_color"
-  );
+  return name != null && ARRAY_NEW_FNS.has(name);
 }
 
 function arrayBuiltin(fname: string | null): string | null {
@@ -4196,6 +4572,94 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     return m ? m.median() : NA;
   }
+  if (
+    name === "matrix.sum_row" ||
+    name === "matrix.avg_row" ||
+    name === "matrix.min_row" ||
+    name === "matrix.max_row" ||
+    name === "matrix.mode_row"
+  ) {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    if (!m || i == null) return NA;
+    if (name === "matrix.sum_row") return m.sumRow(i);
+    if (name === "matrix.avg_row") return m.avgRow(i);
+    if (name === "matrix.min_row") return m.minRow(i);
+    if (name === "matrix.max_row") return m.maxRow(i);
+    return m.modeRow(i) as Value;
+  }
+  if (
+    name === "matrix.sum_col" ||
+    name === "matrix.avg_col" ||
+    name === "matrix.min_col" ||
+    name === "matrix.max_col" ||
+    name === "matrix.mode_col"
+  ) {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["column", "col", "index"]), env));
+    if (!m || i == null) return NA;
+    if (name === "matrix.sum_col") return m.sumCol(i);
+    if (name === "matrix.avg_col") return m.avgCol(i);
+    if (name === "matrix.min_col") return m.minCol(i);
+    if (name === "matrix.max_col") return m.maxCol(i);
+    return m.modeCol(i) as Value;
+  }
+  if (name === "matrix.copy_row") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    if (!m || i == null) return NA;
+    const arr = new PineArray();
+    for (const v of m.copyRow(i)) arr.push(v);
+    return arr;
+  }
+  if (name === "matrix.copy_col") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["column", "col", "index"]), env));
+    if (!m || i == null) return NA;
+    const arr = new PineArray();
+    for (const v of m.copyCol(i)) arr.push(v);
+    return arr;
+  }
+  if (name === "matrix.fill_row") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["row", "index"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 2, ["value"]), env));
+    if (m && i != null) m.fillRow(i, v);
+    return NA;
+  }
+  if (name === "matrix.fill_col") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const i = unwrap(evalExpr(callArg(node.args, 1, ["column", "col", "index"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 2, ["value"]), env));
+    if (m && i != null) m.fillCol(i, v);
+    return NA;
+  }
+  if (name === "matrix.fill_diagonal") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    const v = storeValue(evalExpr(callArg(node.args, 1, ["value"]), env));
+    m?.fillDiagonal(v);
+    return NA;
+  }
+  if (name === "matrix.reverse_rows") {
+    asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env))?.reverseRows();
+    return NA;
+  }
+  if (name === "matrix.reverse_cols") {
+    asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env))?.reverseCols();
+    return NA;
+  }
+  if (name === "matrix.stdev") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    return m ? m.stdev() : NA;
+  }
+  if (name === "matrix.variance") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    return m ? m.variance() : NA;
+  }
+  if (name === "matrix.mode_all") {
+    const m = asMatrix(evalExpr(callArg(node.args, 0, ["id", "matrix"]), env));
+    return m ? (m.modeAll() as Value) : NA;
+  }
   if (name === "matrix.mode") {
     const m = asMatrix(evalExpr(callArg(node.args, 0, ["id"]), env));
     return m ? m.mode() : NA;
@@ -4215,125 +4679,808 @@ function evalMatrixCall(fname: string | null, node: Call, env: Env): Value | und
   return undefined;
 }
 
+function isChartPoint(value: Value): value is ChartPointVal {
+  return typeof value === "object" && value !== null && (value as ChartPointVal).__chartPoint === true;
+}
+
+function makeChartPoint(index: number | null, time: number | null, price: number | null): ChartPointVal {
+  const x = index ?? time;
+  return { __chartPoint: true, index, time, x, y: price, price };
+}
+
+function chartPointField(obj: ChartPointVal, attr: string): Value {
+  if (attr === "__chartPoint" || !Object.prototype.hasOwnProperty.call(obj, attr)) return NA;
+  const v = obj[attr as keyof ChartPointVal];
+  if (typeof v === "number") return Number.isFinite(v) ? v : NA;
+  return NA;
+}
+
+function drawingAllKind(name: string): DrawingKind | null {
+  if (
+    name === "line" ||
+    name === "label" ||
+    name === "box" ||
+    name === "table" ||
+    name === "polyline" ||
+    name === "linefill"
+  ) {
+    return name;
+  }
+  return null;
+}
+
+function drawingAllArray(env: Env, kind: DrawingKind): PineArray {
+  const arr = new PineArray();
+  for (const id of env.drawings.allIds(kind)) arr.push(id);
+  return arr;
+}
+
+function drawId(node: Call, env: Env): number | null {
+  return unwrap(evalExpr(callArg(node.args, 0, ["id", "table_id", "table"]), env));
+}
+
+function drawNum(node: Call, env: Env, index: number, names: string[]): number | null {
+  const e = callArg(node.args, index, names);
+  return e == null ? null : unwrap(evalExpr(e, env));
+}
+
+function drawRaw(node: Call, env: Env, index: number, names: string[]): unknown {
+  const e = callArg(node.args, index, names);
+  if (e == null) return undefined;
+  const v = evalExpr(e, env);
+  if (typeof v === "string" || typeof v === "boolean" || isChartPoint(v) || v instanceof PineArray) return v;
+  const n = unwrap(v);
+  return n != null ? n : v;
+}
+
+function drawText(node: Call, env: Env, index: number, names: string[], fallback = ""): string {
+  const e = callArg(node.args, index, names);
+  if (e == null) return fallback;
+  const s = evalAsString(e, env);
+  if (s != null) return s;
+  const v = evalExpr(e, env);
+  if (typeof v === "string") return v;
+  const n = unwrap(v);
+  return n == null ? fallback : String(n);
+}
+
+function putFinite(extra: Record<string, unknown>, key: string, value: number | null | undefined): void {
+  if (value != null && Number.isFinite(value)) extra[key] = value;
+}
+
+function optionalCoord(node: Call, env: Env, index: number, names: string[], fallback: number): number | null {
+  const e = callArg(node.args, index, names);
+  if (e == null) return fallback;
+  return unwrap(evalExpr(e, env));
+}
+
+function pointXY(p: ChartPointVal): { x: number; y: number } {
+  const x = p.index ?? p.time ?? p.x ?? 0;
+  const y = p.price ?? p.y ?? 0;
+  return { x: x ?? 0, y: y ?? 0 };
+}
+
+function pointsFromValue(value: Value): unknown[] {
+  const arr = asArray(value);
+  if (!arr) return [];
+  return arr.toValues().filter((p) => p != null);
+}
+
 function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname == null) return undefined;
+  const book = env.drawings;
+
+  if (fname === "line" || fname === "box" || fname === "label" || fname === "table" || fname === "polyline" || fname === "linefill") {
+    const e = callArg(node.args, 0, ["id", "x"]);
+    return e == null ? NA : evalExpr(e, env);
+  }
+
   if (fname === "line.new") {
-    return env.drawings.lineNew(env.barIndex);
+    const extra: Record<string, unknown> = {};
+    putFinite(extra, "x1", optionalCoord(node, env, 0, ["x1"], 0));
+    putFinite(extra, "y1", optionalCoord(node, env, 1, ["y1"], 0));
+    putFinite(extra, "x2", optionalCoord(node, env, 2, ["x2"], 0));
+    putFinite(extra, "y2", optionalCoord(node, env, 3, ["y2"], 0));
+    const xloc = drawRaw(node, env, 4, ["xloc"]);
+    if (xloc !== undefined) extra.xloc = xloc;
+    const color = drawRaw(node, env, 5, ["color"]);
+    if (color !== undefined) extra.color = color;
+    putFinite(extra, "width", drawNum(node, env, 6, ["width"]));
+    const style = drawRaw(node, env, 7, ["style"]);
+    if (style !== undefined) extra.style = style;
+    const extend = drawRaw(node, env, 8, ["extend"]);
+    if (extend !== undefined) extra.extend = extend;
+    return book.lineNew(env.barIndex, extra);
   }
   if (fname === "label.new") {
-    const text = evalAsString(callArg(node.args, 2, ["text"]), env);
-    return env.drawings.labelNew(env.barIndex, text ?? undefined);
+    const pointKw = callArg(node.args, -1, ["point"]);
+    const a0 = callArg(node.args, 0, ["x", "point"]);
+    const v0 = pointKw != null ? evalExpr(pointKw, env) : a0 != null ? evalExpr(a0, env) : NA;
+    const extra: Record<string, unknown> = {};
+    let text: string;
+    if (isChartPoint(v0)) {
+      const xy = pointXY(v0);
+      extra.x = xy.x;
+      extra.y = xy.y;
+      text = drawText(node, env, pointKw != null ? 0 : 1, ["text"]);
+    } else {
+      putFinite(extra, "x", a0 == null ? 0 : unwrap(v0));
+      putFinite(extra, "y", optionalCoord(node, env, 1, ["y"], 0));
+      text = drawText(node, env, 2, ["text"]);
+    }
+    const tooltip = drawRaw(node, env, 12, ["tooltip"]);
+    if (tooltip !== undefined) extra.tooltip = tooltip;
+    const style = drawRaw(node, env, 13, ["style"]);
+    if (style !== undefined) extra.style = style;
+    return book.labelNew(env.barIndex, text, extra);
   }
   if (fname === "box.new") {
-    return env.drawings.boxNew(env.barIndex);
+    const extra: Record<string, unknown> = {};
+    putFinite(extra, "left", optionalCoord(node, env, 0, ["left"], 0));
+    putFinite(extra, "top", optionalCoord(node, env, 1, ["top"], 0));
+    putFinite(extra, "right", optionalCoord(node, env, 2, ["right"], 0));
+    putFinite(extra, "bottom", optionalCoord(node, env, 3, ["bottom"], 0));
+    const bgcolor = drawRaw(node, env, 6, ["bgcolor"]);
+    if (bgcolor !== undefined) extra.bgcolor = bgcolor;
+    const text = callArg(node.args, -1, ["text"]);
+    if (text != null) extra.text = drawText(node, env, -1, ["text"]);
+    return book.boxNew(env.barIndex, extra);
   }
   if (fname === "alert") {
     const msg = evalAlertMessage(callArg(node.args, 0, ["message"]), env);
-    env.drawings.alert(env.barIndex, msg);
+    book.alert(env.barIndex, msg);
     return NA;
   }
-  if (fname === "table.new") return env.drawings.tableNew(env.barIndex);
-  if (fname === "polyline.new") return env.drawings.polylineNew(env.barIndex);
-  if (fname === "linefill.new") {
-    const a = unwrap(evalExpr(callArg(node.args, 0, ["id1"]), env));
-    const b = unwrap(evalExpr(callArg(node.args, 1, ["id2"]), env));
-    return env.drawings.linefillNew(
-      env.barIndex,
-      a == null ? undefined : a,
-      b == null ? undefined : b,
-    );
+  if (fname === "table.new") {
+    const extra: Record<string, unknown> = {};
+    const position = drawRaw(node, env, 0, ["position"]);
+    if (position !== undefined) extra.position = position;
+    putFinite(extra, "rows", drawNum(node, env, 1, ["rows"]));
+    putFinite(extra, "columns", drawNum(node, env, 2, ["columns"]));
+    return book.tableNew(env.barIndex, extra);
   }
-  if (fname === "line.set_xy") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
+  if (fname === "polyline.new") {
+    const extra: Record<string, unknown> = {};
+    const ptsExpr = callArg(node.args, 0, ["points"]);
+    extra.points = ptsExpr == null ? [] : pointsFromValue(evalExpr(ptsExpr, env));
+    const closed = drawRaw(node, env, 1, ["closed"]);
+    if (closed !== undefined) extra.closed = closed;
+    const color = drawRaw(node, env, 3, ["color"]);
+    if (color !== undefined) extra.color = color;
+    putFinite(extra, "width", drawNum(node, env, 4, ["width"]));
+    return book.polylineNew(env.barIndex, extra);
+  }
+  if (fname === "linefill.new" || fname === "line.fill") {
+    const a = unwrap(evalExpr(callArg(node.args, 0, ["id1", "line1"]), env));
+    const b = unwrap(evalExpr(callArg(node.args, 1, ["id2", "line2"]), env));
+    const extra: Record<string, unknown> = {};
+    if (a != null) extra.id1 = a;
+    if (b != null) extra.id2 = b;
+    const color = drawRaw(node, env, 2, ["color"]);
+    if (color !== undefined) extra.color = color;
+    return book.linefillNew(env.barIndex, extra);
+  }
+
+  if (fname.endsWith(".all")) {
+    const kind = drawingAllKind(fname.slice(0, -4));
+    if (kind != null) return drawingAllArray(env, kind);
+  }
+
+  if (fname === "chart.point.new" || fname === "chart.point.from_time") {
+    const time = drawNum(node, env, 0, ["time"]);
+    const priceExpr = callArg(node.args, 1, ["price"]);
+    const price = priceExpr == null ? 0 : unwrap(evalExpr(priceExpr, env));
+    if (price == null) return NA;
+    return makeChartPoint(null, time, price);
+  }
+  if (fname === "chart.point.from_index") {
+    const index = drawNum(node, env, 0, ["index"]);
+    const priceExpr = callArg(node.args, 1, ["price"]);
+    const price = priceExpr == null ? 0 : unwrap(evalExpr(priceExpr, env));
+    if (price == null || index == null) return NA;
+    return makeChartPoint(Math.trunc(index), null, price);
+  }
+  if (fname === "chart.point.now") {
+    const priceExpr = callArg(node.args, 0, ["price"]);
+    const price = priceExpr == null ? 0 : unwrap(evalExpr(priceExpr, env));
+    if (price == null) return NA;
+    const time = unwrap(env.ctx.time) ?? env.barTimes[env.barIndex] ?? null;
+    return makeChartPoint(env.barIndex, time, price);
+  }
+  if (fname === "chart.point.copy") {
+    const raw = evalExpr(callArg(node.args, 0, ["point"]), env);
+    if (isChartPoint(raw)) return makeChartPoint(raw.index, raw.time, raw.price);
+    return makeChartPoint(null, null, 0);
+  }
+
+  if (fname === "line.copy" || fname === "label.copy" || fname === "box.copy" || fname === "polyline.copy") {
+    const id = drawId(node, env);
+    if (id == null) return NA;
+    const copied = book.copy(id);
+    return copied == null ? NA : copied;
+  }
+
+  if (fname === "line.delete" || fname === "label.delete" || fname === "box.delete" || fname === "table.delete" || fname === "polyline.delete" || fname === "linefill.delete") {
+    const id = drawId(node, env);
     if (id != null) {
-      env.drawings.lineSetXy(
+      if (fname === "line.delete") book.lineDelete(id);
+      else if (fname === "label.delete") book.labelDelete(id);
+      else if (fname === "box.delete") book.boxDelete(id);
+      else if (fname === "table.delete") book.tableDelete(id);
+      else if (fname === "polyline.delete") book.polylineDelete(id);
+      else book.linefillDelete(id);
+    }
+    return NA;
+  }
+
+  if (fname === "line.get_x1") {
+    const id = drawId(node, env);
+    return id != null ? book.lineGetX1(id) : NA;
+  }
+  if (fname === "line.get_y1") {
+    const id = drawId(node, env);
+    return id != null ? book.lineGetY1(id) : NA;
+  }
+  if (fname === "line.get_x2") {
+    const id = drawId(node, env);
+    return id != null ? book.lineGetX2(id) : NA;
+  }
+  if (fname === "line.get_y2") {
+    const id = drawId(node, env);
+    return id != null ? book.lineGetY2(id) : NA;
+  }
+  if (fname === "line.get_price") {
+    const id = drawId(node, env);
+    const x = drawNum(node, env, 1, ["x"]);
+    return id != null && x != null ? book.lineGetPrice(id, x) : NA;
+  }
+  if (fname === "label.get_x") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.labelGetX(id) ?? 0);
+  }
+  if (fname === "label.get_y") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.labelGetY(id) ?? 0);
+  }
+  if (fname === "label.get_text") {
+    const id = drawId(node, env);
+    return id == null ? "" : (book.labelGetText(id) ?? "");
+  }
+  if (fname === "box.get_left") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.boxGetLeft(id) ?? 0);
+  }
+  if (fname === "box.get_right") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.boxGetRight(id) ?? 0);
+  }
+  if (fname === "box.get_top") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.boxGetTop(id) ?? 0);
+  }
+  if (fname === "box.get_bottom") {
+    const id = drawId(node, env);
+    return id == null ? 0 : (book.boxGetBottom(id) ?? 0);
+  }
+  if (fname === "table.cell_get_text") {
+    const id = drawId(node, env);
+    const row = drawNum(node, env, 1, ["row"]);
+    const col = drawNum(node, env, 2, ["column"]);
+    if (id == null) return "";
+    return book.tableCellGetText(id, col, row) ?? "";
+  }
+  if (fname === "linefill.get_line1") {
+    const id = drawId(node, env);
+    return id != null ? book.linefillGetLine1(id) : NA;
+  }
+  if (fname === "linefill.get_line2") {
+    const id = drawId(node, env);
+    return id != null ? book.linefillGetLine2(id) : NA;
+  }
+  if (fname === "polyline.get_points") {
+    const id = drawId(node, env);
+    const arr = new PineArray();
+    if (id != null) for (const p of book.polylineGetPoints(id)) arr.push(p);
+    return arr;
+  }
+
+  if (fname === "line.set_xy") {
+    const id = drawId(node, env);
+    if (id != null) {
+      book.lineSetXy(
         id,
-        unwrap(evalExpr(callArg(node.args, 1, ["x1"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 2, ["y1"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 3, ["x2"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 4, ["y2"]), env)) ?? 0,
+        drawNum(node, env, 1, ["x1"]) ?? 0,
+        drawNum(node, env, 2, ["y1"]) ?? 0,
+        drawNum(node, env, 3, ["x2"]) ?? 0,
+        drawNum(node, env, 4, ["y2"]) ?? 0,
       );
     }
     return NA;
   }
-  if (fname === "label.set_text") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) env.drawings.labelSetText(id, evalAsString(callArg(node.args, 1, ["text"]), env) ?? "");
+  if (fname === "line.set_xy1") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetXy1(id, drawNum(node, env, 1, ["x1", "x"]) ?? 0, drawNum(node, env, 2, ["y1", "y"]) ?? 0);
     return NA;
   }
-  if (fname === "line.delete" || fname === "label.delete" || fname === "box.delete") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) {
-      if (fname === "line.delete") env.drawings.lineDelete(id);
-      else if (fname === "label.delete") env.drawings.labelDelete(id);
-      else env.drawings.boxDelete(id);
-    }
+  if (fname === "line.set_xy2") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetXy2(id, drawNum(node, env, 1, ["x2", "x"]) ?? 0, drawNum(node, env, 2, ["y2", "y"]) ?? 0);
+    return NA;
+  }
+  if (fname === "line.set_x1") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetX1(id, drawNum(node, env, 1, ["x1", "x"]));
+    return NA;
+  }
+  if (fname === "line.set_y1") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetY1(id, drawNum(node, env, 1, ["y1", "y"]));
+    return NA;
+  }
+  if (fname === "line.set_x2") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetX2(id, drawNum(node, env, 1, ["x2", "x"]));
+    return NA;
+  }
+  if (fname === "line.set_y2") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetY2(id, drawNum(node, env, 1, ["y2", "y"]));
     return NA;
   }
   if (fname === "line.set_color") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) env.drawings.lineSetColor(id, evalAsString(callArg(node.args, 1, ["color"]), env) ?? "");
+    const id = drawId(node, env);
+    if (id != null) book.lineSetColor(id, drawRaw(node, env, 1, ["color"]));
     return NA;
   }
-  if (fname === "line.get_price") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const x = unwrap(evalExpr(callArg(node.args, 1, ["x"]), env));
-    return id != null && x != null ? env.drawings.lineGetPrice(id, x) : NA;
+  if (fname === "line.set_width") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
   }
-  if (fname === "line.get_x1") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return id != null ? env.drawings.getX1(id) : NA;
+  if (fname === "line.set_style") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetStyle(id, drawRaw(node, env, 1, ["style"]));
+    return NA;
   }
-  if (fname === "line.get_y1") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return id != null ? env.drawings.getY1(id) : NA;
+  if (fname === "line.set_extend") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetExtend(id, drawRaw(node, env, 1, ["extend"]));
+    return NA;
   }
-  if (fname === "line.get_x2") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return id != null ? env.drawings.getX2(id) : NA;
+  if (fname === "line.set_xloc") {
+    const id = drawId(node, env);
+    if (id != null) book.lineSetXloc(id, drawRaw(node, env, 1, ["xloc"]));
+    return NA;
   }
-  if (fname === "line.get_y2") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return id != null ? env.drawings.getY2(id) : NA;
+  if (fname === "line.set_first_point") {
+    const id = drawId(node, env);
+    const p = evalExpr(callArg(node.args, 1, ["point"]), env);
+    if (id != null && isChartPoint(p)) {
+      const xy = pointXY(p);
+      book.lineSetXy1(id, xy.x, xy.y);
+    }
+    return NA;
   }
-  if (fname === "label.get_text") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    return id != null ? env.drawings.labelGetText(id) : NA;
+  if (fname === "line.set_second_point") {
+    const id = drawId(node, env);
+    const p = evalExpr(callArg(node.args, 1, ["point"]), env);
+    if (id != null && isChartPoint(p)) {
+      const xy = pointXY(p);
+      book.lineSetXy2(id, xy.x, xy.y);
+    }
+    return NA;
+  }
+
+  if (fname === "label.set_text") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetText(id, drawText(node, env, 1, ["text"]));
+    return NA;
   }
   if (fname === "label.set_xy") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) {
-      env.drawings.labelSetXy(
-        id,
-        unwrap(evalExpr(callArg(node.args, 1, ["x"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 2, ["y"]), env)) ?? 0,
-      );
-    }
+    const id = drawId(node, env);
+    if (id != null) book.labelSetXy(id, drawNum(node, env, 1, ["x"]) ?? 0, drawNum(node, env, 2, ["y"]) ?? 0);
     return NA;
   }
-  if (fname === "box.set_lefttop" || fname === "box.set_corners") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) {
-      env.drawings.boxSetCorners(
-        id,
-        unwrap(evalExpr(callArg(node.args, 1, ["left", "x1"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 2, ["top", "y1"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 3, ["right", "x2"]), env)) ?? 0,
-        unwrap(evalExpr(callArg(node.args, 4, ["bottom", "y2"]), env)) ?? 0,
-      );
-    }
+  if (fname === "label.set_x") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetX(id, drawNum(node, env, 1, ["x"]));
+    return NA;
+  }
+  if (fname === "label.set_y") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetY(id, drawNum(node, env, 1, ["y"]));
     return NA;
   }
   if (fname === "label.set_color") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    if (id != null) env.drawings.labelSetColor(id, evalAsString(callArg(node.args, 1, ["color"]), env) ?? "");
+    const id = drawId(node, env);
+    if (id != null) book.labelSetColor(id, drawRaw(node, env, 1, ["color"]));
     return NA;
   }
+  if (fname === "label.set_style") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetStyle(id, drawRaw(node, env, 1, ["style"]));
+    return NA;
+  }
+  if (fname === "label.set_size") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetSize(id, drawRaw(node, env, 1, ["size"]));
+    return NA;
+  }
+  if (fname === "label.set_tooltip") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTooltip(id, drawRaw(node, env, 1, ["tooltip"]));
+    return NA;
+  }
+  if (fname === "label.set_textalign") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextalign(id, drawRaw(node, env, 1, ["textalign", "halign"]));
+    return NA;
+  }
+  if (fname === "label.set_textcolor") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextcolor(id, drawRaw(node, env, 1, ["color", "textcolor"]));
+    return NA;
+  }
+  if (fname === "label.set_text_font_family") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextFontFamily(id, drawRaw(node, env, 1, ["font_family", "text_font_family"]));
+    return NA;
+  }
+  if (fname === "label.set_text_halign") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextHalign(id, drawRaw(node, env, 1, ["halign", "text_halign"]));
+    return NA;
+  }
+  if (fname === "label.set_text_valign") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextValign(id, drawRaw(node, env, 1, ["valign", "text_valign"]));
+    return NA;
+  }
+  if (fname === "label.set_text_size") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextSize(id, drawRaw(node, env, 1, ["size", "text_size"]));
+    return NA;
+  }
+  if (fname === "label.set_text_formatting") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetTextFormatting(id, drawRaw(node, env, 1, ["formatting", "text_formatting"]));
+    return NA;
+  }
+  if (fname === "label.set_border_color") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetBorderColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "label.set_border_width") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetBorderWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
+  }
+  if (fname === "label.set_border_style") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetBorderStyle(id, drawRaw(node, env, 1, ["style"]));
+    return NA;
+  }
+  if (fname === "label.set_xloc") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetXloc(id, drawRaw(node, env, 1, ["xloc"]));
+    return NA;
+  }
+  if (fname === "label.set_yloc") {
+    const id = drawId(node, env);
+    if (id != null) book.labelSetYloc(id, drawRaw(node, env, 1, ["yloc"]));
+    return NA;
+  }
+  if (fname === "label.set_point") {
+    const id = drawId(node, env);
+    const p = evalExpr(callArg(node.args, 1, ["point"]), env);
+    if (id != null && isChartPoint(p)) {
+      const xy = pointXY(p);
+      book.labelSetXy(id, xy.x, xy.y);
+    }
+    return NA;
+  }
+
+  if (fname === "box.set_lefttop" || fname === "box.set_corners") {
+    const id = drawId(node, env);
+    if (id != null) {
+      book.boxSetCorners(
+        id,
+        drawNum(node, env, 1, ["left", "x1"]) ?? 0,
+        drawNum(node, env, 2, ["top", "y1"]) ?? 0,
+        drawNum(node, env, 3, ["right", "x2"]) ?? 0,
+        drawNum(node, env, 4, ["bottom", "y2"]) ?? 0,
+      );
+    }
+    return NA;
+  }
+  if (fname === "box.set_left") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetLeft(id, drawNum(node, env, 1, ["left"]));
+    return NA;
+  }
+  if (fname === "box.set_right") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetRight(id, drawNum(node, env, 1, ["right"]));
+    return NA;
+  }
+  if (fname === "box.set_top") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTop(id, drawNum(node, env, 1, ["top"]));
+    return NA;
+  }
+  if (fname === "box.set_bottom") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetBottom(id, drawNum(node, env, 1, ["bottom"]));
+    return NA;
+  }
+  if (fname === "box.set_bgcolor") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetBgcolor(id, drawRaw(node, env, 1, ["color", "bgcolor"]));
+    return NA;
+  }
+  if (fname === "box.set_border_color") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetBorderColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "box.set_border_width") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetBorderWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
+  }
+  if (fname === "box.set_border_style") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetBorderStyle(id, drawRaw(node, env, 1, ["style"]));
+    return NA;
+  }
+  if (fname === "box.set_extend") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetExtend(id, drawRaw(node, env, 1, ["extend"]));
+    return NA;
+  }
+  if (fname === "box.set_xloc") {
+    const id = drawId(node, env);
+    if (id != null) {
+      book.boxSetLeft(id, drawNum(node, env, 1, ["left"]));
+      book.boxSetRight(id, drawNum(node, env, 2, ["right"]));
+      book.boxSetXloc(id, drawRaw(node, env, 3, ["xloc"]));
+    }
+    return NA;
+  }
+  if (fname === "box.set_closed") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetClosed(id, drawRaw(node, env, 1, ["closed"]));
+    return NA;
+  }
+  if (fname === "box.set_rightbottom") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetRightBottom(id, drawNum(node, env, 1, ["right"]), drawNum(node, env, 2, ["bottom"]));
+    return NA;
+  }
+  if (fname === "box.set_text") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetText(id, drawText(node, env, 1, ["text"]));
+    return NA;
+  }
+  if (fname === "box.set_text_color") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextColor(id, drawRaw(node, env, 1, ["color", "text_color"]));
+    return NA;
+  }
+  if (fname === "box.set_text_font_family") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextFontFamily(id, drawRaw(node, env, 1, ["font_family"]));
+    return NA;
+  }
+  if (fname === "box.set_text_halign") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextHalign(id, drawRaw(node, env, 1, ["halign"]));
+    return NA;
+  }
+  if (fname === "box.set_text_valign") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextValign(id, drawRaw(node, env, 1, ["valign"]));
+    return NA;
+  }
+  if (fname === "box.set_text_size") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextSize(id, drawRaw(node, env, 1, ["size"]));
+    return NA;
+  }
+  if (fname === "box.set_text_formatting") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextFormatting(id, drawRaw(node, env, 1, ["formatting"]));
+    return NA;
+  }
+  if (fname === "box.set_text_wrap") {
+    const id = drawId(node, env);
+    if (id != null) book.boxSetTextWrap(id, drawRaw(node, env, 1, ["wrap"]));
+    return NA;
+  }
+  if (fname === "box.set_top_left_point") {
+    const id = drawId(node, env);
+    const p = evalExpr(callArg(node.args, 1, ["point"]), env);
+    if (id != null && isChartPoint(p)) {
+      const xy = pointXY(p);
+      book.boxSetLeftTop(id, xy.x, xy.y);
+    }
+    return NA;
+  }
+  if (fname === "box.set_bottom_right_point") {
+    const id = drawId(node, env);
+    const p = evalExpr(callArg(node.args, 1, ["point"]), env);
+    if (id != null && isChartPoint(p)) {
+      const xy = pointXY(p);
+      book.boxSetRightBottom(id, xy.x, xy.y);
+    }
+    return NA;
+  }
+
   if (fname === "table.cell") {
-    const id = unwrap(evalExpr(callArg(node.args, 0, ["id"]), env));
-    const col = unwrap(evalExpr(callArg(node.args, 1, ["column"]), env));
-    const row = unwrap(evalExpr(callArg(node.args, 2, ["row"]), env));
-    const text = evalAsString(callArg(node.args, 3, ["text"]), env) ?? undefined;
-    if (id != null && col != null && row != null) env.drawings.tableCell(id, col, row, text);
+    const id = drawId(node, env);
+    const col = drawNum(node, env, 1, ["column"]);
+    const row = drawNum(node, env, 2, ["row"]);
+    const textArg = callArg(node.args, 3, ["text"]);
+    const text = textArg == null ? undefined : drawText(node, env, 3, ["text"]);
+    if (id != null && col != null && row != null) book.tableCell(id, col, row, text);
+    return NA;
+  }
+  if (fname === "table.cell_set_text") {
+    const id = drawId(node, env);
+    const row = drawNum(node, env, 1, ["row"]);
+    const col = drawNum(node, env, 2, ["column"]);
+    if (id != null) book.tableCellSetText(id, col, row, drawText(node, env, 3, ["text"]));
+    return NA;
+  }
+  if (
+    fname === "table.cell_set_text_color" ||
+    fname === "table.cell_set_bgcolor" ||
+    fname === "table.cell_set_border_color" ||
+    fname === "table.cell_set_border_width" ||
+    fname === "table.cell_set_tooltip"
+  ) {
+    const id = drawId(node, env);
+    const row = drawNum(node, env, 1, ["row"]);
+    const col = drawNum(node, env, 2, ["column"]);
+    const field =
+      fname === "table.cell_set_text_color"
+        ? "text_color"
+        : fname === "table.cell_set_bgcolor"
+          ? "bgcolor"
+          : fname === "table.cell_set_border_color"
+            ? "border_color"
+            : fname === "table.cell_set_border_width"
+              ? "border_width"
+              : "tooltip";
+    if (id != null) book.tableCellSetField(id, col, row, field, drawRaw(node, env, 3, ["color", "width", "tooltip", "text"]));
+    return NA;
+  }
+  if (
+    fname === "table.cell_set_width" ||
+    fname === "table.cell_set_height" ||
+    fname === "table.cell_set_text_halign" ||
+    fname === "table.cell_set_text_valign" ||
+    fname === "table.cell_set_text_size" ||
+    fname === "table.cell_set_text_font_family" ||
+    fname === "table.cell_set_text_formatting"
+  ) {
+    const id = drawId(node, env);
+    const col = drawNum(node, env, 1, ["column", "col"]);
+    const row = drawNum(node, env, 2, ["row"]);
+    const field = fname.slice("table.cell_set_".length);
+    if (id != null) book.tableCellSetField(id, col, row, field, drawRaw(node, env, 3, ["width", "height", "halign", "valign", "size", "font_family", "formatting"]));
+    return NA;
+  }
+  if (fname === "table.set_position") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetPosition(id, drawRaw(node, env, 1, ["position"]));
+    return NA;
+  }
+  if (fname === "table.set_bgcolor") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetBgcolor(id, drawRaw(node, env, 1, ["color", "bgcolor"]));
+    return NA;
+  }
+  if (fname === "table.set_border_color") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetBorderColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "table.set_border_width") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetBorderWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
+  }
+  if (fname === "table.set_frame_color") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetFrameColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "table.set_frame_width") {
+    const id = drawId(node, env);
+    if (id != null) book.tableSetFrameWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
+  }
+  if (fname === "table.clear") {
+    const id = drawId(node, env);
+    if (id != null) {
+      const a1 = callArg(node.args, 1, ["start_row"]);
+      if (a1 == null) book.tableClear(id);
+      else {
+        book.tableClear(
+          id,
+          drawNum(node, env, 1, ["start_row"]),
+          drawNum(node, env, 2, ["start_column", "start_col"]),
+          drawNum(node, env, 3, ["end_row"]),
+          drawNum(node, env, 4, ["end_column", "end_col"]),
+        );
+      }
+    }
+    return NA;
+  }
+  if (fname === "table.merge_cells") {
+    const id = drawId(node, env);
+    if (id != null) {
+      book.tableMergeCells(
+        id,
+        drawNum(node, env, 1, ["start_row"]),
+        drawNum(node, env, 2, ["start_column", "start_col"]),
+        drawNum(node, env, 3, ["end_row"]),
+        drawNum(node, env, 4, ["end_column", "end_col"]),
+      );
+    }
+    return NA;
+  }
+
+  if (fname === "linefill.set_color") {
+    const id = drawId(node, env);
+    if (id != null) book.linefillSetColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "polyline.set_points") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetPoints(id, pointsFromValue(evalExpr(callArg(node.args, 1, ["points"]), env)));
+    return NA;
+  }
+  if (fname === "polyline.set_line_color") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetLineColor(id, drawRaw(node, env, 1, ["color"]));
+    return NA;
+  }
+  if (fname === "polyline.set_line_width") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetLineWidth(id, drawRaw(node, env, 1, ["width"]));
+    return NA;
+  }
+  if (fname === "polyline.set_line_style") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetLineStyle(id, drawRaw(node, env, 1, ["style"]));
+    return NA;
+  }
+  if (fname === "polyline.set_fill_color") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetFillColor(id, drawRaw(node, env, 1, ["fill_color", "color"]));
+    return NA;
+  }
+  if (fname === "polyline.set_curved") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetCurved(id, drawRaw(node, env, 1, ["curved"]));
+    return NA;
+  }
+  if (fname === "polyline.set_force_overlay") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetForceOverlay(id, drawRaw(node, env, 1, ["force_overlay"]));
+    return NA;
+  }
+  if (fname === "polyline.set_closed") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetClosed(id, drawRaw(node, env, 1, ["closed"]));
+    return NA;
+  }
+  if (fname === "polyline.set_xloc") {
+    const id = drawId(node, env);
+    if (id != null) book.polylineSetXloc(id, drawRaw(node, env, 1, ["xloc"]));
     return NA;
   }
   return undefined;
@@ -4681,7 +5828,52 @@ function evalTimeCall(fname: string | null, node: Call, env: Env): Value | undef
     const ms = calendarMs(node, env);
     return ms == null ? NA : timeTradingDay(ms);
   }
+  if (fname === "time_close") return barTimeClose(env);
+  if (fname === "timenow") {
+    const seeded = env.ctx.timenow;
+    if (typeof seeded === "number" && Number.isFinite(seeded)) return seeded;
+    if (typeof env.lastBarTime === "number" && Number.isFinite(env.lastBarTime)) return env.lastBarTime;
+    const t = env.ctx.time;
+    return typeof t === "number" && Number.isFinite(t) ? t : NA;
+  }
   return undefined;
+}
+
+function barTimeClose(env: Env): number {
+  const close = env.ctx.time_close;
+  if (typeof close === "number" && Number.isFinite(close)) return close;
+  const open = env.ctx.time;
+  return typeof open === "number" && Number.isFinite(open) ? open : 0;
+}
+
+function timeframeChange(node: Call, env: Env): Cell {
+  const arg = callArg(node.args, 0, ["timeframe", "tf"]);
+  if (arg == null) return 0;
+  const raw = evalExpr(arg, env);
+  const tf = typeof raw === "string" ? raw : typeof raw === "number" && Number.isFinite(raw) ? String(raw) : null;
+  if (tf == null || tf.trim() === "") return 0;
+  const curr = env.ctx.time;
+  if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
+  const hist = env.series.get("time");
+  const prev = hist != null && hist.length >= 2 ? hist.get(1) : null;
+  return timeframePeriodChanged(curr, prev, tf, env.barIndex) ? 1 : 0;
+}
+
+/** Python `split_symbol` / `extract_prefix`: text before the first `:`, else `""`. */
+function extractPrefix(symbol: string): string {
+  const s = symbol.trim();
+  const i = s.indexOf(":");
+  return i < 0 ? "" : s.slice(0, i);
+}
+
+function syminfoPrefix(node: Call, env: Env): string {
+  const arg = callArg(node.args, 0, ["tickerid", "symbol"]);
+  if (arg == null) return extractPrefix(env.symbol);
+  const raw = evalExpr(arg, env);
+  if (raw instanceof TickerId) return extractPrefix(raw.symbol);
+  if (typeof raw === "string") return extractPrefix(raw);
+  if (typeof raw === "number" && Number.isFinite(raw)) return extractPrefix(String(raw));
+  return "";
 }
 
 function calendarMs(node: Call, env: Env): number | null {

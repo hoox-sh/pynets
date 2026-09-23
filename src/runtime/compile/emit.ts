@@ -24,6 +24,7 @@ import type {
   If,
   Import,
   Name,
+  Once,
   ReAssign,
   Script,
   stmt,
@@ -48,6 +49,7 @@ const CHART_LOCALS = new Set([
   "close",
   "volume",
   "time",
+  "time_close",
   "bar_index",
   "last_bar_index",
   "na",
@@ -139,6 +141,7 @@ export function newEmitCtx(): EmitCtx {
     usesStrategy: false,
     nextSite: 0,
     errors: [],
+    onceFlags: [],
     currentFunc: null,
     currentParamNames: new Set(),
     currentSeriesParams: new Set(),
@@ -211,6 +214,9 @@ function assemble(ctx: EmitCtx, body: string[]): string {
     lines.push(`  const ${arr} = new Array(n_bars).fill(null);`);
   }
   lines.push("  const __var_inited = Object.create(null);");
+  for (const flag of ctx.onceFlags) {
+    lines.push(`  let ${flag} = false;`);
+  }
   for (const fn of ctx.functions) {
     if (fn) lines.push(indentBlock(fn, 2));
   }
@@ -224,6 +230,7 @@ function assemble(ctx: EmitCtx, body: string[]): string {
   lines.push("    const close = close_arr[__bar_idx];");
   lines.push("    const volume = vol_arr[__bar_idx];");
   lines.push("    const time = time_arr[__bar_idx];");
+  lines.push("    const time_close = __h.timeClose(__bar_idx, time_arr);");
   lines.push("    const bar_index = __bar_idx;");
   lines.push("    const last_bar_index = n_bars - 1;");
   lines.push("    const na = null;");
@@ -276,6 +283,7 @@ function emitNode(state: State, node: expr | stmt | null | undefined): string {
     case "Break":
     case "Continue":
     case "Expr":
+    case "Once":
       return emitStmt(state, node);
     default:
       return emitExpr(state, node);
@@ -316,6 +324,8 @@ function emitStmt(state: State, node: stmt | expr): string {
       return emitWhile(state, node);
     case "Switch":
       return emitSwitch(state, node, false);
+    case "Once":
+      return emitOnce(state, node);
     default:
       return emitExprStmt(state, node);
   }
@@ -334,6 +344,8 @@ function emitExprStmt(state: State, value: expr | null | undefined): string {
       return emitWhile(state, value);
     case "Switch":
       return emitSwitch(state, value, false);
+    case "Once":
+      return emitOnce(state, value);
     default: {
       const e = emitExpr(state, value);
       if (!e || e === "null") return "";
@@ -792,6 +804,8 @@ function emitSyminfo(attr: string): string {
     case "tickerid":
     case "root":
       return `"SYMBOL"`;
+    case "prefix":
+      return `__h.syminfoPrefix()`;
     default:
       return "null";
   }
@@ -1063,6 +1077,15 @@ function emitIfStmt(state: State, node: If, asExpr = false): string {
   return `if (${test}) {\n${indentBlock(thenBlock, 2)}\n} else {\n${indentBlock(elseBlock, 2)}\n}`;
 }
 
+function emitOnce(state: State, node: Once): string {
+  const flag = `__once_${state.ctx.onceFlags.length}`;
+  state.ctx.onceFlags.push(flag);
+  const test = node.test == null ? "true" : `__h.nz(${emitExpr(state, node.test)})`;
+  const body = emitBranch(state, node.body, false);
+  const inner = body ? `${indentBlock(body, 4)}\n    ${flag} = true;` : `    ${flag} = true;`;
+  return `if (!${flag}) {\n  if (${test}) {\n${inner}\n  }\n}`;
+}
+
 function emitBranch(state: State, stmts: stmt[], asExpr: boolean): string {
   const list = stmts ?? [];
   if (list.length === 0) return asExpr ? "return null;" : "";
@@ -1121,6 +1144,7 @@ function isValueExpr(node: expr): boolean {
     case "ForIn":
     case "While":
     case "Switch":
+    case "Once":
       return false;
     default:
       return true;
@@ -1242,10 +1266,7 @@ function emitSwitch(state: State, node: Switch, asExpr: boolean): string {
       defaultCase = c;
       continue;
     }
-    const cond =
-      subjN != null
-        ? `__h.eq(${subjN}, ${emitExpr(state, c.pattern)})`
-        : `__h.nz(${emitExpr(state, c.pattern)})`;
+    const cond = emitSwitchCond(state, c.pattern, subjN);
     const kw = first ? "if" : "else if";
     first = false;
     const body = emitBranch(state, c.body ?? [], asExpr);
@@ -1264,6 +1285,21 @@ function emitSwitch(state: State, node: Switch, asExpr: boolean): string {
   const block = parts.filter(Boolean).join("\n");
   if (asExpr) return iife(block, "null");
   return `{\n${indentBlock(block, 2)}\n}`;
+}
+
+/** Python `_switch_case_matches`: a comma arm (`1, 2 =>`) matches any element. */
+function emitSwitchCond(state: State, pattern: expr, subjN: string | null): string {
+  if (pattern.kind === "Tuple") {
+    const parts = (pattern.elts ?? []).map((e) => emitSwitchLeaf(state, e, subjN));
+    return parts.length ? `(${parts.join(" || ")})` : "false";
+  }
+  return emitSwitchLeaf(state, pattern, subjN);
+}
+
+function emitSwitchLeaf(state: State, pattern: expr, subjN: string | null): string {
+  return subjN != null
+    ? `__h.eq(${subjN}, ${emitExpr(state, pattern)})`
+    : `__h.nz(${emitExpr(state, pattern)})`;
 }
 
 function emitBlock(state: State, stmts: stmt[] | null | undefined): string {

@@ -33,6 +33,7 @@ import type {
   If,
   Import,
   Name,
+  Once,
   Param,
   Qualify,
   ReAssign,
@@ -217,6 +218,8 @@ function emitExpr(node: expr): string {
       return emitWhile(node);
     case "Switch":
       return emitSwitch(node);
+    case "Once":
+      return emitOnce(node);
     case "BoolOp":
       return emitBoolOp(node);
     case "Qualify":
@@ -317,6 +320,11 @@ function emitIndentedBody(body: stmt[]): string {
 
 function emitWhile(node: While): string {
   return `while ${emitExpr(node.test)}${emitIndentedBody(node.body)}`;
+}
+
+function emitOnce(node: Once): string {
+  const head = node.test ? `once ${emitExpr(node.test)}` : "once";
+  return head + emitIndentedBody(node.body);
 }
 
 function emitCaseBody(body: stmt[]): string {

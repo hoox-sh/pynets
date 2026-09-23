@@ -9,6 +9,7 @@
 import { timeframeMinutes } from "./request.ts";
 
 const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 86_400;
 const SECONDS_PER_WEEK = 604_800;
 const SECONDS_PER_MONTH = 2_592_000; // 30-day month
@@ -115,4 +116,169 @@ function norm(period: string | null): string | null {
   if (period == null) return null;
   const p = period.trim().toUpperCase();
   return p === "" ? null : p;
+}
+
+/** Bare `D`/`W`/`M` plus `1D`/`1W`/`1M` only. Case-sensitive — `"d"` is a fixed bucket. */
+const CALENDAR_TFS = new Set(["D", "W", "M", "1D", "1W", "1M"]);
+
+const PERIOD_SHORTCUTS: Record<string, number> = {
+  "1H": SECONDS_PER_HOUR,
+  H: SECONDS_PER_HOUR,
+  D: SECONDS_PER_DAY,
+  W: SECONDS_PER_WEEK,
+  MO: SECONDS_PER_MONTH,
+  M: SECONDS_PER_MONTH,
+  "1M": SECONDS_PER_MONTH,
+  MONTH: SECONDS_PER_MONTH,
+  MONTHS: SECONDS_PER_MONTH,
+};
+
+/** Python `TIMEFRAME_SUFFIXES` insertion order (`M` before `MO`). */
+const PERIOD_SUFFIXES: Array<[string, number]> = [
+  ["M", SECONDS_PER_MONTH],
+  ["H", SECONDS_PER_HOUR],
+  ["D", SECONDS_PER_DAY],
+  ["W", SECONDS_PER_WEEK],
+  ["MO", SECONDS_PER_MONTH],
+];
+
+const UTC_ZONE_NAMES = new Set(["UTC", "utc", "Etc/UTC", "GMT", "gmt", "syminfo.timezone"]);
+const OFFSET_RE = /^(?:(?:UTC|GMT)\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|(\d{2}))?$/i;
+
+type ChangeZone = { off: number } | { iana: string };
+
+const zoneFmt = new Map<string, Intl.DateTimeFormat | null>();
+
+/**
+ * `timeframe.change` / `timeframe_period_changed`.
+ * Bar 0 is a new period. Missing time, NaN, or an unusable tf → false.
+ * Calendar frames use *tz* (unset / unknown → UTC). Everything else is a
+ * fixed-width UTC bucket from `timeframe_in_seconds`.
+ */
+export function timeframePeriodChanged(
+  currTs: unknown,
+  prevTs: unknown,
+  timeframeStr: string | null | undefined,
+  barIndex?: number | null,
+  tz?: unknown,
+): boolean {
+  const currId = periodId(currTs, timeframeStr, tz);
+  if (currId == null) return false;
+  if (barIndex != null) {
+    if (barIndex <= 0) return true;
+    if (prevTs == null) return false;
+  } else if (prevTs == null) {
+    return true;
+  }
+  const prevId = periodId(prevTs, timeframeStr, tz);
+  if (prevId == null) return false;
+  return currId !== prevId;
+}
+
+function periodId(ts: unknown, timeframeStr: string | null | undefined, tz: unknown): number | null {
+  if (timeframeStr == null) return null;
+  const raw = String(timeframeStr).trim();
+  if (raw === "") return null;
+  const ms = normalizeTimeMs(ts);
+  if (ms == null) return null;
+  if (CALENDAR_TFS.has(raw)) return calendarId(ms, raw, tz);
+  const sec = periodSeconds(raw);
+  if (sec == null || sec <= 0) return null;
+  return Math.floor(ms / (sec * 1000));
+}
+
+/** Python `timeframe_in_seconds` (not `timeframeMinutes` — `"15M"` is 15 months). */
+function periodSeconds(raw: string): number | null {
+  const tf = raw.trim().toUpperCase();
+  if (tf === "") return null;
+  const shortcut = PERIOD_SHORTCUTS[tf];
+  if (shortcut != null) return shortcut;
+  if (tf.endsWith("M") && /^\d+$/.test(tf.slice(0, -1))) {
+    return Number(tf.slice(0, -1)) * SECONDS_PER_MONTH;
+  }
+  if (/^\d+$/.test(tf)) return Number(tf) * SECONDS_PER_MINUTE;
+  for (const [suffix, mult] of PERIOD_SUFFIXES) {
+    if (!tf.endsWith(suffix)) continue;
+    const head = tf.slice(0, -suffix.length);
+    if (head !== "" && /^\d+$/.test(head)) return Number(head) * mult;
+  }
+  return null;
+}
+
+function calendarId(ms: number, raw: string, tz: unknown): number | null {
+  const kind = raw[raw.length - 1];
+  const civil = civilInZone(ms, resolveZone(tz));
+  if (civil == null) return null;
+  if (kind === "D") return civil.year * 10_000 + civil.month * 100 + civil.day;
+  if (kind === "W") return isoWeekId(civil.year, civil.month, civil.day);
+  return civil.year * 12 + civil.month;
+}
+
+function normalizeTimeMs(ts: unknown): number | null {
+  if (ts == null) return null;
+  const t = typeof ts === "number" ? ts : typeof ts === "string" ? Number(ts) : NaN;
+  if (!Number.isFinite(t)) return null;
+  return t < 1e11 ? t * 1000 : t;
+}
+
+function resolveZone(tz: unknown): ChangeZone {
+  if (typeof tz !== "string") return { off: 0 };
+  const s = tz.trim();
+  if (s === "" || UTC_ZONE_NAMES.has(s)) return { off: 0 };
+  const m = OFFSET_RE.exec(s);
+  if (m) {
+    const sign = m[1] === "+" ? 1 : -1;
+    const hours = Number(m[2]);
+    const mins = Number(m[3] || m[4] || 0);
+    const off = sign * (hours * 60 + mins) * 60_000;
+    if (!Number.isFinite(off) || Math.abs(off) >= 86_400_000) return { off: 0 };
+    return { off };
+  }
+  return { iana: s };
+}
+
+function civilInZone(ms: number, zone: ChangeZone): { year: number; month: number; day: number } | null {
+  if (!Number.isFinite(ms)) return null;
+  if ("off" in zone) return utcCivil(ms + zone.off);
+  let fmt = zoneFmt.get(zone.iana);
+  if (fmt === undefined) {
+    try {
+      fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: zone.iana,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    } catch {
+      fmt = null;
+    }
+    zoneFmt.set(zone.iana, fmt);
+  }
+  if (fmt == null) return utcCivil(ms);
+  let year = NaN;
+  let month = NaN;
+  let day = NaN;
+  for (const p of fmt.formatToParts(new Date(ms))) {
+    if (p.type === "year") year = Number(p.value);
+    else if (p.type === "month") month = Number(p.value);
+    else if (p.type === "day") day = Number(p.value);
+  }
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return utcCivil(ms);
+  return { year, month, day };
+}
+
+function utcCivil(ms: number): { year: number; month: number; day: number } {
+  const d = new Date(ms);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+/** ISO year*100+week of a civil date (Monday start), matching `datetime.isocalendar`. */
+function isoWeekId(year: number, month: number, day: number): number {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const dayNr = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNr);
+  const isoYear = date.getUTCFullYear();
+  const diffDays = Math.round((date.getTime() - Date.UTC(isoYear, 0, 1)) / 86_400_000);
+  const week = Math.ceil((diffDays + 1) / 7);
+  return isoYear * 100 + week;
 }

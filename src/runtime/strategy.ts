@@ -24,8 +24,9 @@ export interface BrokerSettings {
   leverage?: number;
   margin_long?: number;
   margin_short?: number;
-  default_qty_type?: string;
+  default_qty_type?: string | StrategyCashAmount;
   default_qty_value?: number;
+  currency?: string;
 }
 
 export interface StrategyEvent {
@@ -109,12 +110,29 @@ export interface Trade {
   entryPrice: number;
   entryTime?: number;
   exitBar?: number;
+  exitTime?: number;
   exitPrice?: number;
   profit?: number;
   commission: number;
   comment?: string;
+  entry_comment?: string;
+  exit_comment?: string;
   max_runup?: number;
   max_drawdown?: number;
+}
+
+/** Free-cash series that also tags `default_qty_type=strategy.cash` (Python `StrategyCashAmount`). */
+export interface StrategyCashAmount {
+  value: number;
+  _pine_qty_type: "cash";
+}
+
+export function isStrategyCashAmount(v: unknown): v is StrategyCashAmount {
+  return typeof v === "object" && v !== null && (v as StrategyCashAmount)._pine_qty_type === "cash";
+}
+
+export function strategyCashAmount(value: number): StrategyCashAmount {
+  return { value: isFiniteNumber(value) ? value : 0, _pine_qty_type: "cash" };
 }
 
 export interface BarOhlc {
@@ -286,8 +304,17 @@ function normalizeLeverage(value: unknown, fallback = 1): number {
   return lev;
 }
 
+function pineQtyType(value: unknown): string | undefined {
+  if (value == null || typeof value !== "object") return undefined;
+  const tagged = (value as { _pine_qty_type?: unknown })._pine_qty_type;
+  return typeof tagged === "string" ? tagged : undefined;
+}
+
 function normalizeDefaultQtyType(value: unknown): DefaultQtyType | undefined {
   if (value == null) return undefined;
+  const tagged = pineQtyType(value);
+  if (tagged === "cash" || tagged === "fixed" || tagged === "percent_of_equity") return tagged;
+  if (typeof value === "number") return undefined;
   let dqt = String(value).replace(/strategy\./gi, "").trim().toLowerCase();
   if (dqt === "percent" || dqt === "percentage") dqt = "percent_of_equity";
   if (dqt === "fixed" || dqt === "percent_of_equity" || dqt === "cash") return dqt;
@@ -349,6 +376,12 @@ export class StrategyBook {
   margin_short = 100;
   default_qty_type: DefaultQtyType = "fixed";
   default_qty_value = 1;
+  /** `strategy.account_currency` from `strategy(..., currency=)`. */
+  account_currency = "USD";
+  /** Current open position's entry id (Python `position_entry_name`). */
+  position_entry_name = "";
+  /** Pine `strategy.closedtrades.first_index` — always 0 here. */
+  closedtrades_first_index = 0;
 
   /** strategy.risk.allow_entry_in — `all` | `long` | `short`. */
   allow_entry_in: AllowEntryIn = "all";
@@ -395,6 +428,22 @@ export class StrategyBook {
     this.equityPeak = this.initialCapital;
     this.equityTrough = this.initialCapital;
     if (settings) this.applyDeclSettings(settings);
+  }
+
+  /** Margin locked in open trades: sum(|entry * size|) / leverage (Python `capital_held`). */
+  capitalHeld(): number {
+    let notional = 0;
+    for (const t of this.openTrades) {
+      const n = Math.abs(t.entryPrice * t.qty);
+      if (isFiniteNumber(n)) notional += n;
+    }
+    const lev = this.leverage && this.leverage > 0 ? this.leverage : 1;
+    return notional / lev;
+  }
+
+  /** Free cash: equity(mark) − capitalHeld() (Python `StrategyState.cash`). */
+  cash(mark: number): number {
+    return this.equity(mark) - this.capitalHeld();
   }
 
   /** Mark-to-market equity: initial + realized − commission + open PnL. */
@@ -452,6 +501,31 @@ export class StrategyBook {
     return this.closedTrade(i)?.commission ?? null;
   }
 
+  closedEntryTime(i: number): number {
+    return this.closedTrade(i)?.entryTime ?? 0;
+  }
+
+  closedExitTime(i: number): number {
+    return this.closedTrade(i)?.exitTime ?? 0;
+  }
+
+  closedEntryComment(i: number): string {
+    const t = this.closedTrade(i);
+    return t == null ? "" : String(t.entry_comment ?? t.comment ?? "");
+  }
+
+  closedExitComment(i: number): string {
+    return this.closedTrade(i)?.exit_comment ?? "";
+  }
+
+  closedMaxDrawdown(i: number): number {
+    return this.closedTrade(i)?.max_drawdown ?? 0;
+  }
+
+  closedMaxRunup(i: number): number {
+    return this.closedTrade(i)?.max_runup ?? 0;
+  }
+
   openEntryBar(i: number): number | null {
     return this.openTrade(i)?.entryBar ?? null;
   }
@@ -472,6 +546,27 @@ export class StrategyBook {
     const t = this.openTrade(i);
     if (t == null || !isFiniteNumber(markPrice)) return null;
     return this.markProfit(t, markPrice);
+  }
+
+  openEntryTime(i: number): number {
+    return this.openTrade(i)?.entryTime ?? 0;
+  }
+
+  openEntryComment(i: number): string {
+    const t = this.openTrade(i);
+    return t == null ? "" : String(t.entry_comment ?? t.comment ?? "");
+  }
+
+  openCommission(i: number): number {
+    return this.openTrade(i)?.commission ?? 0;
+  }
+
+  openMaxDrawdown(i: number): number {
+    return this.openTrade(i)?.max_drawdown ?? 0;
+  }
+
+  openMaxRunup(i: number): number {
+    return this.openTrade(i)?.max_runup ?? 0;
   }
 
   avgTrade(): number {
@@ -679,6 +774,9 @@ export class StrategyBook {
     if (settings.default_qty_value != null) {
       const v = softFloatDecl(settings.default_qty_value, Number.NaN);
       if (Number.isFinite(v)) this.default_qty_value = v;
+    }
+    if (typeof settings.currency === "string" && settings.currency !== "") {
+      this.account_currency = settings.currency;
     }
     const hasLev = settings.leverage != null;
     const hasMl = settings.margin_long != null;
@@ -946,7 +1044,7 @@ export class StrategyBook {
     const t = isFiniteNumber(opts?.time) ? opts.time : b;
     if (limitP == null && stopP == null && !hasTrail) {
       if (!isFiniteNumber(opts?.price)) return;
-      this.reducePosition(b, oid, opts.price, qty, fromEntry, t);
+      this.reducePosition(b, oid, opts.price, qty, fromEntry, t, opts?.comment);
       return;
     }
 
@@ -1075,7 +1173,7 @@ export class StrategyBook {
     bar: number,
     id: string,
     price: number,
-    opts?: Pick<PlaceEntryOpts, "time"> & { qty?: number | null },
+    opts?: Pick<PlaceEntryOpts, "time" | "comment"> & { qty?: number | null },
   ): void {
     this.ensureSanePosition();
     const b = isFiniteNumber(bar) ? bar : 0;
@@ -1084,10 +1182,11 @@ export class StrategyBook {
       if (!isFiniteNumber(price)) return;
       const absPos = Math.abs(this.position.qty);
       const q = opts?.qty;
+      const cmt = opts?.comment;
       if (isFiniteNumber(q) && q >= 0 && q < absPos - 1e-12) {
-        if (q > 0) this.reducePosition(b, oid, price, q, null, opts?.time);
+        if (q > 0) this.reducePosition(b, oid, price, q, null, opts?.time, cmt);
       } else {
-        this.flattenAt(b, oid, price, opts?.time);
+        this.flattenAt(b, oid, price, opts?.time, cmt);
       }
     }
     this.close(b, oid);
@@ -1208,6 +1307,40 @@ export class StrategyBook {
     return this.reducePosition(t, order.id, price, order.qty, order.from_entry ?? null, t);
   }
 
+  private closeLeg(
+    ot: Trade,
+    bar: number,
+    exitPrice: number,
+    qty: number,
+    profit: number,
+    commission: number,
+    exitTime?: number,
+    exitComment?: string,
+  ): Trade {
+    const closed: Trade = {
+      id: ot.id,
+      direction: ot.direction,
+      qty,
+      entryBar: ot.entryBar,
+      entryPrice: ot.entryPrice,
+      exitBar: bar,
+      exitPrice,
+      profit,
+      commission,
+    };
+    if (ot.entryTime !== undefined) closed.entryTime = ot.entryTime;
+    if (isFiniteNumber(exitTime)) closed.exitTime = exitTime;
+    const entryCmt = ot.entry_comment ?? ot.comment;
+    if (entryCmt !== undefined) {
+      closed.entry_comment = entryCmt;
+      closed.comment = entryCmt;
+    }
+    if (exitComment != null && exitComment !== "") closed.exit_comment = String(exitComment);
+    if (ot.max_runup !== undefined) closed.max_runup = ot.max_runup;
+    if (ot.max_drawdown !== undefined) closed.max_drawdown = ot.max_drawdown;
+    return closed;
+  }
+
   /**
    * Reduce open legs (optional `from_entry` filter) and realize PnL.
    * Unknown `from_entry` is a soft no-op.
@@ -1219,6 +1352,7 @@ export class StrategyBook {
     qty: number,
     fromEntry: string | null,
     exitTime?: number,
+    exitComment?: string,
   ): boolean {
     this.ensureSanePosition();
     if (this.position.qty === 0 || !isFiniteNumber(qty) || qty <= 0 || !isFiniteNumber(price)) {
@@ -1243,7 +1377,7 @@ export class StrategyBook {
     if (closeQty <= 0) return false;
 
     if (fe == null && closeQty >= Math.abs(this.position.qty) - 1e-12) {
-      return this.flattenAt(bar, fillId, price, exitTime);
+      return this.flattenAt(bar, fillId, price, exitTime, exitComment);
     }
 
     const side = this.position.qty > 0 ? "sell" : "buy";
@@ -1271,21 +1405,16 @@ export class StrategyBook {
       const basis = useSticky ? stickyAvg : ot.entryPrice;
       const signed = ot.direction === "long" ? 1 : -1;
       const profit = signed * (px - basis) * cq - entryComm - exitComm;
-      const closed: Trade = {
-        id: ot.id,
-        direction: ot.direction,
-        qty: cq,
-        entryBar: ot.entryBar,
-        entryPrice: basis,
-        exitBar: bar,
-        exitPrice: px,
+      const closed = this.closeLeg(
+        { ...ot, entryPrice: basis },
+        bar,
+        px,
+        cq,
         profit,
-        commission: entryComm + exitComm,
-      };
-      if (ot.entryTime !== undefined) closed.entryTime = ot.entryTime;
-      if (ot.comment !== undefined) closed.comment = ot.comment;
-      if (ot.max_runup !== undefined) closed.max_runup = ot.max_runup;
-      if (ot.max_drawdown !== undefined) closed.max_drawdown = ot.max_drawdown;
+        entryComm + exitComm,
+        exitTime,
+        exitComment,
+      );
       this.closedTrades.push(closed);
       this.noteClosedProfit(profit);
       this.noteClosedTradeDay(isFiniteNumber(exitTime) ? exitTime : bar, profit);
@@ -1300,6 +1429,7 @@ export class StrategyBook {
 
     this.openTrades.length = 0;
     this.openTrades.push(...newOpen);
+    this.position_entry_name = this.openTrades[0]?.id ?? "";
     if (isFiniteNumber(realized)) this.realizedPnl += realized;
 
     const remQty = this.openTrades.reduce((s, t) => s + t.qty, 0);
@@ -1308,6 +1438,7 @@ export class StrategyBook {
       this.position.avgPrice = null;
       this.sameDirAdds = 0;
       this.openTrades.length = 0;
+      this.position_entry_name = "";
     } else {
       const sign = this.position.qty >= 0 ? 1 : -1;
       this.position.qty = sign * remQty;
@@ -1351,6 +1482,7 @@ export class StrategyBook {
     }
     const dir: StrategyDirection = this.position.qty > 0 ? "long" : "short";
     this.notePositionSize();
+    this.position_entry_name = id;
     const comment = opts?.comment != null ? String(opts.comment) : undefined;
     const entryTime = isFiniteNumber(opts?.time) ? opts.time : undefined;
     if (oldAbs === 0 || this.openTrades.length === 0) {
@@ -1364,7 +1496,10 @@ export class StrategyBook {
         commission: fee,
       };
       if (entryTime !== undefined) trade.entryTime = entryTime;
-      if (comment !== undefined) trade.comment = comment;
+      if (comment !== undefined) {
+        trade.comment = comment;
+        trade.entry_comment = comment;
+      }
       this.openTrades.push(trade);
       return;
     }
@@ -1385,7 +1520,10 @@ export class StrategyBook {
       commission: fee,
     };
     if (entryTime !== undefined) trade.entryTime = entryTime;
-    if (comment !== undefined) trade.comment = comment;
+    if (comment !== undefined) {
+      trade.comment = comment;
+      trade.entry_comment = comment;
+    }
     this.openTrades.push(trade);
   }
 
@@ -1393,7 +1531,7 @@ export class StrategyBook {
    * Flatten the open position at `price`. Returns false when there is nothing
    * to close or the fill cannot be recorded without corrupting state.
    */
-  private flattenAt(bar: number, id: string, price: number, exitTime?: number): boolean {
+  private flattenAt(bar: number, id: string, price: number, exitTime?: number, exitComment?: string): boolean {
     const q = this.position.qty;
     if (q === 0 || !isFiniteNumber(q) || !isFiniteNumber(price)) return false;
     const side = q > 0 ? "sell" : "buy";
@@ -1405,10 +1543,11 @@ export class StrategyBook {
     const pnl = q * (px - basis);
     if (isFiniteNumber(pnl)) this.realizedPnl += pnl;
     const t = isFiniteNumber(exitTime) ? exitTime : bar;
-    this.closeOpenTrades(bar, id, px, absQ, q > 0 ? "long" : "short", basis, t);
+    this.closeOpenTrades(bar, id, px, absQ, q > 0 ? "long" : "short", basis, t, exitComment);
     this.position.qty = 0;
     this.position.avgPrice = null;
     this.sameDirAdds = 0;
+    this.position_entry_name = "";
     this.closedCount += 1;
     this.noteFilledOrder(t);
     this.updateEquityExtremes(px);
@@ -1434,6 +1573,7 @@ export class StrategyBook {
     direction: StrategyDirection,
     basis: number,
     exitTime?: number,
+    exitComment?: string,
   ): void {
     if (this.openTrades.length === 0 && absQ > 0) {
       this.openTrades.push({
@@ -1451,26 +1591,14 @@ export class StrategyBook {
       const share = totalQty > 0 ? ot.qty / totalQty : 1;
       const exitComm = exitFeeTotal * share;
       const profit = this.markProfit(ot, exitPrice) - exitComm;
-      const closed: Trade = {
-        id: ot.id,
-        direction: ot.direction,
-        qty: ot.qty,
-        entryBar: ot.entryBar,
-        entryPrice: ot.entryPrice,
-        exitBar: bar,
-        exitPrice,
-        profit,
-        commission: ot.commission + exitComm,
-      };
-      if (ot.entryTime !== undefined) closed.entryTime = ot.entryTime;
-      if (ot.comment !== undefined) closed.comment = ot.comment;
-      if (ot.max_runup !== undefined) closed.max_runup = ot.max_runup;
-      if (ot.max_drawdown !== undefined) closed.max_drawdown = ot.max_drawdown;
-      this.closedTrades.push(closed);
+      this.closedTrades.push(
+        this.closeLeg(ot, bar, exitPrice, ot.qty, profit, ot.commission + exitComm, exitTime, exitComment),
+      );
       this.noteClosedProfit(profit);
       this.noteClosedTradeDay(isFiniteNumber(exitTime) ? exitTime : bar, profit);
     }
     this.openTrades.length = 0;
+    this.position_entry_name = "";
   }
 
   private noteClosedProfit(profit: number): void {

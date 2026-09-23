@@ -86,6 +86,98 @@ function asFiniteNumber(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** Python `isinstance(x, int | float)` — bool counts; `na` / non-finite does not. */
+function numericCell(v: unknown): number | null {
+  if (typeof v === "boolean") return v ? 1 : 0;
+  return asFiniteNumber(v);
+}
+
+function sumNumeric(cells: readonly unknown[]): number {
+  let total = 0;
+  for (const x of cells) {
+    const n = numericCell(x);
+    if (n !== null) total += n;
+  }
+  return total;
+}
+
+/** Empty numeric line → 0 (Python `avg_row` / `avg_col`). */
+function avgNumeric(cells: readonly unknown[]): number {
+  let total = 0;
+  let count = 0;
+  for (const x of cells) {
+    const n = numericCell(x);
+    if (n === null) continue;
+    total += n;
+    count += 1;
+  }
+  return count > 0 ? total / count : 0;
+}
+
+function extremumNumeric(cells: readonly unknown[], max: boolean): Cell {
+  let best: number | null = null;
+  for (const x of cells) {
+    const n = numericCell(x);
+    if (n === null) continue;
+    if (best === null || (max ? n > best : n < best)) best = n;
+  }
+  return best;
+}
+
+/** Python `Counter.most_common`: first-seen wins ties. Non-finite is `na`. */
+function modeOf(values: readonly unknown[]): unknown {
+  if (values.length === 0) return null;
+  const keys: unknown[] = [];
+  const counts: number[] = [];
+  let bestI = 0;
+  let bestN = 0;
+  for (const raw of values) {
+    const key = typeof raw === "number" && !Number.isFinite(raw) ? null : (raw ?? null);
+    let idx = -1;
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i] === key) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx < 0) {
+      idx = keys.length;
+      keys.push(key);
+      counts.push(1);
+    } else {
+      counts[idx] = (counts[idx] ?? 0) + 1;
+    }
+    const n = counts[idx] ?? 0;
+    if (n > bestN) {
+      bestN = n;
+      bestI = idx;
+    }
+  }
+  return keys[bestI] ?? null;
+}
+
+/** Sample moments (Python `statistics.variance` / `stdev`, divisor n−1). */
+function sampleMoments(vals: readonly number[]): { variance: number; stdev: number } | null {
+  const n = vals.length;
+  if (n < 2) return null;
+  let sum = 0;
+  for (const x of vals) sum += x;
+  const mean = sum / n;
+  let ss = 0;
+  let dev = 0;
+  for (const x of vals) {
+    const d = x - mean;
+    dev += d;
+    ss += d * d;
+  }
+  ss -= (dev * dev) / n;
+  if (ss < 0) ss = 0;
+  const variance = ss / (n - 1);
+  const stdev = Math.sqrt(variance);
+  if (!Number.isFinite(variance) || !Number.isFinite(stdev)) return null;
+  return { variance, stdev };
+}
+
 function defaultMatrixSortField(rows: readonly unknown[][], column: number): unknown {
   for (const row of rows) {
     const cell = row[column];
@@ -1048,6 +1140,114 @@ export class PineMatrix {
     return best;
   }
 
+  /** Copy of the row. OOB → empty (same as `row`). */
+  copyRow(index: number): Cell[] {
+    return this.row(index);
+  }
+
+  /** Copy of the column. OOB → empty (same as `col`). */
+  copyCol(index: number): Cell[] {
+    return this.col(index);
+  }
+
+  /** Sum of numeric cells. Skips `na`. No numeric cells → 0. OOB → `na`. */
+  sumRow(index: number): Cell {
+    const line = this.lineAt("row", index);
+    return line === null ? null : sumNumeric(line);
+  }
+
+  sumCol(index: number): Cell {
+    const line = this.lineAt("col", index);
+    return line === null ? null : sumNumeric(line);
+  }
+
+  /** Mean of numeric cells. Skips `na`. No numeric cells → 0. OOB → `na`. */
+  avgRow(index: number): Cell {
+    const line = this.lineAt("row", index);
+    return line === null ? null : avgNumeric(line);
+  }
+
+  avgCol(index: number): Cell {
+    const line = this.lineAt("col", index);
+    return line === null ? null : avgNumeric(line);
+  }
+
+  /** Min numeric cell. Skips `na`. None → `na`. OOB → `na`. */
+  minRow(index: number): Cell {
+    const line = this.lineAt("row", index);
+    return line === null ? null : extremumNumeric(line, false);
+  }
+
+  minCol(index: number): Cell {
+    const line = this.lineAt("col", index);
+    return line === null ? null : extremumNumeric(line, false);
+  }
+
+  maxRow(index: number): Cell {
+    const line = this.lineAt("row", index);
+    return line === null ? null : extremumNumeric(line, true);
+  }
+
+  maxCol(index: number): Cell {
+    const line = this.lineAt("col", index);
+    return line === null ? null : extremumNumeric(line, true);
+  }
+
+  /** Most common cell in the row, including `na`. Empty / OOB → `na`. */
+  modeRow(index: number): unknown {
+    const line = this.lineAt("row", index);
+    return line === null ? null : modeOf(line);
+  }
+
+  modeCol(index: number): unknown {
+    const line = this.lineAt("col", index);
+    return line === null ? null : modeOf(line);
+  }
+
+  /** Most common cell, row-major, including `na` (Python `Counter`). Empty → `na`. */
+  modeAll(): unknown {
+    return modeOf(this.flatCells());
+  }
+
+  /** OOB / non-finite index is a no-op. */
+  fillRow(index: number, value: unknown): void {
+    const i = resolveIndex(index, this.nRows);
+    if (i === null) return;
+    const row = this.cells[i]!;
+    for (let j = 0; j < this.nCols; j++) row[j] = value;
+  }
+
+  /** OOB / non-finite index is a no-op. */
+  fillCol(index: number, value: unknown): void {
+    const j = resolveIndex(index, this.nCols);
+    if (j === null) return;
+    for (let i = 0; i < this.nRows; i++) this.cells[i]![j] = value;
+  }
+
+  /** Main diagonal, `min(rows, columns)` long. */
+  fillDiagonal(value: unknown): void {
+    const n = Math.min(this.nRows, this.nCols);
+    for (let i = 0; i < n; i++) this.cells[i]![i] = value;
+  }
+
+  reverseRows(): void {
+    this.cells.reverse();
+  }
+
+  reverseCols(): void {
+    for (const row of this.cells) row.reverse();
+  }
+
+  /** Sample stdev of numeric cells (n−1). Skips `na`. Fewer than 2 → `na`. */
+  stdev(): Cell {
+    return sampleMoments(this.numericFlat())?.stdev ?? null;
+  }
+
+  /** Sample variance of numeric cells (n−1). Skips `na`. Fewer than 2 → `na`. */
+  variance(): Cell {
+    return sampleMoments(this.numericFlat())?.variance ?? null;
+  }
+
   /** Every cell is 0 or 1. `na` / other values → false. Empty is true. */
   isBinary(): boolean {
     for (let i = 0; i < this.nRows; i++) {
@@ -1247,6 +1447,36 @@ export class PineMatrix {
     const out: Cell[] = [];
     for (let i = 0; i < this.nRows; i++) {
       for (let j = 0; j < this.nCols; j++) out.push(this.cells[i]![j] as Cell);
+    }
+    return out;
+  }
+
+  /** In-range line, or `null` when the index is OOB / non-finite. */
+  private lineAt(axis: "row" | "col", index: number): readonly unknown[] | null {
+    if (axis === "row") {
+      const i = resolveIndex(index, this.nRows);
+      return i === null ? null : this.cells[i]!;
+    }
+    const j = resolveIndex(index, this.nCols);
+    if (j === null) return null;
+    const out: unknown[] = [];
+    for (let i = 0; i < this.nRows; i++) out.push(this.cells[i]![j]);
+    return out;
+  }
+
+  private flatCells(): unknown[] {
+    const out: unknown[] = [];
+    for (let i = 0; i < this.nRows; i++) {
+      for (let j = 0; j < this.nCols; j++) out.push(this.cells[i]![j]);
+    }
+    return out;
+  }
+
+  private numericFlat(): number[] {
+    const out: number[] = [];
+    for (const v of this.flatCells()) {
+      const n = numericCell(v);
+      if (n !== null) out.push(n);
     }
     return out;
   }

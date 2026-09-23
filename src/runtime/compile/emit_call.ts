@@ -124,6 +124,18 @@ const TA_METHODS = new Set([
   "bbw",
   "max",
   "min",
+  "uo",
+  "rci",
+  "dpo",
+  "kst",
+  "stochrsi",
+  "donchian",
+  "ichimoku",
+  "bb_pct",
+  "emv",
+  "fractal",
+  "atr_stop",
+  "zigzag",
 ]);
 
 /**
@@ -179,6 +191,8 @@ const PLOT_FUNCS = new Set([
   "hline",
   "bgcolor",
   "barcolor",
+  "plotcandle",
+  "plotbar",
 ]);
 
 const STRATEGY_ACTIONS = new Set([
@@ -316,6 +330,19 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
       return `__h.timeframeInSeconds(${pick(args, 0, ["timeframe", "period"], "null")})`;
     }
     return "86400";
+  }
+  if (name === "timeframe_change") {
+    // Prev bar time is `time_arr[__bar_idx-1]`; bar 0 has no prev (interpret series.get(1)).
+    return `__h.timeframeChange(${pick(args, 0, ["timeframe", "tf"], "null")}, time, (__bar_idx > 0 ? time_arr[__bar_idx - 1] : null), __bar_idx)`;
+  }
+  if (name === "time_close") {
+    return `__h.timeClose(__bar_idx, time_arr)`;
+  }
+  if (name === "syminfo_prefix") {
+    if (hasArg(args, 0, ["tickerid", "symbol"])) {
+      return `__h.syminfoPrefix(${pick(args, 0, ["tickerid", "symbol"], "null")})`;
+    }
+    return `__h.syminfoPrefix()`;
   }
   if (name === "ticker_heikinashi" || name === "heikinashi") {
     ctx.needsHeikinashi = true;
@@ -621,6 +648,26 @@ const MATRIX_SIGS: Record<string, string[][]> = {
   remove_col: [["id"], ["column", "index"]],
   remove_column: [["id"], ["column", "index"]],
   submatrix: [["id"], ["from_row"], ["to_row"], ["from_column", "from_col"], ["to_column", "to_col"]],
+  sum_row: [["id"], ["row", "index"]],
+  avg_row: [["id"], ["row", "index"]],
+  min_row: [["id"], ["row", "index"]],
+  max_row: [["id"], ["row", "index"]],
+  mode_row: [["id"], ["row", "index"]],
+  sum_col: [["id"], ["column", "col", "index"]],
+  avg_col: [["id"], ["column", "col", "index"]],
+  min_col: [["id"], ["column", "col", "index"]],
+  max_col: [["id"], ["column", "col", "index"]],
+  mode_col: [["id"], ["column", "col", "index"]],
+  copy_row: [["id"], ["row", "index"]],
+  copy_col: [["id"], ["column", "col", "index"]],
+  fill_row: [["id"], ["row", "index"], ["value"]],
+  fill_col: [["id"], ["column", "col", "index"], ["value"]],
+  fill_diagonal: [["id"], ["value"]],
+  reverse_rows: [["id"]],
+  reverse_cols: [["id"]],
+  stdev: [["id"]],
+  variance: [["id"]],
+  mode_all: [["id"]],
 };
 
 function nsMethod(name: string, prefix: string): string | null {
@@ -629,6 +676,8 @@ function nsMethod(name: string, prefix: string): string | null {
 }
 
 function ctorMethod(method: string): string {
+  // Every Python `array.new*` spelling (newint, new_float, new_chart.point, …)
+  // lowers to the same PineArray constructor as `array.new`.
   return method === "from" || method.startsWith("new") ? "new" : method;
 }
 
@@ -1095,7 +1144,7 @@ function packUserFuncArgs(ctx: EmitCtx, name: string, args: CallArgs): string[] 
   return packed;
 }
 
-function emitPlot(ctx: EmitCtx, _fname: string, args: CallArgs): string {
+function emitPlot(ctx: EmitCtx, fname: string, args: CallArgs): string {
   let title: string | null = constString(args.kwNodes.title);
   if (title == null) {
     for (const n of args.posNodes) {
@@ -1106,8 +1155,16 @@ function emitPlot(ctx: EmitCtx, _fname: string, args: CallArgs): string {
       }
     }
   }
-  if (title == null || title === "") title = `plot_${ctx.plots.length}`;
-  const series = pick(args, 0, ["series", "source", "price"], "null");
+  if (title == null || title === "") {
+    if (fname === "plotcandle") title = "candles";
+    else if (fname === "plotbar") title = "bars";
+    else title = `plot_${ctx.plots.length}`;
+  }
+  // Python primary column for plotcandle/plotbar is close (arg 3), not open.
+  const ohlc = fname === "plotcandle" || fname === "plotbar";
+  const series = ohlc
+    ? pick(args, 3, ["close"], "null")
+    : pick(args, 0, ["series", "source", "price"], "null");
   const i = ctx.plots.length;
   ctx.plots.push({ title });
   return `plot_${i}[__bar_idx] = __h.naNum(${series})`;
@@ -1187,9 +1244,13 @@ function emitMath(name: string, args: CallArgs): string | null {
     name === "todegrees" ||
     name === "toradians" ||
     name === "iff" ||
-    name === "fixnan";
+    name === "fixnan" ||
+    name === "round_to_mintick";
   if (!isNs && !isBareMath) return null;
 
+  if (bare === "round_to_mintick") {
+    return `__h.roundToMintick(${pick(args, 0, ["number", "x"], "null")})`;
+  }
   if (bare === "iff") {
     const cond = pick(args, 0, ["condition", "cond"], "null");
     const a = pick(args, 1, ["then", "if_true"], "null");
@@ -1658,6 +1719,78 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     // Kernel returns {down, up}; interpret exposes the tuple [down, up].
     const call = taCall("aroon", site, [HIGH, LOW, pick(args, 0, ["length"], "14")]);
     return `(() => { const __r = ${call}; return [__r.down, __r.up]; })()`;
+  }
+  if (method === "uo") {
+    return taCall("uo", site, [
+      HIGH,
+      LOW,
+      CLOSE,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+      finiteOr(pick(args, 2, ["length"], "null"), "0"),
+    ]);
+  }
+  if (method === "rci") {
+    // srcArg: missing source is na, not close.
+    return taCall("rci", site, [
+      pick(args, 0, ["source", "series"], "null"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
+  }
+  if (method === "dpo") {
+    return taCall("dpo", site, [CLOSE, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+  }
+  if (method === "kst") {
+    return taCall("kst", site, [
+      CLOSE,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+      finiteOr(pick(args, 2, ["length"], "null"), "0"),
+      finiteOr(pick(args, 3, ["length"], "null"), "0"),
+    ]);
+  }
+  if (method === "stochrsi") {
+    // Engine method is stochRsi; record already branded {stochrsi, signal}.
+    return taCall("stochRsi", site, [
+      CLOSE,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
+  }
+  if (method === "donchian") {
+    return taCall("donchian", site, [HIGH, LOW, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+  }
+  if (method === "ichimoku") {
+    return taCall("ichimoku", site, [
+      HIGH,
+      LOW,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
+  }
+  if (method === "bb_pct") {
+    return taCall("bbPct", site, [
+      CLOSE,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+      finiteOr(pick(args, 1, ["std_dev", "mult", "std"], "null"), "2"),
+    ]);
+  }
+  if (method === "emv") {
+    return taCall("emv", site, [HIGH, LOW, VOL, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+  }
+  if (method === "fractal") {
+    return taCall("fractal", site, [HIGH, LOW, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+  }
+  if (method === "atr_stop") {
+    // Kernel has no call-site; missing multiplier → 2 (interpret numArg).
+    return `__h.ta.atrStop(${CLOSE}, ${pick(args, 0, ["atr", "atr_value"], "null")}, ${finiteOr(pick(args, 1, ["multiplier", "mult"], "null"), "2")})`;
+  }
+  if (method === "zigzag") {
+    const call = taCall("zigzag", site, [
+      pick(args, 0, ["source", "series"], "null"),
+      finiteOr(pick(args, 1, ["threshold", "percent", "deviation"], "null"), "5"),
+    ]);
+    return `(() => { const __r = ${call}; return [__r.high, __r.low, __r.dir]; })()`;
   }
   return "null";
 }

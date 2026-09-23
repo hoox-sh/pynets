@@ -73,6 +73,7 @@ import {
   type Primary_expression_callContext,
   type Primary_expression_subscriptContext,
   type Not_equal_trailing_pairContext,
+  type Once_structureContext,
   type Parameter_definitionContext,
   type Parameter_listContext,
   type Simple_augassignmentContext,
@@ -81,6 +82,7 @@ import {
   type Simple_tuple_initializationContext,
   type Structure_expressionContext,
   type Structure_statementContext,
+  type Switch_caseContext,
   type Switch_casesContext,
   type Switch_default_caseContext,
   type Switch_pattern_caseContext,
@@ -160,6 +162,7 @@ import {
   ifExpr,
   importStmt,
   name,
+  onceExpr,
   param,
   qualify,
   reAssign,
@@ -732,7 +735,7 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitStructure_expression = (ctx: Structure_expressionContext): unknown => {
-    return this.visit(ctx.structure());
+    return this.visit(ctx.value_structure());
   };
 
   visitTrailing_structure_statements = (ctx: Trailing_structure_statementsContext): unknown => {
@@ -1009,6 +1012,15 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
+  visitOnce_structure = (ctx: Once_structureContext): unknown => {
+    const testCtx = ctx.expression();
+    const test = isRuleCtx(testCtx) ? ((this.visit(testCtx) as expr | undefined) ?? null) : null;
+    const body = asStmtList(this.visit(ctx.local_block()));
+    const node = onceExpr(test, body);
+    loc(node, ctx);
+    return node;
+  };
+
   visitSwitch_structure = (ctx: Switch_structureContext): unknown => {
     const cases = asCaseList(this.visit(ctx.switch_cases()));
     const subjectCtx = ctx.expression();
@@ -1021,15 +1033,27 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitSwitch_cases = (ctx: Switch_casesContext): unknown => {
-    const cases: unknown[] = (ctx.switch_pattern_case_list() ?? []).map((c) => this.visit(c));
-    const defaultCase = ctx.switch_default_case();
-    if (isRuleCtx(defaultCase)) cases.push(this.visit(defaultCase));
-    return cases;
+    return (ctx.switch_case_list() ?? []).map((c) => this.visit(c));
+  };
+
+  visitSwitch_case = (ctx: Switch_caseContext): unknown => {
+    const patternCase = ctx.switch_pattern_case();
+    if (isRuleCtx(patternCase)) return this.visit(patternCase);
+    return this.visit(ctx.switch_default_case());
   };
 
   visitSwitch_pattern_case = (ctx: Switch_pattern_caseContext): unknown => {
     const body = asStmtList(this.visit(ctx.local_block()));
-    const pattern = this.visit(ctx.expression()) as expr;
+    const patsCtx = ctx.switch_patterns();
+    const exprs = isRuleCtx(patsCtx)
+      ? (patsCtx.expression_list() ?? []).map((e) => this.visit(e) as expr)
+      : [];
+    let pattern: expr | null = null;
+    if (exprs.length === 1) pattern = exprs[0]!;
+    else if (exprs.length > 1) {
+      pattern = tupleExpr(exprs, Load);
+      loc(pattern, patsCtx);
+    }
     const node = caseNode(body, pattern);
     loc(node, ctx);
     return node;

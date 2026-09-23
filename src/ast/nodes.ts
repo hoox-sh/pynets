@@ -31,6 +31,7 @@ export type ASTKind =
   | "ForIn"
   | "While"
   | "Switch"
+  | "Once"
   | "Case"
   | "BoolOp"
   | "Qualify"
@@ -301,6 +302,12 @@ export interface Switch extends AST {
   subject: expr | null;
 }
 
+export interface Once extends AST {
+  kind: "Once";
+  test: expr | null;
+  body: stmt[];
+}
+
 export interface Case extends AST {
   kind: "Case";
   body: stmt[];
@@ -337,6 +344,7 @@ export type expr =
   | ForIn
   | While
   | Switch
+  | Once
   | BoolOp
   | Qualify
   | Specialize
@@ -644,6 +652,10 @@ export function switchExpr(cases: Case[] = [], subject: expr | null = null): Swi
 
 export function caseNode(body: stmt[] = [], pattern: expr | null = null): Case {
   return { kind: "Case", body, pattern };
+}
+
+export function onceExpr(test: expr | null = null, body: stmt[] = []): Once {
+  return { kind: "Once", test, body };
 }
 
 export function boolOp(op: bool_op, values: expr[] = []): BoolOp {

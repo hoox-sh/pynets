@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { dump, interpret, parse } from "../src/index.ts";
+import { compileToResult } from "../src/runtime/compile/index.ts";
 
 const BARS = [1, 2, 3, 4, 5].map((close) => ({ close }));
 
@@ -65,5 +66,27 @@ describe("interpret switch", () => {
   test.skipIf(!switchReady(BOOL_SRC))("boolean switch close == n cases", () => {
     const out = interpret(BOOL_SRC, BARS);
     expect(out.plots).toEqual(EXPECTED);
+  });
+
+  test("multi-value arm matches any element", () => {
+    const src = `indicator("t")
+x = switch close
+    1, 2 => 10
+    4 => 40
+    => 0
+plot(x)`;
+    expect(interpret(src, BARS).plots).toEqual([10, 10, 0, 40, 0]);
+    expect(compileToResult(src, BARS).plots).toEqual([10, 10, 0, 40, 0]);
+  });
+
+  test("boolean switch multi-value arm is any-truthy", () => {
+    const src = `indicator("t")
+x = switch
+    close == 1, close == 2 => 10
+    close == 4 => 40
+    => 0
+plot(x)`;
+    expect(interpret(src, BARS).plots).toEqual([10, 10, 0, 40, 0]);
+    expect(compileToResult(src, BARS).plots).toEqual([10, 10, 0, 40, 0]);
   });
 });

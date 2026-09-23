@@ -385,4 +385,108 @@ export const compileMatrix = {
   eigenvectors(id: unknown): PineMatrix | null {
     return asMatrix(id)?.eigenvectors() ?? null;
   },
+  sum_row(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.sumRow(i);
+  },
+  avg_row(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.avgRow(i);
+  },
+  min_row(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.minRow(i);
+  },
+  max_row(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.maxRow(i);
+  },
+  mode_row(id: unknown, index?: unknown): unknown {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.modeRow(i);
+  },
+  sum_col(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.sumCol(i);
+  },
+  avg_col(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.avgCol(i);
+  },
+  min_col(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.minCol(i);
+  },
+  max_col(id: unknown, index?: unknown): number | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.maxCol(i);
+  },
+  mode_col(id: unknown, index?: unknown): unknown {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return m.modeCol(i);
+  },
+  copy_row(id: unknown, index?: unknown): PineArray | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return wrapCells(m.copyRow(i));
+  },
+  copy_col(id: unknown, index?: unknown): PineArray | null {
+    const m = asMatrix(id);
+    const i = naNum(index);
+    if (m == null || i == null) return null;
+    return wrapCells(m.copyCol(i));
+  },
+  fill_row(id: unknown, index?: unknown, value?: unknown): unknown {
+    const i = naNum(index);
+    if (i != null) asMatrix(id)?.fillRow(i, store(value));
+    return id ?? null;
+  },
+  fill_col(id: unknown, index?: unknown, value?: unknown): unknown {
+    const i = naNum(index);
+    if (i != null) asMatrix(id)?.fillCol(i, store(value));
+    return id ?? null;
+  },
+  fill_diagonal(id: unknown, value?: unknown): unknown {
+    asMatrix(id)?.fillDiagonal(store(value));
+    return id ?? null;
+  },
+  reverse_rows(id: unknown): unknown {
+    asMatrix(id)?.reverseRows();
+    return id ?? null;
+  },
+  reverse_cols(id: unknown): unknown {
+    asMatrix(id)?.reverseCols();
+    return id ?? null;
+  },
+  stdev(id: unknown): number | null {
+    return asMatrix(id)?.stdev() ?? null;
+  },
+  variance(id: unknown): number | null {
+    return asMatrix(id)?.variance() ?? null;
+  },
+  mode_all(id: unknown): unknown {
+    const m = asMatrix(id);
+    return m == null ? null : m.modeAll();
+  },
 };

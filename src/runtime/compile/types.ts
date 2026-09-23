@@ -58,6 +58,8 @@ export interface EmitCtx {
   usesStrategy: boolean;
   nextSite: number;
   errors: string[];
+  /** `once`-structure fired flags, declared in the bar-loop frame. */
+  onceFlags: string[];
   /** Pine UDF name currently being emitted (null at script scope). */
   currentFunc: string | null;
   /** Formal names of the current UDF. */

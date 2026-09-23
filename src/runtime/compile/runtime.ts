@@ -32,6 +32,7 @@ import {
   mathMin,
   mathPow,
   mathRound,
+  mathRoundToMintick,
   mathSign,
   mathSin,
   mathSqrt,
@@ -58,7 +59,8 @@ import { LogBook, formatLogParts } from "../log.ts";
 import { resolveCurrencyRate } from "../request.ts";
 import { TaEngine } from "../ta.ts";
 import { utcPartsFromMs, timestamp, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
-import { timeframeInSeconds } from "../timeframe.ts";
+import { TickerId } from "../ticker.ts";
+import { timeframeInSeconds, timeframePeriodChanged } from "../timeframe.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
 import { createCompileDraw } from "./draw.ts";
 import {
@@ -180,6 +182,10 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     weekOfYear,
     timeTradingDay,
     timeframeInSeconds: timeframeInSecondsOrDaily,
+    timeframeChange,
+    timeClose,
+    roundToMintick,
+    syminfoPrefix,
     strLength,
     strContains,
     strStartsWith,
@@ -299,4 +305,53 @@ function calendarDayofweek(t: unknown): number | null {
 
 function logBar(bar: unknown): number {
   return typeof bar === "number" && Number.isFinite(bar) ? bar : 0;
+}
+
+/** `timeframe.change`: bar 0 is a new period; empty / unknown tf → false. */
+function timeframeChange(tf: unknown, curr: unknown, prev: unknown, barIndex: unknown): number {
+  const s =
+    typeof tf === "string"
+      ? tf
+      : typeof tf === "number" && Number.isFinite(tf)
+        ? String(tf)
+        : null;
+  if (s == null || s.trim() === "") return 0;
+  if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
+  const idx = typeof barIndex === "number" && Number.isFinite(barIndex) ? barIndex : null;
+  return timeframePeriodChanged(curr, prev, s, idx) ? 1 : 0;
+}
+
+/**
+ * Next bar open, last bar `time + 86400000`. `0` next-open counts as missing
+ * (interpret beginBar). Compile has no per-bar `time_close` column.
+ */
+function timeClose(barIdx: unknown, timeArr: unknown): number {
+  const i = typeof barIdx === "number" && Number.isFinite(barIdx) ? Math.trunc(barIdx) : 0;
+  const arr = Array.isArray(timeArr) ? (timeArr as Array<number | null | undefined>) : [];
+  const t = arr[i];
+  const tNum = typeof t === "number" && Number.isFinite(t) ? t : 0;
+  if (i + 1 < arr.length) {
+    const next = arr[i + 1] ?? 0;
+    return next !== 0 ? next : tNum;
+  }
+  return Math.trunc(tNum) + 86_400_000;
+}
+
+function roundToMintick(x: unknown): number | null {
+  return mathRoundToMintick(naNum(x), 0.01);
+}
+
+/** Python `split_symbol` / `extract_prefix`: text before the first `:`, else `""`. */
+function extractPrefix(symbol: string): string {
+  const s = symbol.trim();
+  const i = s.indexOf(":");
+  return i < 0 ? "" : s.slice(0, i);
+}
+
+function syminfoPrefix(tickerid?: unknown): string {
+  if (arguments.length === 0 || tickerid === undefined) return extractPrefix("SYMBOL");
+  if (tickerid instanceof TickerId) return extractPrefix(tickerid.symbol);
+  if (typeof tickerid === "string") return extractPrefix(tickerid);
+  if (typeof tickerid === "number" && Number.isFinite(tickerid)) return extractPrefix(String(tickerid));
+  return "";
 }

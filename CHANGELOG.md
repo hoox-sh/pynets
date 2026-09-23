@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
+`once` / multi-value `switch`, and a Python `Runtime.run` interpret parity slice (drawings, strategy fields, host helpers, TA/matrix). Compile emit for the TA/matrix/host names from that slice.
+
 ### Added
+- `once [cond]` structure — parse / unparse / interpret / compile fire the body the first time the test is true (or bar 0 with no test), regen from PYNE grammar
+- multi-value `switch` arms (`1, 2 =>`) match any element on interpret and compile
+- `matrix.sum_row` / `sum_col`, `avg_*`, `min_*`, `max_*`, `mode_*`, `copy_row` / `copy_col`, `fill_row` / `fill_col` / `fill_diagonal`, `reverse_rows` / `reverse_cols`, `stdev`, `variance`
+- `ta.uo`, `ta.rci`, `ta.dpo`, `ta.kst`, `ta.stochrsi`, `ta.donchian`, `ta.ichimoku`, `ta.bb_pct`, `ta.emv`, `ta.fractal`, `ta.atr_stop`, `ta.zigzag` (interpret; v3/v4 bare aliases)
+- `timeframe.change`, `time_close`, `syminfo.prefix`, bare `round_to_mintick`, v4 `array.new*` constructors, `plotcandle` / `plotbar`
+- JS compile emit for those TA / matrix / host names so `compileToResult` matches interpret
+- Drawing getters/setters, `*.all`, `*.copy`, remaining deletes, `chart.point.*`, `line.fill`
+- `strategy.cash` is free cash (tagged for `default_qty_type`); trade-history fields; `oca` / `direction` / `commission` constants; zero-arg `strategy.netprofit()` calls
+- `timenow`, `max_bars_back`, `alertcondition`, `plot.linestyle_*`, bare `random`, bare `security` / `security_lower_tf`
 - `FunctionDef.returns` — UDF/method return types survive parse → unparse (`int ilog2(...)`)
 - `Runtime.run(..., timeout_seconds)` — interpret wall-clock circuit breaker (every 32 bars); `timed_out` + `error_kind=runtime`
 - `Runtime.run(..., libraries=[{namespace, name, version, source}])` — same list shape as Python `Runtime.run`

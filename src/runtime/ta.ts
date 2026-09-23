@@ -274,6 +274,63 @@ interface KlingerState {
   started: boolean;
 }
 
+interface UoState {
+  n1: number;
+  n2: number;
+  n3: number;
+  prev: Cell;
+  window: Array<[Cell, Cell]>;
+}
+
+interface RciState {
+  length: number;
+  window: Cell[];
+}
+
+interface DpoState {
+  length: number;
+  window: Cell[];
+}
+
+interface KstState {
+  key: string;
+  window: Cell[];
+}
+
+interface StochRsiState {
+  rsiLen: number;
+  stochLen: number;
+  prices: number[];
+  rsiRing: number[];
+  bars: number;
+  validRsi: number;
+  signal: number | null;
+}
+
+interface BbPctState {
+  length: number;
+  window: Cell[];
+}
+
+interface EmvState {
+  length: number;
+  prevH: Cell;
+  prevL: Cell;
+  started: boolean;
+  valid: number[];
+}
+
+interface FractalState {
+  period: number;
+  highs: Cell[];
+  lows: Cell[];
+  bars: number;
+}
+
+interface ZigzagState {
+  samples: Cell[];
+}
+
 export type PivotPoints = {
   pp: Cell;
   r1: Cell;
@@ -284,6 +341,25 @@ export type PivotPoints = {
 
 function finiteCell(value: Cell): Cell {
   return value !== null && Number.isFinite(value) ? value : null;
+}
+
+/** Plain dict returned by `ta.*` handlers. Attribute reads are brand-gated. */
+export interface TaRecord {
+  readonly __taRecord: true;
+  [key: string]: number | null | boolean | string;
+}
+
+function taRec(fields: Record<string, number | null | boolean | string>): TaRecord {
+  return { __taRecord: true, ...fields };
+}
+
+function pushCap<T>(window: T[], value: T, cap: number): void {
+  if (window.length === cap) window.shift();
+  window.push(value);
+}
+
+function finiteOut(value: number): Cell {
+  return Number.isFinite(value) ? value : null;
 }
 
 /** Near-integer floats round (14.0000000001 → 14); else floor. Python `_float_to_period_int`. */
@@ -374,6 +450,15 @@ export class TaEngine {
   private readonly cmfSites = new Map<string, CmfState>();
   private readonly klingerSites = new Map<string, KlingerState>();
   private readonly aroonSites = new Map<string, AroonState>();
+  private readonly uoSites = new Map<string, UoState>();
+  private readonly rciSites = new Map<string, RciState>();
+  private readonly dpoSites = new Map<string, DpoState>();
+  private readonly kstSites = new Map<string, KstState>();
+  private readonly stochRsiSites = new Map<string, StochRsiState>();
+  private readonly bbPctSites = new Map<string, BbPctState>();
+  private readonly emvSites = new Map<string, EmvState>();
+  private readonly fractalSites = new Map<string, FractalState>();
+  private readonly zigzagSites = new Map<string, ZigzagState>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -2256,4 +2341,387 @@ export class TaEngine {
       up: Number.isFinite(up) ? up : null,
     };
   }
+
+  /**
+   * Ultimate Oscillator. BP/TR window; first bar has no prev close.
+   * Weights 4, 2, 1. Ready once the longest window is all finite (`_uo_inc_update`).
+   */
+  uo(site: string, high: Cell, low: Cell, close: Cell, n1: number, n2: number, n3: number): Cell {
+    const a = pinePeriod(n1);
+    const b = pinePeriod(n2);
+    const c = pinePeriod(n3);
+    if (a === null || b === null || c === null) return null;
+    const need = Math.max(a, b, c);
+    let st = this.uoSites.get(site);
+    if (st === undefined || st.n1 !== a || st.n2 !== b || st.n3 !== c) {
+      st = { n1: a, n2: b, n3: c, prev: null, window: [] };
+      this.uoSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const cl = finiteCell(close);
+    const prev = st.prev;
+    st.prev = cl;
+    let bp: Cell = null;
+    let tr: Cell = null;
+    if (prev !== null && h !== null && l !== null && cl !== null) {
+      const lowRef = l < prev ? l : prev;
+      const highRef = h > prev ? h : prev;
+      bp = cl - lowRef;
+      tr = highRef - lowRef;
+    }
+    pushCap(st.window, [bp, tr], need);
+    if (st.window.length < need) return null;
+    const avg = (length: number): Cell => {
+      let bpS = 0;
+      let trS = 0;
+      const start = st.window.length - length;
+      for (let i = start; i < st.window.length; i++) {
+        const pair = st.window[i]!;
+        if (pair[0] === null || pair[1] === null) return null;
+        bpS += pair[0];
+        trS += pair[1];
+      }
+      if (trS === 0) return null;
+      return bpS / trS;
+    };
+    const a1 = avg(a);
+    const a2 = avg(b);
+    const a3 = avg(c);
+    if (a1 === null || a2 === null || a3 === null) return null;
+    return finiteOut((100 * (4 * a1 + 2 * a2 + a3)) / 7);
+  }
+
+  /**
+   * Rank Correlation Index: Spearman rho of time vs value (not ×100).
+   * Length < 2 raises, matching `_builtin_ta_rci` (not the kernel's soft na).
+   */
+  rci(site: string, source: Cell, length: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null || n < 2) {
+      throw new Error("ta.rci length must be at least 2");
+    }
+    let st = this.rciSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, window: [] };
+      this.rciSites.set(site, st);
+    }
+    pushCap(st.window, finiteCell(source), n);
+    if (st.window.length < n) return null;
+    const vals: number[] = [];
+    for (const v of st.window) {
+      if (v === null) return null;
+      vals.push(v);
+    }
+    return spearmanRho(vals);
+  }
+
+  /** `close[length//2+1] - sma(close, length)` (`_dpo_inc_update`). Any na in the window → na. */
+  dpo(site: string, close: Cell, length: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null) return null;
+    const disp = Math.floor(n / 2) + 1;
+    const keep = Math.max(n, disp);
+    let st = this.dpoSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, window: [] };
+      this.dpoSites.set(site, st);
+    }
+    const x = finiteCell(close);
+    pushCap(st.window, x, keep);
+    if (st.window.length < n || st.window.length < disp) return null;
+    const smaStart = st.window.length - n;
+    if (x === null) return null;
+    let sum = 0;
+    for (let i = smaStart; i < st.window.length; i++) {
+      const v = st.window[i]!;
+      if (v === null) return null;
+      sum += v;
+    }
+    const displaced = st.window[st.window.length - disp];
+    if (displaced === null || displaced === undefined) return null;
+    return finiteOut(displaced - sum / n);
+  }
+
+  /**
+   * Know Sure Thing. ROC is `(close - close[-length]) / close[-length] * 100`
+   * (lookback `length`, not `length` bars via `src[length]`). Weights 1/2/3/4, /10.
+   */
+  kst(site: string, close: Cell, l1: number, l2: number, l3: number, l4: number): Cell {
+    const lengths = [pinePeriod(l1), pinePeriod(l2), pinePeriod(l3), pinePeriod(l4)];
+    if (lengths.some((v) => v === null)) return null;
+    const ns = lengths as number[];
+    if (Math.min(...ns) < 1) return null;
+    const keep = Math.max(...ns);
+    const key = ns.join(",");
+    let st = this.kstSites.get(site);
+    if (st === undefined || st.key !== key) {
+      st = { key, window: [] };
+      this.kstSites.set(site, st);
+    }
+    const x = finiteCell(close);
+    pushCap(st.window, x, keep);
+    if (st.window.length < keep || x === null) return null;
+    const rocs: number[] = [];
+    for (const length of ns) {
+      const base = st.window[st.window.length - length];
+      if (base === null || base === undefined) return null;
+      if (base === 0) rocs.push(0);
+      else rocs.push(((x - base) / base) * 100);
+    }
+    return finiteOut((rocs[0]! * 1 + rocs[1]! * 2 + rocs[2]! * 3 + rocs[3]! * 4) / 10);
+  }
+
+  /**
+   * StochRSI. Simple (non-Wilder) RSI: sum of gains/losses over `rsiLen` closes
+   * divided by `rsiLen`. First RSI omits the oldest close (`bars > rsiLen`).
+   * Signal is `0.33 * stoch + 0.67 * prev` (`_stochrsi_inc_update`).
+   */
+  stochRsi(site: string, close: Cell, rsiLength: number, stochLength: number): TaRecord {
+    const empty = taRec({ stochrsi: null, signal: null });
+    const rsiLen = pinePeriod(rsiLength);
+    const stochLen = pinePeriod(stochLength);
+    if (rsiLen === null || stochLen === null) return empty;
+    let st = this.stochRsiSites.get(site);
+    if (st === undefined || st.rsiLen !== rsiLen || st.stochLen !== stochLen) {
+      st = {
+        rsiLen,
+        stochLen,
+        prices: [],
+        rsiRing: [],
+        bars: 0,
+        validRsi: 0,
+        signal: null,
+      };
+      this.stochRsiSites.set(site, st);
+    }
+    const x = finiteCell(close);
+    if (x === null) return taRec({ stochrsi: null, signal: st.signal });
+    pushCap(st.prices, x, rsiLen);
+    st.bars += 1;
+    if (st.bars <= rsiLen) return empty;
+    if (st.prices.length < rsiLen) return empty;
+    let gains = 0;
+    let losses = 0;
+    for (let j = 1; j < st.prices.length; j++) {
+      const d = st.prices[j]! - st.prices[j - 1]!;
+      if (d > 0) gains += d;
+      else losses += -d;
+    }
+    const avgGain = gains / rsiLen;
+    const avgLoss = losses / rsiLen;
+    const rs = avgLoss !== 0 ? avgGain / avgLoss : 100;
+    const rsiVal = 100 - 100 / (1 + rs);
+    pushCap(st.rsiRing, rsiVal, stochLen);
+    st.validRsi += 1;
+    if (st.validRsi < stochLen || st.rsiRing.length < stochLen) return empty;
+    let rsiHigh = st.rsiRing[0]!;
+    let rsiLow = rsiHigh;
+    for (const v of st.rsiRing) {
+      if (v > rsiHigh) rsiHigh = v;
+      if (v < rsiLow) rsiLow = v;
+    }
+    const rsiRange = rsiHigh - rsiLow;
+    const stoch = rsiRange === 0 ? 0 : ((rsiVal - rsiLow) / rsiRange) * 100;
+    const prev = st.signal === null ? stoch : st.signal;
+    const signal = stoch * 0.33 + prev * 0.67;
+    st.signal = signal;
+    return taRec({
+      stochrsi: finiteOut(stoch),
+      signal: finiteOut(signal),
+    });
+  }
+
+  /** Donchian channel via nested highest/lowest (`_donchian_inc_update`). */
+  donchian(site: string, high: Cell, low: Cell, length: number): TaRecord {
+    const empty = taRec({ high: null, low: null, mid: null });
+    const hi = this.highest(`${site}:hi`, high, length);
+    const lo = this.lowest(`${site}:lo`, low, length);
+    if (hi === null || lo === null) return empty;
+    return taRec({ high: hi, low: lo, mid: (hi + lo) / 2 });
+  }
+
+  /**
+   * Ichimoku. Tenkan/kijun are high-low midpoints. Senkou B is fixed at 52
+   * (`ICHIMOKU_SENKOU_B_PERIOD`), not `2 * slow`.
+   */
+  ichimoku(site: string, high: Cell, low: Cell, fast: number, slow: number): TaRecord {
+    const mid = (tag: string, period: number): Cell => {
+      const hi = this.highest(`${site}:${tag}:hi`, high, period);
+      const lo = this.lowest(`${site}:${tag}:lo`, low, period);
+      if (hi === null || lo === null) return null;
+      return (hi + lo) / 2;
+    };
+    const tenkan = mid("tenkan", fast);
+    const kijun = mid("kijun", slow);
+    const senkouA = tenkan !== null && kijun !== null ? (tenkan + kijun) / 2 : null;
+    const senkouB = mid("spanb", 52);
+    return taRec({
+      tenkan_sen: tenkan,
+      kijun_sen: kijun,
+      senkou_span_a: senkouA,
+      senkou_span_b: senkouB,
+    });
+  }
+
+  /** Bollinger %B × 100, population variance (`/ length`), clamped to 0..100. */
+  bbPct(site: string, close: Cell, length: number, mult: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null) return null;
+    const m = Number.isFinite(mult) ? mult : 2;
+    let st = this.bbPctSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, window: [] };
+      this.bbPctSites.set(site, st);
+    }
+    pushCap(st.window, finiteCell(close), n);
+    if (st.window.length < n) return null;
+    let sum = 0;
+    for (const v of st.window) {
+      if (v === null) return null;
+      sum += v;
+    }
+    const sma = sum / n;
+    let varSum = 0;
+    for (const v of st.window) {
+      const d = v! - sma;
+      varSum += d * d;
+    }
+    const std = Math.sqrt(varSum / n);
+    const upper = sma + std * m;
+    const lower = sma - std * m;
+    if (upper === lower) return 50;
+    const last = st.window[st.window.length - 1]!;
+    let pct = ((last - lower) / (upper - lower)) * 100;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return finiteOut(pct);
+  }
+
+  /**
+   * Ease of Movement, SMA of the last `length` finite EMV samples
+   * (na bars are skipped, not zeros). Bar 0 is na.
+   */
+  emv(site: string, high: Cell, low: Cell, volume: Cell, length: number): Cell {
+    const n = pinePeriod(length);
+    if (n === null) return null;
+    let st = this.emvSites.get(site);
+    if (st === undefined || st.length !== n) {
+      st = { length: n, prevH: null, prevL: null, started: false, valid: [] };
+      this.emvSites.set(site, st);
+    }
+    const h = finiteCell(high);
+    const l = finiteCell(low);
+    const vol = finiteCell(volume);
+    if (!st.started) {
+      st.started = true;
+      st.prevH = h;
+      st.prevL = l;
+      return null;
+    }
+    let sample: number | null = null;
+    if (h !== null && l !== null && vol !== null && vol !== 0 && st.prevH !== null && st.prevL !== null) {
+      const distance = (h + l) / 2 - (st.prevH + st.prevL) / 2;
+      const box = h - l;
+      if (box !== 0) {
+        const emv = (distance / box) * (h - l) / vol;
+        sample = Number.isFinite(emv) ? emv : null;
+      }
+    }
+    st.prevH = h;
+    st.prevL = l;
+    if (sample !== null) pushCap(st.valid, sample, n);
+    if (st.valid.length < n) return null;
+    let sum = 0;
+    for (const v of st.valid) sum += v;
+    return finiteOut(sum / n);
+  }
+
+  /**
+   * Fractal flags. Python evaluates at the series end, so the forward half of
+   * the centered window is empty: once `bars >= 2*period+1`, current equals
+   * the extreme of the last `period+1` bars (ties count). Warmup is false, not na.
+   */
+  fractal(site: string, high: Cell, low: Cell, period: number): TaRecord {
+    const none = taRec({ is_high_fractal: false, is_low_fractal: false });
+    const n = pinePeriod(period);
+    if (n === null) return none;
+    const win = n + 1;
+    const need = n * 2 + 1;
+    let st = this.fractalSites.get(site);
+    if (st === undefined || st.period !== n) {
+      st = { period: n, highs: [], lows: [], bars: 0 };
+      this.fractalSites.set(site, st);
+    }
+    st.bars += 1;
+    pushCap(st.highs, finiteCell(high), win);
+    pushCap(st.lows, finiteCell(low), win);
+    if (st.bars < need || st.highs.length < win) return none;
+    const ch = st.highs[st.highs.length - 1]!;
+    const cl = st.lows[st.lows.length - 1]!;
+    if (ch === null || cl === null) return none;
+    let maxH = ch;
+    let minL = cl;
+    for (const h of st.highs) {
+      if (h === null) return none;
+      if (h > maxH) maxH = h;
+    }
+    for (const l of st.lows) {
+      if (l === null) return none;
+      if (l < minL) minL = l;
+    }
+    return taRec({ is_high_fractal: ch === maxH, is_low_fractal: cl === minL });
+  }
+
+  /** ATR stop around chart close. Non-positive ATR → na (`_builtin_ta_atr_stop`). */
+  atrStop(close: Cell, atr: Cell, multiplier: number): TaRecord {
+    const c = finiteCell(close);
+    const a = finiteCell(atr);
+    const m = Number.isFinite(multiplier) ? multiplier : 2;
+    if (c === null || a === null || a <= 0) return taRec({ long_stop: null, short_stop: null });
+    return taRec({ long_stop: finiteOut(c - a * m), short_stop: finiteOut(c + a * m) });
+  }
+
+  /**
+   * Zigzag tuple `(high, low, direction)`. `_expect_list` materializes
+   * newest-first history, so `[-2:]` is the two oldest finite samples
+   * (PineSeries cap 1000), not the last two bars.
+   */
+  zigzag(site: string, source: Cell, threshold: number): { high: Cell; low: Cell; dir: number } {
+    const th = Number.isFinite(threshold) ? threshold : 5;
+    let st = this.zigzagSites.get(site);
+    if (st === undefined) {
+      st = { samples: [] };
+      this.zigzagSites.set(site, st);
+    }
+    pushCap(st.samples, finiteCell(source), 1000);
+    const finite: number[] = [];
+    for (const v of st.samples) {
+      if (v !== null) finite.push(v);
+    }
+    if (finite.length < 2) return { high: null, low: null, dir: 0 };
+    const oldest = finite[0]!;
+    const second = finite[1]!;
+    const recentHigh = Math.max(oldest, second);
+    const recentLow = Math.min(oldest, second);
+    const pct = recentLow !== 0 ? ((recentHigh - recentLow) / recentLow) * 100 : 0;
+    const direction = recentHigh === oldest ? 1 : -1;
+    return { high: recentHigh, low: recentLow, dir: pct > th ? 1 : direction };
+  }
+}
+
+/** Spearman rho. Rank is the stable sort position (`_rci_spearman`). */
+function spearmanRho(vals: number[]): Cell {
+  const n = vals.length;
+  if (n < 2) return null;
+  const order = vals.map((_, i) => i);
+  order.sort((i, j) => vals[i]! - vals[j]!);
+  let d2 = 0;
+  for (let pos = 0; pos < n; pos++) {
+    const d = order[pos]! - pos;
+    d2 += d * d;
+  }
+  const denom = n * (n * n - 1);
+  if (denom === 0) return null;
+  return finiteOut(1 - (6 * d2) / denom);
 }

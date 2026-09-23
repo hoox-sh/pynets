@@ -31,6 +31,7 @@ import { Field_definitionContext } from "./PinescriptParser.ts";
 import { Enum_declarationContext } from "./PinescriptParser.ts";
 import { Enum_definitionsContext } from "./PinescriptParser.ts";
 import { Enum_definitionContext } from "./PinescriptParser.ts";
+import { Value_structureContext } from "./PinescriptParser.ts";
 import { StructureContext } from "./PinescriptParser.ts";
 import { Structure_statementContext } from "./PinescriptParser.ts";
 import { Structure_expressionContext } from "./PinescriptParser.ts";
@@ -44,8 +45,11 @@ import { For_structure_inContext } from "./PinescriptParser.ts";
 import { For_iteratorContext } from "./PinescriptParser.ts";
 import { While_structureContext } from "./PinescriptParser.ts";
 import { Switch_structureContext } from "./PinescriptParser.ts";
+import { Once_structureContext } from "./PinescriptParser.ts";
+import { Switch_caseContext } from "./PinescriptParser.ts";
 import { Switch_casesContext } from "./PinescriptParser.ts";
 import { Switch_pattern_caseContext } from "./PinescriptParser.ts";
+import { Switch_patternsContext } from "./PinescriptParser.ts";
 import { Switch_default_caseContext } from "./PinescriptParser.ts";
 import { Local_blockContext } from "./PinescriptParser.ts";
 import { Indented_local_blockContext } from "./PinescriptParser.ts";
@@ -113,6 +117,7 @@ import { Type_specificationContext } from "./PinescriptParser.ts";
 import { Type_qualifierContext } from "./PinescriptParser.ts";
 import { Attributed_type_nameContext } from "./PinescriptParser.ts";
 import { Template_spec_suffixContext } from "./PinescriptParser.ts";
+import { Rshift_closed_type_argsContext } from "./PinescriptParser.ts";
 import { Array_type_suffixContext } from "./PinescriptParser.ts";
 import { Type_argument_listContext } from "./PinescriptParser.ts";
 import { NameContext } from "./PinescriptParser.ts";
@@ -299,6 +304,12 @@ export default class PinescriptParserVisitor<Result> extends ParseTreeVisitor<Re
 	 */
 	visitEnum_definition?: (ctx: Enum_definitionContext) => Result;
 	/**
+	 * Visit a parse tree produced by `PinescriptParser.value_structure`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitValue_structure?: (ctx: Value_structureContext) => Result;
+	/**
 	 * Visit a parse tree produced by `PinescriptParser.structure`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -377,6 +388,18 @@ export default class PinescriptParserVisitor<Result> extends ParseTreeVisitor<Re
 	 */
 	visitSwitch_structure?: (ctx: Switch_structureContext) => Result;
 	/**
+	 * Visit a parse tree produced by `PinescriptParser.once_structure`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitOnce_structure?: (ctx: Once_structureContext) => Result;
+	/**
+	 * Visit a parse tree produced by `PinescriptParser.switch_case`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSwitch_case?: (ctx: Switch_caseContext) => Result;
+	/**
 	 * Visit a parse tree produced by `PinescriptParser.switch_cases`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -388,6 +411,12 @@ export default class PinescriptParserVisitor<Result> extends ParseTreeVisitor<Re
 	 * @return the visitor result
 	 */
 	visitSwitch_pattern_case?: (ctx: Switch_pattern_caseContext) => Result;
+	/**
+	 * Visit a parse tree produced by `PinescriptParser.switch_patterns`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSwitch_patterns?: (ctx: Switch_patternsContext) => Result;
 	/**
 	 * Visit a parse tree produced by `PinescriptParser.switch_default_case`.
 	 * @param ctx the parse tree
@@ -794,6 +823,12 @@ export default class PinescriptParserVisitor<Result> extends ParseTreeVisitor<Re
 	 * @return the visitor result
 	 */
 	visitTemplate_spec_suffix?: (ctx: Template_spec_suffixContext) => Result;
+	/**
+	 * Visit a parse tree produced by `PinescriptParser.rshift_closed_type_args`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitRshift_closed_type_args?: (ctx: Rshift_closed_type_argsContext) => Result;
 	/**
 	 * Visit a parse tree produced by `PinescriptParser.array_type_suffix`.
 	 * @param ctx the parse tree

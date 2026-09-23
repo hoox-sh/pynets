@@ -10,6 +10,7 @@ Product manuals live on the PYNE docs site (same structure as `hoox.sh/pyne/docs
 | Runtime | https://hoox.sh/pyne/docs/pynets/runtime |
 | JS compile | https://hoox.sh/pyne/docs/pynets/compile |
 | Parity | https://hoox.sh/pyne/docs/pynets/parity |
+| Missing features | https://hoox.sh/pyne/docs/pynets/missing-features |
 | Ecosystem | https://hoox.sh/pyne/docs/reference/ecosystem |
 | Modes | https://hoox.sh/pyne/docs/enduser/reference/modes |
 
