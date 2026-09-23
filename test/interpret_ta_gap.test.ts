@@ -6,8 +6,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
+import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
-const PY = "/home/jango/Git/pynescript/.venv/bin/python";
+const PY = pythonBin();
 
 function makeBars(n: number) {
   return Array.from({ length: n }, (_, i) => {
@@ -179,7 +180,7 @@ plot(d, "d")`,
   },
 ];
 
-describe("interpret ta gap vs Python Runtime.run", () => {
+describe.skipIf(!pythonAvailable())("interpret ta gap vs Python Runtime.run", () => {
   test("plotted series match", async () => {
     const jobs = cases.map((c) => ({
       id: c.id,

@@ -4,8 +4,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime, type OHLCVBar } from "../src/index.ts";
+import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
-const PY = "/home/jango/Git/pynescript/.venv/bin/python";
+const PY = pythonBin();
 
 type PyOut = { plots: Array<number | null>; series: Record<string, Array<number | null>> };
 
@@ -52,7 +53,7 @@ function matchPython(src: string, bars: OHLCVBar[], symbol = "TEST"): PyOut {
 const T0 = 1_704_067_200_000; // 2024-01-01 00:00 UTC
 const HOUR = 3_600_000;
 
-describe("interpret utility gaps", () => {
+describe.skipIf(!pythonAvailable())("interpret utility gaps", () => {
   test("timeframe.change hourly buckets and daily calendar", () => {
     const bars = [0, 1, 2, 23, 24].map((h) => ({
       time: T0 + h * HOUR,

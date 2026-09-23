@@ -4,8 +4,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime, type OHLCVBar } from "../src/index.ts";
+import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
-const PY = "/home/jango/Git/pynescript/.venv/bin/python";
+const PY = pythonBin();
 
 type PyOut = { plots: Array<number | null>; series: Record<string, Array<number | null>> };
 
@@ -57,7 +58,7 @@ const BARS: OHLCVBar[] = [100, 110].map((close, i) => ({
   time: Date.UTC(2020, 0, 1) + i * 60_000,
 }));
 
-describe("interpret drawing gaps", () => {
+describe.skipIf(!pythonAvailable())("interpret drawing gaps", () => {
   test("line.new + set_width + get_x1", () => {
     matchPython(
       `//@version=5

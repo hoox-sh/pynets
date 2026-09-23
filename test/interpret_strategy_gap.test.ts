@@ -6,8 +6,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime, type OHLCVBar } from "../src/index.ts";
+import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
-const PY = "/home/jango/Git/pynescript/.venv/bin/python";
+const PY = pythonBin();
 
 type PyOut = { plots: Array<number | null>; series: Record<string, Array<number | null>> };
 
@@ -56,7 +57,7 @@ const BARS: OHLCVBar[] = [
   { open: 120, high: 120, low: 120, close: 120, volume: 1, time: 1_700_000_120_000 },
 ];
 
-describe("interpret strategy gaps", () => {
+describe.skipIf(!pythonAvailable())("interpret strategy gaps", () => {
   test("plot(strategy.cash) is numeric free cash, not the qty-type string", () => {
     const py = matchPython(
       `strategy("t", initial_capital=100000)

@@ -4,8 +4,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime, type OHLCVBar } from "../src/index.ts";
+import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
-const PY = "/home/jango/Git/pynescript/.venv/bin/python";
+const PY = pythonBin();
 
 type PyAlert = { message?: string; bar_index?: number; source?: string; title?: string };
 type PyOut = {
@@ -74,7 +75,7 @@ const BARS: OHLCVBar[] = [0, 1, 2].map((i) => ({
   volume: 10,
 }));
 
-describe("interpret host gaps", () => {
+describe.skipIf(!pythonAvailable())("interpret host gaps", () => {
   test("timenow is last bar time (bare name and call)", () => {
     const src = `//@version=5
 indicator("t")
