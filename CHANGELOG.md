@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-27
+
+Python `Runtime.run` footprint mock, plot style / alert frequency tokens, and `alert()` gating. Compile emits the same names.
+
+### Added
+- `request.footprint` Python mock on interpret and compile. `footprint.*` and `volume_row.*` accessors (call form). `request.seed` seeds the mock RNG so numbers match Python.
+- `plot.style_line` … `plot.style_circles` and `alert.freq_once_per_bar` / `once_per_bar_close` / `all` on interpret and compile.
+- `alert()` frequency gating: default once per bar, `"all"` every call, zero-arg is a no-op.
+
+### Notes
+- Realtime `once` rollback and the extension-analytics `ta.*` list are still open.
+- Chart-series plots that Python leaves `na` stay unwired (`ta.beta`, `ta.skewness`, `ta.parkinson`, and the rest of that list).
+
 ## [0.4.0] - 2026-09-27
 
 Interpret and compile for the next Python `Runtime.run` slice: bar-mode `ta.*` detectors, strategy field emit, drawing-book emit, and host helpers. `array.from` on the compile path collects its arguments.

@@ -144,7 +144,9 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 
 **`strategy.*`** — entry/exit/order, pending limit/stop, commission/slippage/pyramiding, open/closed trade accessors, **`strategy.risk.*`**, **OCA cancel/reduce**. `strategy.cash` is free cash and still selects cash sizing for `default_qty_type`.
 
-**Drawings / alerts** — `line` / `label` / `box` / `table` / `polyline` / `linefill` getters and setters, `*.all`, `*.copy`, `chart.point.*`; `alert` / `alertcondition`. `timenow` is the dataset last-bar time on every bar.
+**Drawings / alerts** — `line` / `label` / `box` / `table` / `polyline` / `linefill` getters and setters, `*.all`, `*.copy`, `chart.point.*`; `alert` / `alertcondition` with Python frequency tokens (`alert.freq_*`). `plot.style_*` tokens. `timenow` is the dataset last-bar time on every bar.
+
+**`request.*`** — same-symbol `security` passthrough; foreign / HTF without a feed is `na`. `request.footprint` is Python’s mock object (`footprint.*` / `volume_row.*`); `request.seed` seeds that mock.
 
 ---
 
