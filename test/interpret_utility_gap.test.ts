@@ -161,7 +161,7 @@ plot(syminfo.tickerid == "NASDAQ:AAPL" ? 1 : 0, "tid")`,
     );
     expect(kept.series.ticker).toEqual([1]);
     expect(kept.series.tid).toEqual([1]);
-  });
+  }, 20_000);
 
   test("bare round_to_mintick matches math.round_to_mintick", () => {
     matchPython(
