@@ -9,7 +9,10 @@
  * is the host's job (`bucketIndex` / `shouldForwardFill`).
  * Lower-TF request without a feed is na — no invented intra-bar array.
  * Interpret should call this from `evalCall`; this module is host-agnostic.
+ * `request.footprint` is the Python mock (not foreign-na).
  */
+
+import { createFootprint, seedFootprintRng } from "./footprint.ts";
 
 export type Cell = number | null;
 
@@ -29,7 +32,7 @@ export interface RequestHost {
  * Named or positional args for `resolveRequest`.
  * Security uses `symbol` / `timeframe` / `sameSymbolValue`;
  * currency uses `from`/`to` (or `from_currency`/`to_currency`);
- * seed uses `seed`.
+ * seed uses `seed`; footprint uses `num_ticks` / `va_percentage`.
  */
 export interface RequestNamedArgs {
   symbol?: string | null;
@@ -41,6 +44,8 @@ export interface RequestNamedArgs {
   from_currency?: string | null;
   to_currency?: string | null;
   seed?: unknown;
+  num_ticks?: unknown;
+  va_percentage?: unknown;
 }
 
 export type RequestArgs = readonly unknown[] | RequestNamedArgs;
@@ -231,7 +236,7 @@ function bareTicker(symbol: string): string {
   return colon >= 0 ? s.slice(colon + 1) : s;
 }
 
-/** Missing / foreign fundamentals, economic, quandl, footprint → na. */
+/** Missing / foreign fundamentals, economic, quandl → na. */
 export function resolveForeignNa(): Cell {
   return null;
 }
@@ -249,9 +254,10 @@ export function resolveCurrencyRate(
   return null;
 }
 
-/** `request.seed` — record the seed (Python returns None). */
+/** `request.seed` — record the seed and seed the footprint RNG (Python returns None). */
 export function resolveSeed(seed?: unknown): Cell {
   lastSeed = coerceSeed(seed ?? 0);
+  seedFootprintRng(lastSeed);
   return null;
 }
 
@@ -262,7 +268,7 @@ export function lastRequestSeed(): number | null {
 /**
  * Dispatch a `request.*` name. Security keeps `resolveSecurity` semantics;
  * lower-TF without a feed is na; currency is 1.0 only for identical codes;
- * everything else is na.
+ * footprint is the Python mock; everything else is na.
  */
 export function resolveRequest(
   fname: string,
@@ -283,6 +289,10 @@ export function resolveRequest(
   }
   if (fname === "request.seed") {
     return resolveSeed(seedFromArgs(args));
+  }
+  if (fname === "request.footprint") {
+    const [numTicks, va] = footprintFromArgs(args);
+    return createFootprint(numTicks, va);
   }
   return resolveForeignNa();
 }
@@ -324,6 +334,11 @@ function currencyFromArgs(args: RequestArgs): [string | null, string | null] {
 function seedFromArgs(args: RequestArgs): unknown {
   if (!isNamedArgs(args)) return args[0] ?? 0;
   return args.seed ?? 0;
+}
+
+function footprintFromArgs(args: RequestArgs): [unknown, unknown] {
+  if (!isNamedArgs(args)) return [args[0] ?? 100, args[1] ?? 70];
+  return [args.num_ticks ?? 100, args.va_percentage ?? 70];
 }
 
 function currencyPair(

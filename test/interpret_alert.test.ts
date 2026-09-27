@@ -59,7 +59,7 @@ function alertText(ev: Alertish): string {
 function drawingsWired(): boolean {
   if (!parseOk(SRC)) return false;
   try {
-    const out = new Runtime("TEST").run(SRC, BARS);
+    const out = new Runtime("TEST").run(SRC, BARS, { mode: "interpret" });
     if (out.error) return false;
     return collectAlertish(out).some((ev) => alertText(ev).includes("hi"));
   } catch {
@@ -69,7 +69,7 @@ function drawingsWired(): boolean {
 
 describe("interpret alert", () => {
   test.skipIf(!drawingsWired())('alert("hi") if drawings wired', () => {
-    const out = new Runtime("TEST").run(SRC, BARS);
+    const out = new Runtime("TEST").run(SRC, BARS, { mode: "interpret" });
     expect(out.error).toBeUndefined();
     const alerts = collectAlertish(out);
     expect(alerts.length).toBeGreaterThan(0);

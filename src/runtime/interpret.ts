@@ -123,6 +123,27 @@ import {
   type StubKwargs,
 } from "./library.ts";
 import { isRequestBuiltin, resolveRequest, resolveSecurity } from "./request.ts";
+import {
+  Footprint,
+  footprintBuyVolume,
+  footprintDelta,
+  footprintGetRowByPrice,
+  footprintPoc,
+  footprintRows,
+  footprintSellVolume,
+  footprintTotalVolume,
+  footprintVah,
+  footprintVal,
+  volumeRowBuyVolume,
+  volumeRowDelta,
+  volumeRowDownPrice,
+  volumeRowHasBuyImbalance,
+  volumeRowHasSellImbalance,
+  volumeRowSellVolume,
+  volumeRowTotalVolume,
+  volumeRowUpPrice,
+  type VolumeRow,
+} from "./footprint.ts";
 import { NA, PineSeries, type Cell } from "./series.ts";
 import {
   strContains,
@@ -254,6 +275,8 @@ type Value =
   | PineMap
   | PineMatrix
   | TickerId
+  | Footprint
+  | VolumeRow
   | UdtType
   | UdtInstance
   | LibraryModule
@@ -337,7 +360,7 @@ interface Env {
   onceFired: WeakSet<object>;
   /** Python `_max_bars_back_decls` — recorded only; evaluation is unbounded. */
   maxBarsBackDecls: Array<{ var: Value; num: Value }>;
-  /** Python `_alert_fire_bars` keys for `alertcondition` once_per_bar. */
+  /** Python `_alert_fire_bars` keys for `alert` / `alertcondition` freq gating. */
   alertFireBars: Map<string, number>;
 }
 
@@ -1510,6 +1533,22 @@ export const MATH_CONSTANTS: Record<string, Value> = {
   "plot.linestyle_solid": "linestyle_solid",
   "plot.linestyle_dashed": "linestyle_dashed",
   "plot.linestyle_dotted": "linestyle_dotted",
+  // Python plotting.py PlotStyle tokens — longer than hline's "solid".
+  "plot.style_line": "style_line",
+  "plot.style_linebr": "style_linebr",
+  "plot.style_stepline": "style_stepline",
+  "plot.style_steplinebr": "style_steplinebr",
+  "plot.style_stepline_diamond": "style_stepline_diamond",
+  "plot.style_histogram": "style_histogram",
+  "plot.style_columns": "style_columns",
+  "plot.style_cross": "style_cross",
+  "plot.style_area": "style_area",
+  "plot.style_areabr": "style_areabr",
+  "plot.style_circles": "style_circles",
+  // Python alerts.py `_alerts_builtin_map`.
+  "alert.freq_once_per_bar": "once_per_bar",
+  "alert.freq_once_per_bar_close": "once_per_bar_close",
+  "alert.freq_all": "all",
   "dayofweek.sunday": 1,
   "dayofweek.monday": 2,
   "dayofweek.tuesday": 3,
@@ -1889,6 +1928,8 @@ function evalCall(node: Call, env: Env): Value {
   ) {
     return evalRequestCall(fname!, node, env);
   }
+  const fpCall = evalFootprintCall(fname, node, env);
+  if (fpCall !== undefined) return fpCall;
   const arrVal = evalArrayCall(fname, node, env);
   if (arrVal !== undefined) return arrVal;
   const colorVal = evalColorCall(fname, node, env);
@@ -2577,14 +2618,66 @@ function packDrawings(book: DrawingBook): DrawingEvent[] | undefined {
   return book.items.length === 0 ? undefined : book.items;
 }
 
-/** Python `_emit_alert(..., source="alertcondition", freq=once_per_bar)`. */
-function fireAlertCondition(env: Env, title: string, message: string): void {
-  const key = `alertcondition|${title}|${message}|once_per_bar`;
-  if (env.alertFireBars.get(key) === env.barIndex) return;
+const FREQ_ONCE_PER_BAR = "once_per_bar";
+const FREQ_ONCE_PER_BAR_CLOSE = "once_per_bar_close";
+const FREQ_ALL = "all";
+
+const ALERT_FREQ_ALIASES: Record<string, string> = {
+  once_per_bar: FREQ_ONCE_PER_BAR,
+  freq_once_per_bar: FREQ_ONCE_PER_BAR,
+  "alert.freq_once_per_bar": FREQ_ONCE_PER_BAR,
+  once_per_bar_close: FREQ_ONCE_PER_BAR_CLOSE,
+  freq_once_per_bar_close: FREQ_ONCE_PER_BAR_CLOSE,
+  "alert.freq_once_per_bar_close": FREQ_ONCE_PER_BAR_CLOSE,
+  all: FREQ_ALL,
+  freq_all: FREQ_ALL,
+  "alert.freq_all": FREQ_ALL,
+};
+
+/** Python `normalize_alert_freq`. Unknown non-empty tokens are kept (still once-per-bar gated). */
+function normalizeAlertFreq(freq: unknown): string {
+  if (freq == null) return FREQ_ONCE_PER_BAR;
+  if (typeof freq === "number" && !Number.isFinite(freq)) return FREQ_ONCE_PER_BAR;
+  const s = String(freq).trim().toLowerCase().replace(/ /g, "_");
+  return ALERT_FREQ_ALIASES[s] ?? (s ? s : FREQ_ONCE_PER_BAR);
+}
+
+/** Python `_bar_is_confirmed`. This host sets `barstate.isconfirmed` to 1 on every bar. */
+function barIsConfirmed(_env: Env): boolean {
+  return true;
+}
+
+/** Python `_should_fire_alert`. */
+function shouldFireAlert(env: Env, source: string, title: string, message: string, freq: string): boolean {
+  const freqN = normalizeAlertFreq(freq);
+  if (freqN === FREQ_ALL) return true;
+  if (freqN === FREQ_ONCE_PER_BAR_CLOSE && !barIsConfirmed(env)) return false;
+  const key = `${source}|${title}|${message}|${freqN}`;
+  if (env.alertFireBars.get(key) === env.barIndex) return false;
   env.alertFireBars.set(key, env.barIndex);
+  return true;
+}
+
+/** Python `_emit_alert`. Records on the drawing book (no separate alerts array). */
+function emitAlert(
+  env: Env,
+  message: string,
+  freq: unknown,
+  opts?: { title?: string; source?: string },
+): void {
+  const source = opts?.source ?? "alert";
+  const title = opts?.title ?? "";
+  const freqN = normalizeAlertFreq(freq);
+  if (!shouldFireAlert(env, source, title, message, freqN)) return;
   env.drawings.alert(env.barIndex, message);
   const ev = env.drawings.items[env.drawings.items.length - 1];
-  if (ev != null) ev.extra = { source: "alertcondition", title, freq: "once_per_bar" };
+  if (ev == null) return;
+  ev.extra = title ? { source, title, freq: freqN } : { source, freq: freqN };
+}
+
+/** Python `_emit_alert(..., source="alertcondition", freq=once_per_bar)`. */
+function fireAlertCondition(env: Env, title: string, message: string): void {
+  emitAlert(env, message, FREQ_ONCE_PER_BAR, { title, source: "alertcondition" });
 }
 
 function inputTitle(node: Call): string | null {
@@ -2895,7 +2988,7 @@ function evalRequestSecurity(node: Call, env: Env): Cell {
   );
 }
 
-function evalRequestCall(fname: string, node: Call, env: Env): Cell {
+function evalRequestCall(fname: string, node: Call, env: Env): Value {
   if (
     fname === "request.security" ||
     fname === "request.security_lower_tf" ||
@@ -2916,8 +3009,73 @@ function evalRequestCall(fname: string, node: Call, env: Env): Cell {
     const v = resolveRequest(fname, host, { seed });
     return typeof v === "number" || v === null ? v : NA;
   }
+  if (fname === "request.footprint") {
+    const numTicks = unwrap(evalExpr(callArg(node.args, 0, ["num_ticks"]), env));
+    const va = unwrap(evalExpr(callArg(node.args, 1, ["va_percentage"]), env));
+    const v = resolveRequest(fname, host, {
+      num_ticks: numTicks ?? 100,
+      va_percentage: va ?? 70,
+    });
+    return v instanceof Footprint ? v : NA;
+  }
   const v = resolveRequest(fname, host, {});
   return typeof v === "number" || v === null ? v : NA;
+}
+
+function evalFootprintCall(fname: string | null, node: Call, env: Env): Value | undefined {
+  if (fname == null) return undefined;
+  if (fname.startsWith("footprint.")) {
+    const fp = evalExpr(callArg(node.args, 0, ["id", "footprint"]), env);
+    switch (fname) {
+      case "footprint.buy_volume":
+        return footprintBuyVolume(fp);
+      case "footprint.sell_volume":
+        return footprintSellVolume(fp);
+      case "footprint.delta":
+        return footprintDelta(fp);
+      case "footprint.total_volume":
+        return footprintTotalVolume(fp);
+      case "footprint.vah":
+        return footprintVah(fp);
+      case "footprint.val":
+        return footprintVal(fp);
+      case "footprint.poc":
+        return footprintPoc(fp);
+      case "footprint.rows": {
+        const arr = new PineArray();
+        for (const row of footprintRows(fp)) arr.push(row);
+        return arr;
+      }
+      case "footprint.get_row_by_price":
+        return footprintGetRowByPrice(fp, unwrap(evalExpr(callArg(node.args, 1, ["price"]), env)));
+      default:
+        return undefined;
+    }
+  }
+  if (fname.startsWith("volume_row.")) {
+    const vr = evalExpr(callArg(node.args, 0, ["id", "volume_row"]), env);
+    switch (fname) {
+      case "volume_row.up_price":
+        return volumeRowUpPrice(vr);
+      case "volume_row.down_price":
+        return volumeRowDownPrice(vr);
+      case "volume_row.buy_volume":
+        return volumeRowBuyVolume(vr);
+      case "volume_row.sell_volume":
+        return volumeRowSellVolume(vr);
+      case "volume_row.delta":
+        return volumeRowDelta(vr);
+      case "volume_row.total_volume":
+        return volumeRowTotalVolume(vr);
+      case "volume_row.has_buy_imbalance":
+        return volumeRowHasBuyImbalance(vr);
+      case "volume_row.has_sell_imbalance":
+        return volumeRowHasSellImbalance(vr);
+      default:
+        return undefined;
+    }
+  }
+  return undefined;
 }
 
 function evalMathCall(fname: string | null, node: Call, env: Env): Cell | undefined {
@@ -4978,8 +5136,16 @@ function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | un
     return book.boxNew(env.barIndex, extra);
   }
   if (fname === "alert") {
+    // Python `_builtin_alert`: zero-arg `alert()` is a soft no-op.
+    if (asArgs(node.args).length === 0) return NA;
     const msg = evalAlertMessage(callArg(node.args, 0, ["message"]), env);
-    book.alert(env.barIndex, msg);
+    const freqExpr = callArg(node.args, 1, ["freq"]);
+    let freq: unknown = null;
+    if (freqExpr != null) {
+      const v = evalExpr(freqExpr, env);
+      freq = typeof v === "string" ? v : unwrap(v);
+    }
+    emitAlert(env, msg, freq, { source: "alert" });
     return NA;
   }
   if (fname === "table.new") {

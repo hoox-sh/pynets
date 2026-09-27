@@ -305,7 +305,19 @@ describe("resolveForeignNa", () => {
     expect(
       resolveRequest("request.quandl", { symbol: "AAPL" }, ["EIA/PET_RWTC_D"]),
     ).toBeNull();
-    expect(resolveRequest("request.footprint", { symbol: "AAPL" }, [100, 70])).toBeNull();
+  });
+});
+
+describe("resolveRequest footprint mock", () => {
+  test("request.footprint returns a branded mock, not na", () => {
+    const fp = resolveRequest("request.footprint", { symbol: "AAPL" }, [10, 70]) as {
+      buy_volume?: unknown;
+      rows?: unknown[];
+    };
+    expect(fp).not.toBeNull();
+    expect(typeof fp.buy_volume).toBe("number");
+    expect(Number.isFinite(fp.buy_volume as number)).toBe(true);
+    expect(fp.rows?.length).toBe(10);
   });
 });
 
