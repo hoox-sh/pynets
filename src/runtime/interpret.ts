@@ -3951,6 +3951,157 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     const z = env.ta.zigzag(site, srcArg(node, env), th);
     return tupleOf([z.high, z.low, z.dir]);
   }
+  // wave10a-start
+  const wave10aArg = (index: number, names: string[], message: string): expr => {
+    const arg = callArg(node.args, index, names);
+    if (arg == null) runtimeError(message);
+    return arg;
+  };
+  if (fname === "ta.hammer" || fname === "hammer") {
+    const msg = "ta.hammer() requires 4 arguments: open, high, low, close";
+    return env.ta.hammer(
+      unwrap(evalExpr(wave10aArg(0, ["open"], msg), env)),
+      unwrap(evalExpr(wave10aArg(1, ["high"], msg), env)),
+      unwrap(evalExpr(wave10aArg(2, ["low"], msg), env)),
+      unwrap(evalExpr(wave10aArg(3, ["close"], msg), env)),
+    );
+  }
+  if (fname === "ta.engulfing" || fname === "engulfing") {
+    const msg = "ta.engulfing() requires 4 arguments: open, high, low, close";
+    unwrap(evalExpr(wave10aArg(0, ["open"], msg), env));
+    unwrap(evalExpr(wave10aArg(1, ["high"], msg), env));
+    unwrap(evalExpr(wave10aArg(2, ["low"], msg), env));
+    unwrap(evalExpr(wave10aArg(3, ["close"], msg), env));
+    return env.ta.engulfing();
+  }
+  if (fname === "ta.gap_detector" || fname === "gap_detector") {
+    const msg = "ta.gap_detector() requires 3 arguments: high, low, prev_close";
+    return env.ta.gapDetector(
+      unwrap(evalExpr(wave10aArg(0, ["high"], msg), env)),
+      unwrap(evalExpr(wave10aArg(1, ["low"], msg), env)),
+      unwrap(evalExpr(wave10aArg(2, ["prev_close", "prev"], msg), env)),
+    );
+  }
+  if (fname === "ta.double_top_bottom" || fname === "double_top_bottom") {
+    const msg = "ta.double_top_bottom() requires 3 arguments";
+    unwrap(evalExpr(wave10aArg(0, ["high"], msg), env));
+    unwrap(evalExpr(wave10aArg(1, ["low"], msg), env));
+    return env.ta.doubleTopBottom(unwrap(evalExpr(wave10aArg(2, ["period", "length"], msg), env)));
+  }
+  if (fname === "ta.inside_bar_pattern" || fname === "inside_bar_pattern") {
+    const msg = "ta.inside_bar_pattern() requires 2 arguments";
+    unwrap(evalExpr(wave10aArg(0, ["high"], msg), env));
+    unwrap(evalExpr(wave10aArg(1, ["low"], msg), env));
+    return env.ta.insideBarPattern();
+  }
+  if (fname === "ta.macd_signal" || fname === "macd_signal") {
+    const msg = "ta.macd_signal() requires 2 arguments: macd_line, signal_line";
+    return env.ta.macdSignal(
+      unwrap(evalExpr(wave10aArg(0, ["macd_line", "macd"], msg), env)),
+      unwrap(evalExpr(wave10aArg(1, ["signal_line", "signal"], msg), env)),
+    );
+  }
+  if (fname === "ta.acceleration_factor" || fname === "acceleration_factor") {
+    const msg = "ta.acceleration_factor() requires 2 arguments";
+    return env.ta.accelerationFactor(
+      site,
+      unwrap(evalExpr(wave10aArg(0, ["momentum_list", "momentum", "source", "series"], msg), env)),
+      unwrap(evalExpr(wave10aArg(1, ["period", "length"], msg), env)),
+    );
+  }
+  if (fname === "ta.stoch_smooth" || fname === "stoch_smooth") {
+    const msg = "ta.stoch_smooth() requires 6 arguments: high, low, close, period, smooth_k, smooth_d";
+    return env.ta.stochSmooth(
+      unwrap(evalExpr(wave10aArg(0, ["high"], msg), env)),
+      unwrap(evalExpr(wave10aArg(1, ["low"], msg), env)),
+      unwrap(evalExpr(wave10aArg(2, ["close"], msg), env)),
+      unwrap(evalExpr(wave10aArg(3, ["period", "length"], msg), env)),
+      unwrap(evalExpr(wave10aArg(4, ["smooth_k", "k"], msg), env)),
+      unwrap(evalExpr(wave10aArg(5, ["smooth_d", "d"], msg), env)),
+    );
+  }
+  // wave10a-end
+  // wave10b-start
+  const wave10bList = (index: number, names: string[]): Array<number | null> => {
+    const raw = evalExpr(callArg(node.args, index, names), env);
+    const arr = asArray(raw);
+    if (arr == null) return [unwrap(raw)];
+    const out: Array<number | null> = [];
+    for (let i = 0; i < arr.size(); i++) out.push(arr.get(i));
+    return out;
+  };
+  if (fname === "ta.voi" || fname === "voi") {
+    return env.ta.voi(
+      unwrap(evalExpr(callArg(node.args, 0, ["buy_volume", "buy"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["sell_volume", "sell"]), env)),
+    );
+  }
+  if (fname === "ta.bid_ask_imbalance" || fname === "bid_ask_imbalance") {
+    return env.ta.bidAskImbalance(
+      unwrap(evalExpr(callArg(node.args, 0, ["bid_size", "bid"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["ask_size", "ask"]), env)),
+      unwrap(evalExpr(callArg(node.args, 2, ["bid_price"]), env)),
+      unwrap(evalExpr(callArg(node.args, 3, ["ask_price"]), env)),
+    );
+  }
+  if (fname === "ta.rsi_oversold_overbought" || fname === "rsi_oversold_overbought") {
+    const os = unwrap(evalExpr(callArg(node.args, 1, ["oversold_level", "oversold"]), env));
+    const ob = unwrap(evalExpr(callArg(node.args, 2, ["overbought_level", "overbought"]), env));
+    return env.ta.rsiOversoldOverbought(
+      unwrap(evalExpr(callArg(node.args, 0, ["rsi_series", "rsi", "source"]), env)),
+      os ?? Number.NaN,
+      ob ?? Number.NaN,
+    );
+  }
+  if (fname === "ta.rsi_divergence" || fname === "rsi_divergence") {
+    const period = unwrap(evalExpr(callArg(node.args, 1, ["period", "length"]), env));
+    return env.ta.rsiDivergence(wave10bList(0, ["rsi_series", "series", "source"]), period ?? 0);
+  }
+  if (fname === "ta.cumulative_delta" || fname === "cumulative_delta") {
+    const period = unwrap(evalExpr(callArg(node.args, 2, ["period", "length"]), env));
+    return env.ta.cumulativeDelta(
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["close", "source"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["volume"]), env)),
+      period ?? 0,
+    );
+  }
+  if (fname === "ta.volume_momentum" || fname === "volume_momentum") {
+    const period = unwrap(evalExpr(callArg(node.args, 1, ["period", "length"]), env));
+    return env.ta.volumeMomentum(
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["volume", "source"]), env)),
+      period ?? 0,
+    );
+  }
+  if (fname === "ta.volume_profile_high" || fname === "volume_profile_high") {
+    return env.ta.volumeProfileHigh(
+      wave10bList(0, ["close", "price", "source", "series"]),
+      wave10bList(1, ["volume"]),
+    );
+  }
+  if (fname === "ta.volume_profile_low" || fname === "volume_profile_low") {
+    const period = unwrap(evalExpr(callArg(node.args, 2, ["period", "length"]), env));
+    const levels = unwrap(evalExpr(callArg(node.args, 3, ["levels"]), env));
+    return env.ta.volumeProfileLow(
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["close", "source"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["volume"]), env)),
+      period ?? 0,
+      levels ?? 0,
+    );
+  }
+  if (fname === "ta.volume_thrust" || fname === "volume_thrust") {
+    const sens = unwrap(evalExpr(callArg(node.args, 3, ["sensitivity"]), env));
+    return env.ta.volumeThrust(
+      site,
+      unwrap(evalExpr(callArg(node.args, 0, ["close", "source"]), env)),
+      unwrap(evalExpr(callArg(node.args, 1, ["volume"]), env)),
+      unwrap(evalExpr(callArg(node.args, 2, ["volume_sma", "vol_sma", "sma"]), env)),
+      sens ?? 0.3,
+    );
+  }
+  // wave10b-end
   return undefined;
 }
 

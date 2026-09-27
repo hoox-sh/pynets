@@ -2708,6 +2708,398 @@ export class TaEngine {
     const direction = recentHigh === oldest ? 1 : -1;
     return { high: recentHigh, low: recentLow, dir: pct > th ? 1 : direction };
   }
+
+  private readonly accelSites = new Map<string, Cell[]>();
+
+  /** Python `pine_expect_int`: near-integers round, other finites floor. `na` throws. */
+  private coerceTaInt(value: Cell, message: string): number {
+    if (value === null || !Number.isFinite(value)) throw new Error(`${message}. Got: na`);
+    const nearest = Math.round(value);
+    if (Math.abs(value - nearest) <= PERIOD_INT_EPS) return nearest;
+    return Math.floor(value);
+  }
+
+  /**
+   * Current-bar hammer / doji (`patterns.py` `_hammer`). Both flags can be
+   * true; strength prefers doji. `na` OHLC raises (Python `TypeError`).
+   */
+  hammer(open: Cell, high: Cell, low: Cell, close: Cell): TaRecord {
+    if (open === null || high === null || low === null || close === null) {
+      throw new Error("bad operand type for abs(): 'NoneType'");
+    }
+    const body = Math.abs(close - open);
+    const range = high - low;
+    const lower = Math.min(open, close) - low;
+    const upper = high - Math.max(open, close);
+    const isDoji = body < range * 0.1;
+    const isHammer = body > 0 && lower > body * 2 && upper < body;
+    let strength = 0;
+    if (isDoji) strength = 1 - body / (range + 0.0001);
+    else if (isHammer) strength = Math.min(1, lower / (range + 0.0001));
+    return taRec({
+      is_hammer: isHammer,
+      is_doji: isDoji,
+      pattern_strength: Number.isFinite(strength) ? strength : null,
+    });
+  }
+
+  /**
+   * Gap vs an explicit prev-close scalar (`patterns.py` `_gap_detector`).
+   * `na` prev-close is the missing-scalar sentinel (zeros), not an error.
+   * Numeric prev with `na` high/low raises, matching Python arithmetic.
+   */
+  gapDetector(high: Cell, low: Cell, prevClose: Cell): TaRecord {
+    const none = taRec({ gap_size: 0, gap_type: 0, gap_percent: 0 });
+    if (prevClose === null) return none;
+    if (high === null || low === null) {
+      throw new Error("unsupported operand type(s) for -: 'float' and 'NoneType'");
+    }
+    const upside = Math.max(0, low - prevClose);
+    const downside = Math.max(0, prevClose - high);
+    if (upside > downside) {
+      const pct = prevClose !== 0 ? (upside / prevClose) * 100 : 0;
+      return taRec({
+        gap_size: upside,
+        gap_type: 1,
+        gap_percent: Number.isFinite(pct) ? pct : null,
+      });
+    }
+    if (downside > 0) {
+      const pct = prevClose !== 0 ? (downside / prevClose) * 100 : 0;
+      return taRec({
+        gap_size: downside,
+        gap_type: -1,
+        gap_percent: Number.isFinite(pct) ? pct : null,
+      });
+    }
+    return none;
+  }
+
+  /** `macd_line - signal_line` (`oscillators.py`). Either `na` → `na`. */
+  macdSignal(macdLine: Cell, signalLine: Cell): Cell {
+    if (macdLine === null || signalLine === null) return null;
+    return finiteOut(macdLine - signalLine);
+  }
+
+  /**
+   * `advanced.py` `_builtin_ta_acceleration_factor` (wins over economics).
+   * `_expect_list` is newest-first PineSeries history, cap 1000, so
+   * `[-period-1:]` is the oldest window — the value sticks once warm.
+   */
+  accelerationFactor(site: string, source: Cell, period: Cell): Cell {
+    const p = this.coerceTaInt(period, "ta.acceleration_factor() requires 2 arguments");
+    let samples = this.accelSites.get(site);
+    if (samples === undefined) {
+      samples = [];
+      this.accelSites.set(site, samples);
+    }
+    pushCap(samples, finiteCell(source), 1000);
+    if (samples.length < p + 1 || p <= 0) return 0;
+    const oldest = samples.slice(0, p + 1);
+    const newestFirst: number[] = [];
+    for (let i = oldest.length - 1; i >= 0; i--) {
+      const v = oldest[i];
+      if (v !== null) newestFirst.push(v);
+    }
+    if (newestFirst.length < 2) return 0;
+    let oldSum = 0;
+    for (let i = 0; i < newestFirst.length - 1; i++) oldSum += newestFirst[i]!;
+    const oldMom = oldSum / (newestFirst.length - 1);
+    if (Math.abs(oldMom) < 1e-10) return 0;
+    const newMom = newestFirst[newestFirst.length - 1]!;
+    let acc = (newMom - oldMom) / oldMom;
+    if (acc < -2) acc = -2;
+    if (acc > 2) acc = 2;
+    return finiteOut(acc);
+  }
+
+  /**
+   * Bar mode sees a 1-element OHLC list (`oscillators.py` `_builtin_ta_stoch_smooth`).
+   * Raw %K is the current bar; `_ema` is `na` unless both smooth lengths are 1.
+   * Period `<= 0` makes `max()` of an empty window raise.
+   */
+  stochSmooth(high: Cell, low: Cell, close: Cell, period: Cell, smoothK: Cell, smoothD: Cell): Cell {
+    const p = this.coerceTaInt(period, "ta.stoch_smooth period must be integer");
+    const k = this.coerceTaInt(smoothK, "ta.stoch_smooth smooth_k must be integer");
+    const d = this.coerceTaInt(smoothD, "ta.stoch_smooth smooth_d must be integer");
+    if (p <= 0) throw new Error("max() iterable argument is empty");
+    if (high === null || low === null || close === null) {
+      throw new Error("unsupported operand type(s) for /: 'float' and 'NoneType'");
+    }
+    if (k !== 1 || d !== 1) return null;
+    const span = high - low;
+    const stoch = span !== 0 ? (100 * (close - low)) / span : 50;
+    return finiteOut(stoch);
+  }
+
+  /**
+   * Bar-mode OHLC is a PineSeries, not a list (`len < 2`). Sentinel every bar
+   * (`patterns.py` `_builtin_ta_engulfing`) — a lookback port would disagree.
+   */
+  engulfing(): TaRecord {
+    return taRec({ is_bullish: false, is_bearish: false, pattern_strength: 0 });
+  }
+
+  /** Same one-element series: `advanced.py` `_builtin_ta_inside_bar_pattern` is always false. */
+  insideBarPattern(): boolean {
+    return false;
+  }
+
+  /**
+   * One-element high/low never fills the window (`patterns.py`
+   * `_builtin_ta_double_top_bottom`). Any finite period is the none-sentinel;
+   * `na` period still raises.
+   */
+  doubleTopBottom(period: Cell): TaRecord {
+    if (period === null || !Number.isFinite(period)) {
+      throw new Error("period must be integer. Got: na");
+    }
+    return taRec({ pattern_type: "none", strength: 0, breakout_level: 0 });
+  }
+
+  // `_expect_list` materializes PineSeries history newest-first (cap 1000).
+  // Negative indexes are the oldest samples, not the latest bars.
+  private readonly cumDeltaSites = new Map<string, { close: Cell[]; volume: Cell[] }>();
+  private readonly volMomSites = new Map<string, { volume: Cell[] }>();
+  private readonly volProfileLowSites = new Map<string, { close: Cell[]; volume: Cell[] }>();
+  private readonly volThrustSites = new Map<string, { close: Cell[]; volume: Cell[]; sma: Cell[] }>();
+
+  private asCount(value: number): number | null {
+    if (!Number.isFinite(value)) return null;
+    const nearest = Math.round(value);
+    return Math.abs(value - nearest) <= PERIOD_INT_EPS ? nearest : Math.floor(value);
+  }
+
+  private pushChrono(buf: Cell[], value: Cell): void {
+    buf.push(value !== null && Number.isFinite(value) ? value : null);
+    if (buf.length > 1000) buf.shift();
+  }
+
+  /** Newest-first negative index into a chronological buffer. */
+  private nf(buf: Cell[], i: number): Cell {
+    const v = buf[-i - 1];
+    return v === undefined ? null : v;
+  }
+
+  /** `ta.voi` — non-numeric inputs are 0 (`volume.py`). */
+  voi(buy: Cell, sell: Cell): Cell {
+    const b = buy !== null && Number.isFinite(buy) ? buy : 0;
+    const s = sell !== null && Number.isFinite(sell) ? sell : 0;
+    const total = b + s;
+    if (total === 0) return 0;
+    return finiteOut((b - s) / total);
+  }
+
+  /** `ta.bid_ask_imbalance` — `{imbalance_ratio, spread}` (`volume.py`). */
+  bidAskImbalance(bidSize: Cell, askSize: Cell, bidPrice: Cell, askPrice: Cell): TaRecord {
+    const bid = bidSize !== null && Number.isFinite(bidSize) ? bidSize : 0;
+    const ask = askSize !== null && Number.isFinite(askSize) ? askSize : 0;
+    const bidPx = bidPrice !== null && Number.isFinite(bidPrice) ? bidPrice : 0;
+    const askPx = askPrice !== null && Number.isFinite(askPrice) ? askPrice : 0;
+    const total = bid + ask;
+    if (total === 0) return taRec({ imbalance_ratio: 0, spread: 0 });
+    return taRec({
+      imbalance_ratio: finiteOut((bid - ask) / total),
+      spread: finiteOut(bidPx > 0 ? askPx - bidPx : 0),
+    });
+  }
+
+  /** `ta.rsi_oversold_overbought` — current sample only (`oscillators.py`). */
+  rsiOversoldOverbought(rsi: Cell, oversold: number, overbought: number): TaRecord {
+    if (rsi === null || !Number.isFinite(rsi)) {
+      return taRec({ is_oversold: false, is_overbought: false, rsi: null });
+    }
+    const os = this.asCount(oversold);
+    const ob = this.asCount(overbought);
+    if (os === null || ob === null) {
+      return taRec({ is_oversold: false, is_overbought: false, rsi });
+    }
+    return taRec({ is_oversold: rsi < os, is_overbought: rsi > ob, rsi });
+  }
+
+  /**
+   * `ta.rsi_divergence` — last element of the list Python returns.
+   * A scalar is a one-element series (`i < period` → 0). Do not accumulate.
+   */
+  rsiDivergence(series: Cell[], period: number): Cell {
+    const p = this.asCount(period);
+    if (p === null || series.length === 0) return null;
+    let last = 0;
+    for (let i = 0; i < series.length; i++) {
+      if (i < p) {
+        last = 0;
+        continue;
+      }
+      const start = Math.max(0, i - p);
+      const vals: number[] = [];
+      for (let j = start; j <= i; j++) {
+        const v = series[j];
+        if (v !== null && Number.isFinite(v)) vals.push(v);
+      }
+      if (vals.length < 2) {
+        last = 0;
+        continue;
+      }
+      let rsiMin = vals[0]!;
+      let rsiMax = vals[0]!;
+      for (const v of vals) {
+        if (v < rsiMin) rsiMin = v;
+        if (v > rsiMax) rsiMax = v;
+      }
+      const cur = series[i];
+      const range = rsiMax - rsiMin;
+      if (cur === null || !Number.isFinite(cur) || range <= 0) {
+        last = 0;
+        continue;
+      }
+      last = ((cur - rsiMin) / range) * 2 - 1;
+    }
+    return finiteOut(last);
+  }
+
+  /** `ta.cumulative_delta` — oldest `period` bars (`advanced.py`). */
+  cumulativeDelta(site: string, close: Cell, volume: Cell, period: number): Cell {
+    const n = this.asCount(period);
+    let st = this.cumDeltaSites.get(site);
+    if (st === undefined) {
+      st = { close: [], volume: [] };
+      this.cumDeltaSites.set(site, st);
+    }
+    this.pushChrono(st.close, close);
+    this.pushChrono(st.volume, volume);
+    if (n === null || n <= 0 || st.close.length < n || st.volume.length < n) return 0;
+    let delta = 0;
+    for (let i = -n; i < 0; i++) {
+      const cRaw = this.nf(st.close, i);
+      const vRaw = this.nf(st.volume, i);
+      const c = cRaw !== null && Number.isFinite(cRaw) ? cRaw : 0;
+      const v = vRaw !== null && Number.isFinite(vRaw) ? vRaw : 0;
+      if (i > -n) {
+        const prevRaw = this.nf(st.close, i - 1);
+        const prev = prevRaw !== null && Number.isFinite(prevRaw) ? prevRaw : c;
+        if (c > prev) delta += v;
+        else if (c < prev) delta -= v;
+      }
+    }
+    return finiteOut(delta);
+  }
+
+  /** `ta.volume_momentum` — oldest `period + 1` volumes (`advanced.py`). */
+  volumeMomentum(site: string, volume: Cell, period: number): Cell {
+    const n = this.asCount(period);
+    let st = this.volMomSites.get(site);
+    if (st === undefined) {
+      st = { volume: [] };
+      this.volMomSites.set(site, st);
+    }
+    this.pushChrono(st.volume, volume);
+    if (n === null || n <= 0 || st.volume.length < n + 1) return 0;
+    const clean: number[] = [];
+    for (let i = 0; i < n + 1; i++) {
+      const v = st.volume[i];
+      if (v !== null && Number.isFinite(v)) clean.push(v);
+    }
+    if (clean.length < 2) return 0;
+    const newVol = clean[0]!;
+    let sum = 0;
+    for (let i = 1; i < clean.length; i++) sum += clean[i]!;
+    const oldVol = sum / (clean.length - 1);
+    if (oldVol === 0) return 0;
+    let momentum = ((newVol - oldVol) / oldVol) * 100;
+    if (momentum > 100) momentum = 100;
+    if (momentum < -100) momentum = -100;
+    return finiteOut(momentum);
+  }
+
+  /**
+   * `ta.volume_profile_high` — numeric list only (`advanced.py`).
+   * A one-element pair is that price when its volume is the strict max.
+   */
+  volumeProfileHigh(prices: Cell[], volumes: Cell[]): Cell {
+    if (prices.length === 0 || volumes.length === 0 || prices.length !== volumes.length) return 0;
+    let maxVol = 0;
+    let maxPrice = 0;
+    for (let i = 0; i < prices.length; i++) {
+      const v = volumes[i];
+      if (v === null || !Number.isFinite(v) || !(v > maxVol)) continue;
+      maxVol = v;
+      const p = prices[i];
+      maxPrice = p !== null && Number.isFinite(p) ? p : 0;
+    }
+    return finiteOut(maxPrice);
+  }
+
+  /** `ta.volume_profile_low` — buckets over the oldest `period` pairs (`advanced.py`). */
+  volumeProfileLow(site: string, close: Cell, volume: Cell, period: number, levels: number): Cell {
+    const p = this.asCount(period);
+    const lv = this.asCount(levels);
+    let st = this.volProfileLowSites.get(site);
+    if (st === undefined) {
+      st = { close: [], volume: [] };
+      this.volProfileLowSites.set(site, st);
+    }
+    this.pushChrono(st.close, close);
+    this.pushChrono(st.volume, volume);
+    const oldest = st.close.length > 0 ? st.close[0]! : null;
+    const fallback: Cell = st.close.length === 0 ? 100 : oldest !== null && Number.isFinite(oldest) ? oldest : null;
+    if (p === null || lv === null || p <= 0 || lv <= 0 || st.close.length < p) return fallback;
+    const prices: number[] = [];
+    const vols: number[] = [];
+    for (let i = -p; i < 0; i++) {
+      const c = this.nf(st.close, i);
+      const v = this.nf(st.volume, i);
+      if (c !== null && Number.isFinite(c) && v !== null && Number.isFinite(v)) {
+        prices.push(c);
+        vols.push(v);
+      }
+    }
+    if (prices.length === 0) return fallback;
+    let minP = prices[0]!;
+    let maxP = prices[0]!;
+    for (const c of prices) {
+      if (c < minP) minP = c;
+      if (c > maxP) maxP = c;
+    }
+    if (minP === maxP) return minP;
+    const bucket = (maxP - minP) / lv;
+    const buckets = new Array<number>(lv).fill(0);
+    for (let k = 0; k < prices.length; k++) {
+      let idx = Math.trunc((prices[k]! - minP) / bucket);
+      if (idx > lv - 1) idx = lv - 1;
+      if (idx < 0) idx = 0;
+      buckets[idx] = (buckets[idx] ?? 0) + vols[k]!;
+    }
+    let minIdx = 0;
+    for (let i = 1; i < lv; i++) {
+      if ((buckets[i] ?? 0) < (buckets[minIdx] ?? 0)) minIdx = i;
+    }
+    return finiteOut(minP + minIdx * bucket);
+  }
+
+  /**
+   * `ta.volume_thrust` — bool as 1/0. `[-1]`/`[-2]` are the oldest two
+   * samples (`advanced.py`), not the current bar.
+   */
+  volumeThrust(site: string, close: Cell, volume: Cell, volSma: Cell, sensitivity: number): Cell {
+    const sens = Number.isFinite(sensitivity) ? sensitivity : 0.3;
+    let st = this.volThrustSites.get(site);
+    if (st === undefined) {
+      st = { close: [], volume: [], sma: [] };
+      this.volThrustSites.set(site, st);
+    }
+    this.pushChrono(st.close, close);
+    this.pushChrono(st.volume, volume);
+    this.pushChrono(st.sma, volSma);
+    if (st.close.length === 0 || st.volume.length === 0 || st.sma.length === 0) return 0;
+    const numOr = (v: Cell, fallback: number): number => (v !== null && Number.isFinite(v) ? v : fallback);
+    const cVal = numOr(this.nf(st.close, -1), 100);
+    const cPrev = st.close.length > 1 ? numOr(this.nf(st.close, -2), 100) : 100;
+    const vVal = numOr(this.nf(st.volume, -1), 1000);
+    const vsVal = numOr(this.nf(st.sma, -1), 1000);
+    const spike = vVal > vsVal * (1 + sens);
+    const move = cPrev !== 0 ? Math.abs(cVal - cPrev) / cPrev > 0.01 : false;
+    return spike && move ? 1 : 0;
+  }
 }
 
 /** Spearman rho. Rank is the stable sort position (`_rci_spearman`). */
