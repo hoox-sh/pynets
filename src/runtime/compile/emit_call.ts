@@ -136,6 +136,23 @@ const TA_METHODS = new Set([
   "fractal",
   "atr_stop",
   "zigzag",
+  "hammer",
+  "gap_detector",
+  "macd_signal",
+  "acceleration_factor",
+  "stoch_smooth",
+  "engulfing",
+  "inside_bar_pattern",
+  "double_top_bottom",
+  "voi",
+  "bid_ask_imbalance",
+  "rsi_oversold_overbought",
+  "rsi_divergence",
+  "cumulative_delta",
+  "volume_momentum",
+  "volume_profile_high",
+  "volume_profile_low",
+  "volume_thrust",
 ]);
 
 /**
@@ -533,6 +550,19 @@ function finiteOr(expr: string, fb: string): string {
   return `((__v) => (__v != null && Number.isFinite(__v) ? __v : ${fb}))(${expr})`;
 }
 
+/** Interpret `unwrap`: bool → 1/0, non-finite → null. */
+function cellOf(expr: string): string {
+  return `((__c) => (__c == null ? null : typeof __c === "boolean" ? (__c ? 1 : 0) : (typeof __c === "number" && Number.isFinite(__c) ? __c : null)))(${expr})`;
+}
+
+/**
+ * Interpret `wave10bList`: a Pine array becomes its cells; a scalar is a
+ * one-element list. Bar-mode series stay one element.
+ */
+function cellList(expr: string): string {
+  return `(() => { const __v = ${expr}; const __cell = (e) => (e == null ? null : typeof e === "boolean" ? (e ? 1 : 0) : (typeof e === "number" && Number.isFinite(e) ? e : null)); if (__v != null && typeof __v.size === "function" && typeof __v.get === "function") { const __n = __v.size(); const __o = []; for (let __i = 0; __i < __n; __i++) __o.push(__cell(__v.get(__i))); return __o; } return [__cell(__v)]; })()`;
+}
+
 const DRAW_KINDS = new Set(["label", "line", "box", "table", "polyline", "linefill"]);
 
 const ARRAY_SIGS: Record<string, string[][]> = {
@@ -712,6 +742,10 @@ function emitHostCall(ns: string, method: string, args: CallArgs, params: string
 function emitArray(name: string, args: CallArgs): string | null {
   const raw = nsMethod(name, "array_");
   if (raw == null) return null;
+  if (raw === "from") {
+    const parts = args.pos.length > 0 ? args.pos : Object.values(args.kw);
+    return `__h.array.from([${parts.join(", ")}])`;
+  }
   const method = ctorMethod(raw);
   const params = ARRAY_SIGS[method];
   if (params == null) return null;
@@ -1985,6 +2019,81 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       finiteOr(pick(args, 1, ["threshold", "percent", "deviation"], "null"), "5"),
     ]);
     return `(() => { const __r = ${call}; return [__r.high, __r.low, __r.dir]; })()`;
+  }
+  if (method === "hammer") {
+    return `__h.ta.hammer(${cellOf(pick(args, 0, ["open"], "null"))}, ${cellOf(pick(args, 1, ["high"], "null"))}, ${cellOf(pick(args, 2, ["low"], "null"))}, ${cellOf(pick(args, 3, ["close"], "null"))})`;
+  }
+  if (method === "gap_detector") {
+    return `__h.ta.gapDetector(${cellOf(pick(args, 0, ["high"], "null"))}, ${cellOf(pick(args, 1, ["low"], "null"))}, ${cellOf(pick(args, 2, ["prev_close", "prev"], "null"))})`;
+  }
+  if (method === "macd_signal") {
+    return `__h.ta.macdSignal(${cellOf(pick(args, 0, ["macd_line", "macd"], "null"))}, ${cellOf(pick(args, 1, ["signal_line", "signal"], "null"))})`;
+  }
+  if (method === "acceleration_factor") {
+    return taCall("accelerationFactor", site, [
+      cellOf(pick(args, 0, ["momentum_list", "momentum", "source", "series"], "null")),
+      cellOf(pick(args, 1, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "stoch_smooth") {
+    return `__h.ta.stochSmooth(${cellOf(pick(args, 0, ["high"], "null"))}, ${cellOf(pick(args, 1, ["low"], "null"))}, ${cellOf(pick(args, 2, ["close"], "null"))}, ${cellOf(pick(args, 3, ["period", "length"], "null"))}, ${cellOf(pick(args, 4, ["smooth_k", "k"], "null"))}, ${cellOf(pick(args, 5, ["smooth_d", "d"], "null"))})`;
+  }
+  if (method === "engulfing") {
+    // Bar-mode sentinel. Args are still evaluated (interpret reads all four).
+    return `(() => { ${cellOf(pick(args, 0, ["open"], "null"))}; ${cellOf(pick(args, 1, ["high"], "null"))}; ${cellOf(pick(args, 2, ["low"], "null"))}; ${cellOf(pick(args, 3, ["close"], "null"))}; return __h.ta.engulfing(); })()`;
+  }
+  if (method === "inside_bar_pattern") {
+    return `(() => { ${cellOf(pick(args, 0, ["high"], "null"))}; ${cellOf(pick(args, 1, ["low"], "null"))}; return __h.ta.insideBarPattern(); })()`;
+  }
+  if (method === "double_top_bottom") {
+    return `(() => { ${cellOf(pick(args, 0, ["high"], "null"))}; ${cellOf(pick(args, 1, ["low"], "null"))}; return __h.ta.doubleTopBottom(${cellOf(pick(args, 2, ["period", "length"], "null"))}); })()`;
+  }
+  if (method === "voi") {
+    return `__h.ta.voi(${cellOf(pick(args, 0, ["buy_volume", "buy"], "null"))}, ${cellOf(pick(args, 1, ["sell_volume", "sell"], "null"))})`;
+  }
+  if (method === "bid_ask_imbalance") {
+    return `__h.ta.bidAskImbalance(${cellOf(pick(args, 0, ["bid_size", "bid"], "null"))}, ${cellOf(pick(args, 1, ["ask_size", "ask"], "null"))}, ${cellOf(pick(args, 2, ["bid_price"], "null"))}, ${cellOf(pick(args, 3, ["ask_price"], "null"))})`;
+  }
+  if (method === "rsi_oversold_overbought") {
+    return `__h.ta.rsiOversoldOverbought(${cellOf(pick(args, 0, ["rsi_series", "rsi", "source"], "null"))}, ${cellOf(pick(args, 1, ["oversold_level", "oversold"], "null"))}, ${cellOf(pick(args, 2, ["overbought_level", "overbought"], "null"))})`;
+  }
+  if (method === "rsi_divergence") {
+    // Missing period is 0 (interpret `period ?? 0`), not the engine's null → na.
+    const period = `((__n) => (__n == null ? 0 : __n))(${cellOf(pick(args, 1, ["period", "length"], "null"))})`;
+    return `__h.ta.rsiDivergence(${cellList(pick(args, 0, ["rsi_series", "series", "source"], "null"))}, ${period})`;
+  }
+  if (method === "cumulative_delta") {
+    return taCall("cumulativeDelta", site, [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["volume"], "null")),
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "volume_momentum") {
+    return taCall("volumeMomentum", site, [
+      cellOf(pick(args, 0, ["volume", "source"], "null")),
+      cellOf(pick(args, 1, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "volume_profile_high") {
+    return `__h.ta.volumeProfileHigh(${cellList(pick(args, 0, ["close", "price", "source", "series"], "null"))}, ${cellList(pick(args, 1, ["volume"], "null"))})`;
+  }
+  if (method === "volume_profile_low") {
+    return taCall("volumeProfileLow", site, [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["volume"], "null")),
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+      cellOf(pick(args, 3, ["levels"], "null")),
+    ]);
+  }
+  if (method === "volume_thrust") {
+    const sens = cellOf(pick(args, 3, ["sensitivity"], "null"));
+    return taCall("volumeThrust", site, [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["volume"], "null")),
+      cellOf(pick(args, 2, ["volume_sma", "vol_sma", "sma"], "null")),
+      `((__n) => (__n == null ? 0.3 : __n))(${sens})`,
+    ]);
   }
   return "null";
 }

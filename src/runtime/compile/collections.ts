@@ -79,6 +79,10 @@ export const compileArray = {
   new(size?: unknown, initial?: unknown): PineArray {
     return new PineArray(n(size, 0), store(initial));
   },
+  /** Variadic `array.from` — not `array.new(size, initial)`. */
+  from(values?: unknown): PineArray {
+    return wrapCells(Array.isArray(values) ? values : []) ?? new PineArray();
+  },
   get(id: unknown, index?: unknown): unknown {
     return asArray(id)?.get(n(index, 0)) ?? null;
   },
