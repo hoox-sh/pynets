@@ -15,7 +15,7 @@ TypeScript / Bun library for **Pine Script**: parse, unparse, and interpret.
 Same public names as Python [`pynescript`](https://github.com/hoox-sh/pyne): `parse`, `unparse`, `Runtime.run`.
 Python `pynescript.runtime` is the **source of truth**. When semantics disagree, Python wins. This is not a TradingView platform certification.
 
-**Docs (hoox.sh):** [PyneTS](https://hoox.sh/pyne/docs/pynets) · [install](https://hoox.sh/pyne/docs/pynets/install) · [runtime](https://hoox.sh/pyne/docs/pynets/runtime) · [CLI](https://hoox.sh/pyne/docs/pynets/cli) · [JS compile](https://hoox.sh/pyne/docs/pynets/compile) · [parity](https://hoox.sh/pyne/docs/pynets/parity) · [ecosystem](https://hoox.sh/pyne/docs/reference/ecosystem)
+**Docs (hoox.sh):** [PyneTS](https://hoox.sh/pyne/docs/pynets) · [install](https://hoox.sh/pyne/docs/pynets/install) · [runtime](https://hoox.sh/pyne/docs/pynets/runtime) · [CLI](https://hoox.sh/pyne/docs/pynets/cli) · [JS compile](https://hoox.sh/pyne/docs/pynets/compile) · [parity](https://hoox.sh/pyne/docs/pynets/parity) · [missing features](https://hoox.sh/pyne/docs/pynets/missing-features) · [ecosystem](https://hoox.sh/pyne/docs/reference/ecosystem)
 
 ```ts
 import { parse, unparse, Runtime } from "@hoox-sh/pynets";
@@ -134,17 +134,17 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 
 **Language** — `var` / `varip` / `:=`, tuples, `if` / `for` / `while` / `switch`, UDFs, `type` / `enum`, `import`, `library()`.
 
-**`ta.*`** — SMA/EMA/RMA/WMA/VWMA/HMA/ALMA/DEMA/TEMA/KAMA/SWMA, RSI, ATR, Supertrend, Keltner, BB/BBW, MACD, Stoch, CCI, WPR, DMI/ADX, SAR, MFI, CMO, TSI, COG, stdev/dev/variance, highest/lowest, crossover/crossunder, volume (OBV, PVT, AD, WAD, NVI/PVI, III, WVAD), pivots, barssince, valuewhen, percentiles, and the v3/v4 bare names.
+**`ta.*`** — SMA/EMA/RMA/WMA/VWMA/HMA/ALMA/DEMA/TEMA/KAMA/SWMA, RSI, ATR, Supertrend, Keltner, BB/BBW, MACD, Stoch, CCI, WPR, DMI/ADX, SAR, MFI, CMO, TSI, COG, stdev/dev/variance, highest/lowest, crossover/crossunder, volume (OBV, PVT, AD, WAD, NVI/PVI, III, WVAD), pivots, barssince, valuewhen, percentiles, and the v3/v4 bare names. Also `uo`, `rci`, `dpo`, `kst`, `stochrsi`, `donchian`, `ichimoku`, `bb_pct`, `emv`, `fractal`, `atr_stop`, `zigzag`, and the Python bar-mode detectors (`hammer`, `gap_detector`, `macd_signal`, `acceleration_factor`, `stoch_smooth`, `engulfing`, `inside_bar_pattern`, `double_top_bottom`, `voi`, `bid_ask_imbalance`, `rsi_oversold_overbought`, `rsi_divergence`, `cumulative_delta`, `volume_momentum`, `volume_profile_high` / `low`, `volume_thrust`). Compile emits the same names. A chart-series plot that Python leaves `na` (`beta`, `r_squared`, `comovement`, `apo`, `skewness`, `kurtosis`, `parkinson`, `garman_klass`, and the same class) stays unwired.
 
 **`math.*` / `str.*` / `color.*` / `input.*` / `log.*`** — the Python set, including `nz`, `iff`, `fixnan`, `timestamp`, `weekofyear`, `time_tradingday`.
 
 **`array.*`** — new/from, get/set, push/pop/shift/unshift, slice/copy/concat, sort/search (binary + leftmost/rightmost), aggregates (avg/min/max/sum/median/mode/range/stdev/variance/covariance), percentiles, standardize, sort_indices.
 
-**`matrix.*`** — shape ops, predicates, `mult` / `inv` / **`pinv`** / `pow` / `kron` / `rank` / **eigenvalues / eigenvectors**.
+**`matrix.*`** — shape ops, predicates, `mult` / `inv` / **`pinv`** / `pow` / `kron` / `rank` / **eigenvalues / eigenvectors**, plus row/col `sum` / `avg` / `min` / `max` / `mode`, fill, reverse, copy, `stdev`, `variance`.
 
-**`strategy.*`** — entry/exit/order, pending limit/stop, commission/slippage/pyramiding, open/closed trade accessors, **`strategy.risk.*`**, **OCA cancel/reduce**.
+**`strategy.*`** — entry/exit/order, pending limit/stop, commission/slippage/pyramiding, open/closed trade accessors, **`strategy.risk.*`**, **OCA cancel/reduce**. `strategy.cash` is free cash and still selects cash sizing for `default_qty_type`.
 
-**Drawings / alerts** — `line` / `label` / `box` / `table` events; `alert` / `alertcondition`.
+**Drawings / alerts** — `line` / `label` / `box` / `table` / `polyline` / `linefill` getters and setters, `*.all`, `*.copy`, `chart.point.*`; `alert` / `alertcondition`. `timenow` is the dataset last-bar time on every bar.
 
 ---
 

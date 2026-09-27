@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+Interpret and compile for the next Python `Runtime.run` slice: bar-mode `ta.*` detectors, strategy field emit, drawing-book emit, and host helpers. `array.from` on the compile path collects its arguments.
+
+### Added
+- `ta.hammer`, `ta.gap_detector`, `ta.macd_signal`, `ta.acceleration_factor`, `ta.stoch_smooth`, `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`, `ta.voi`, `ta.bid_ask_imbalance`, `ta.rsi_oversold_overbought`, `ta.rsi_divergence`, `ta.cumulative_delta`, `ta.volume_momentum`, `ta.volume_profile_high`, `ta.volume_profile_low`, `ta.volume_thrust` (interpret and compile; v3/v4 bare aliases). Several are Python’s bar-mode sentinels (`ta.engulfing` is false every bar; `ta.stoch_smooth` is `na` unless both smooth lengths are 1).
+- Compile emit for `strategy.cash` free cash, trade-history getters, and `oca` / `direction` / `commission` constants. `default_qty_type=strategy.cash` still sizes entries as cash.
+- Compile emit for `timenow` / `timenow()`, `max_bars_back`, `alertcondition`, `plot.linestyle_*`, bare `random`, bare `security_lower_tf`.
+- Compile emit for drawing getters and remaining setters, `*.all`, `*.copy`, `chart.point.*`, and `line.fill`.
+
+### Changed
+- Compile `array.from` collects its arguments. It no longer lowers to `array.new(size, initial)`.
+
+### Notes
+- Still unwired because a chart-series plot is `na` on every bar: `ta.skewness`, `ta.kurtosis`, `ta.sma_weighted`, `ta.atr_normalized`, `ta.parkinson`, `ta.garman_klass`, `ta.volume_weighted_momentum`, and `ta.beta`, `ta.r_squared`, `ta.comovement`, `ta.apo`.
+- Footprint / `volume_row`, realtime `once` rollback, and the extension-analytics `ta.*` list are still open.
+
 ## [0.3.0] - 2026-09-23
 
 `once` / multi-value `switch`, and a Python `Runtime.run` interpret parity slice (drawings, strategy fields, host helpers, TA/matrix). Compile emit for the TA/matrix/host names from that slice.
