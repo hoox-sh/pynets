@@ -56,7 +56,28 @@ import {
   strUpper,
 } from "../str.ts";
 import { LogBook, formatLogParts } from "../log.ts";
-import { resolveCurrencyRate } from "../request.ts";
+import { PineArray } from "../array.ts";
+import {
+  createFootprint,
+  footprintBuyVolume,
+  footprintDelta,
+  footprintGetRowByPrice,
+  footprintPoc,
+  footprintRows,
+  footprintSellVolume,
+  footprintTotalVolume,
+  footprintVah,
+  footprintVal,
+  volumeRowBuyVolume,
+  volumeRowDelta,
+  volumeRowDownPrice,
+  volumeRowHasBuyImbalance,
+  volumeRowHasSellImbalance,
+  volumeRowSellVolume,
+  volumeRowTotalVolume,
+  volumeRowUpPrice,
+} from "../footprint.ts";
+import { resolveCurrencyRate, resolveSeed } from "../request.ts";
 import { TaEngine } from "../ta.ts";
 import { utcPartsFromMs, timestamp, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
 import { TickerId } from "../ticker.ts";
@@ -227,10 +248,39 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     udtSet,
     udtRegister,
     currencyRate: resolveCurrencyRate,
+    requestSeed: resolveSeed,
+    requestFootprint: createFootprint,
+    footprint: {
+      buy_volume: footprintBuyVolume,
+      sell_volume: footprintSellVolume,
+      delta: footprintDelta,
+      total_volume: footprintTotalVolume,
+      vah: footprintVah,
+      val: footprintVal,
+      poc: footprintPoc,
+      rows: compileFootprintRows,
+      get_row_by_price: footprintGetRowByPrice,
+      volume_row: {
+        up_price: volumeRowUpPrice,
+        down_price: volumeRowDownPrice,
+        buy_volume: volumeRowBuyVolume,
+        sell_volume: volumeRowSellVolume,
+        delta: volumeRowDelta,
+        total_volume: volumeRowTotalVolume,
+        has_buy_imbalance: volumeRowHasBuyImbalance,
+        has_sell_imbalance: volumeRowHasSellImbalance,
+      },
+    },
     runtimeError(msg: unknown): never {
       throw new Error(String(msg));
     },
   };
+}
+
+function compileFootprintRows(fp: unknown): PineArray {
+  const arr = new PineArray();
+  for (const row of footprintRows(fp)) arr.push(row);
+  return arr;
 }
 
 /** Pine `color.new(color, transp)` — first arg is a color, not r,g,b. */

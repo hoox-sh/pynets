@@ -46,6 +46,8 @@ const NS = new Set([
   "syminfo",
   "timenow",
   "chart",
+  "footprint",
+  "volume_row",
 ]);
 
 /** TaEngine methods we emit. Unknown `ta.*` → `null`. */
@@ -453,6 +455,8 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
 
   const req = emitRequest(ctx, name, args);
   if (req != null) return req;
+  const fp = emitFootprint(name, args);
+  if (fp != null) return fp;
 
   return "null";
 }
@@ -1018,7 +1022,6 @@ const SECURITY_FUNCS = new Set([
   "security_lower_tf",
   "request_security",
   "request_security_lower_tf",
-  "request_seed",
 ]);
 
 const SIMPLE_CHART_EXPR = new Set([
@@ -1064,8 +1067,58 @@ function emitRequest(ctx: EmitCtx, name: string, args: CallArgs): string | null 
   if (name === "request_currency_rate" || name === "currency_rate") {
     return `__h.currencyRate(${pick(args, 0, ["from", "from_currency"], "null")}, ${pick(args, 1, ["to", "to_currency"], "null")})`;
   }
+  if (name === "request_seed") {
+    return `__h.requestSeed(${pick(args, 0, ["seed"], "0")})`;
+  }
+  if (name === "request_footprint") {
+    return `__h.requestFootprint(${pick(args, 0, ["num_ticks"], "100")}, ${pick(args, 1, ["va_percentage"], "70")})`;
+  }
   if (name.startsWith("request_")) return "null";
   return null;
+}
+
+/** Python `request.footprint` mock + `footprint.*` / `volume_row.*` accessors. */
+function emitFootprint(name: string, args: CallArgs): string | null {
+  const fp = pick(args, 0, ["id", "footprint"], "null");
+  const vr = pick(args, 0, ["id", "volume_row"], "null");
+  switch (name) {
+    case "footprint_buy_volume":
+      return `__h.footprint.buy_volume(${fp})`;
+    case "footprint_sell_volume":
+      return `__h.footprint.sell_volume(${fp})`;
+    case "footprint_delta":
+      return `__h.footprint.delta(${fp})`;
+    case "footprint_total_volume":
+      return `__h.footprint.total_volume(${fp})`;
+    case "footprint_vah":
+      return `__h.footprint.vah(${fp})`;
+    case "footprint_val":
+      return `__h.footprint.val(${fp})`;
+    case "footprint_poc":
+      return `__h.footprint.poc(${fp})`;
+    case "footprint_rows":
+      return `__h.footprint.rows(${fp})`;
+    case "footprint_get_row_by_price":
+      return `__h.footprint.get_row_by_price(${fp}, ${pick(args, 1, ["price"], "null")})`;
+    case "volume_row_up_price":
+      return `__h.footprint.volume_row.up_price(${vr})`;
+    case "volume_row_down_price":
+      return `__h.footprint.volume_row.down_price(${vr})`;
+    case "volume_row_buy_volume":
+      return `__h.footprint.volume_row.buy_volume(${vr})`;
+    case "volume_row_sell_volume":
+      return `__h.footprint.volume_row.sell_volume(${vr})`;
+    case "volume_row_delta":
+      return `__h.footprint.volume_row.delta(${vr})`;
+    case "volume_row_total_volume":
+      return `__h.footprint.volume_row.total_volume(${vr})`;
+    case "volume_row_has_buy_imbalance":
+      return `__h.footprint.volume_row.has_buy_imbalance(${vr})`;
+    case "volume_row_has_sell_imbalance":
+      return `__h.footprint.volume_row.has_sell_imbalance(${vr})`;
+    default:
+      return null;
+  }
 }
 
 function isSimpleSecurityExpr(expr: string): boolean {
