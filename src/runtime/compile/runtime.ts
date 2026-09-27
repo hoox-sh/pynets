@@ -83,6 +83,7 @@ import {
   safeNeg,
   safeSub,
 } from "./helpers.ts";
+import { isStrategyCashAmount } from "../strategy.ts";
 import { createCompileStrategy } from "./strategy.ts";
 import { udtGet, udtNew, udtRegister, udtSet } from "./udt_runtime.ts";
 
@@ -105,6 +106,8 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     na: NA_FN,
     nz,
     naNum,
+    plotNum,
+    timenow,
     isNa: isNaCell,
     eq: pineEq,
     ne: pineNe,
@@ -262,6 +265,23 @@ function hasInput(inputs: CompileHelperInputs, key: unknown): boolean {
 function iff(cond: unknown, thenV: unknown, elseV: unknown): unknown {
   if (typeof cond === "boolean") return cond ? thenV : elseV;
   return mathIff(cond as number | null, thenV as number | null, elseV as number | null);
+}
+
+/** Plot cell: tagged `strategy.cash` unwraps to its number (interpret `unwrap`). */
+function plotNum(v: unknown): number | null {
+  if (isStrategyCashAmount(v)) return Number.isFinite(v.value) ? v.value : null;
+  return naNum(v);
+}
+
+/**
+ * Dataset last-bar time on every bar. Interpret `beginBar` stores that on
+ * `ctx.timenow` (host seed is overwritten). Not wall-clock, not current bar.
+ */
+function timenow(timeArr: unknown): number {
+  if (!Array.isArray(timeArr) || timeArr.length === 0) return 0;
+  const last = timeArr[timeArr.length - 1];
+  if (typeof last === "number" && Number.isFinite(last)) return last;
+  return (timeArr.length - 1) * 60_000;
 }
 
 function NA_FN(v?: unknown): number | null {

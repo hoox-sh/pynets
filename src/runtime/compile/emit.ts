@@ -418,6 +418,8 @@ function emitName(state: State, node: Name): string {
   if (CHART_LOCALS.has(id)) return id;
   if (state.ctx.userFuncs.has(id)) return id;
   if (state.ctx.enumTypes.has(id)) return JSON.stringify(id);
+  // Dataset last-bar time on every bar (interpret ctx.timenow / lastBarTime).
+  if (id === "timenow") return "__h.timenow(time_arr)";
   return safeIdent(id);
 }
 
@@ -540,7 +542,56 @@ const STRATEGY_QUERY_ATTRS = new Set([
   "margin_liquidation_price",
   "position_avg_price",
   "initial_capital",
+  "cash",
+  "position_entry_name",
+  "account_currency",
+  "default_entry_qty",
+  "max_contracts_held_all",
+  "max_contracts_held_long",
+  "max_contracts_held_short",
+  "wintrades",
+  "losstrades",
+  "eventrades",
+  "grossprofit",
+  "grossloss",
+  "avg_trade",
+  "avg_winning_trade",
+  "avg_losing_trade",
+  "netprofit_percent",
+  "openprofit_percent",
+  "grossprofit_percent",
+  "grossloss_percent",
+  "avg_trade_percent",
+  "avg_winning_trade_percent",
+  "avg_losing_trade_percent",
+  "max_drawdown",
+  "max_drawdown_percent",
+  "max_runup",
+  "max_runup_percent",
+  "percent_profitable",
+  "winrate",
+  "profitfactor",
+  "profit_factor",
 ]);
+
+/** Nested `strategy.*` constants (interpret `strategySeriesValue`). */
+const STRATEGY_NESTED_CONSTS: Record<string, string> = {
+  "strategy.direction.long": "long",
+  "strategy.direction.short": "short",
+  "strategy.direction.all": "all",
+  "strategy.oca.none": "none",
+  "strategy.oca.cancel": "cancel",
+  "strategy.oca.reduce": "reduce",
+  "strategy.commission.percent": "percent",
+  "strategy.commission.cash_per_order": "cash_per_order",
+  "strategy.commission.cash_per_contract": "cash_per_contract",
+};
+
+/** Nested `strategy.*` series that are not a single identifier. */
+const STRATEGY_NESTED_CALLS: Record<string, string> = {
+  "strategy.closedtrades.first_index": "closedtrades_first_index",
+  "strategy.opentrades.capital_held": "capital_held",
+};
 
 /** Namespaces used as call receivers or dotted constants — not UDT field access. */
 const ATTR_NAMESPACES = new Set([
@@ -652,6 +703,10 @@ const ATTR_CONSTANTS: Record<string, string | number | boolean> = {
   "hline.style_solid": "solid",
   "hline.style_dashed": "dashed",
   "hline.style_dotted": "dotted",
+  // Python plotting.py PlotStyle — longer than hline's "solid".
+  "plot.linestyle_solid": "linestyle_solid",
+  "plot.linestyle_dashed": "linestyle_dashed",
+  "plot.linestyle_dotted": "linestyle_dotted",
   "dayofweek.sunday": 1,
   "dayofweek.monday": 2,
   "dayofweek.tuesday": 3,
@@ -688,6 +743,7 @@ const ATTR_CONST_NS = new Set([
   "display",
   "position",
   "hline",
+  "plot",
   "dayofweek",
   "month",
 ]);
@@ -847,12 +903,28 @@ function emitAttribute(state: State, node: Attribute): string {
     if (attr === "avg_price_stock") return `"stock"`;
     if (attr === "avg_price_futures") return `"futures"`;
     if (attr === "avg_price_inverse") return `"inverse"`;
-    if (attr === "cash") return `"cash"`;
     if (attr === "fixed") return `"fixed"`;
     if (attr === "percent_of_equity") return `"percent_of_equity"`;
+    // `strategy.commission` the series is 0; `strategy.commission.percent` is nested.
+    if (attr === "commission") return "0";
     if (STRATEGY_QUERY_ATTRS.has(attr)) {
       state.ctx.usesStrategy = true;
       return `__h.strategy.${attr}()`;
+    }
+    return "null";
+  }
+  if (node.attr === "all" && node.value.kind === "Name") {
+    const kind = node.value.id;
+    if (
+      kind === "line" ||
+      kind === "label" ||
+      kind === "box" ||
+      kind === "table" ||
+      kind === "polyline" ||
+      kind === "linefill"
+    ) {
+      state.ctx.usesDrawings = true;
+      return `__h.draw.all(${JSON.stringify(kind)})`;
     }
   }
   if (node.value.kind === "Name") {
@@ -863,6 +935,14 @@ function emitAttribute(state: State, node: Attribute): string {
   }
   const qn = attrQualifiedName(node);
   if (qn != null) {
+    const nested = STRATEGY_NESTED_CONSTS[qn];
+    if (nested !== undefined) return JSON.stringify(nested);
+    const nestedCall = STRATEGY_NESTED_CALLS[qn];
+    if (nestedCall != null) {
+      state.ctx.usesStrategy = true;
+      return `__h.strategy.${nestedCall}()`;
+    }
+    if (qn.startsWith("strategy.") && qn.split(".").length > 2) return "null";
     const dot = qn.indexOf(".");
     const root = dot < 0 ? qn : qn.slice(0, dot);
     if (ATTR_CONST_NS.has(root)) {

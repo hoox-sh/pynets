@@ -367,7 +367,15 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     return `(() => { throw new Error(String(${msg})); })()`;
   }
 
-  if (name === "alertcondition") return "null";
+  if (name === "max_bars_back") return "null";
+  if (name === "timenow") return "__h.timenow(time_arr)";
+  if (name === "alertcondition") {
+    ctx.usesDrawings = true;
+    const cond = pick(args, 0, ["condition"], "null");
+    const title = hasArg(args, 1, ["title"]) ? pick(args, 1, ["title"], `"Alert"`) : `"Alert"`;
+    const message = hasArg(args, 2, ["message"]) ? pick(args, 2, ["message"], `"Alert"`) : `"Alert"`;
+    return `__h.draw.alertcondition(__bar_idx, ${cond}, ${title}, ${message})`;
+  }
   if (name === "str_tostring" || name === "tostring") {
     const x = pick(args, 0, ["value", "source", "x"], "null");
     return `String(${x} ?? "")`;
@@ -745,11 +753,24 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
   label: {
     set_text: [["id"], ["text"]],
     set_xy: [["id"], ["x"], ["y"]],
+    set_x: [["id"], ["x"]],
+    set_y: [["id"], ["y"]],
     set_color: [["id"], ["color"]],
     set_style: [["id"], ["style"]],
     set_size: [["id"], ["size"]],
     set_tooltip: [["id"], ["tooltip"]],
     set_textalign: [["id"], ["textalign"]],
+    set_textcolor: [["id"], ["color", "textcolor"]],
+    set_text_font_family: [["id"], ["font_family", "text_font_family"]],
+    set_text_halign: [["id"], ["halign", "text_halign"]],
+    set_text_valign: [["id"], ["valign", "text_valign"]],
+    set_text_size: [["id"], ["size", "text_size"]],
+    set_text_formatting: [["id"], ["formatting", "text_formatting"]],
+    set_border_color: [["id"], ["color"]],
+    set_border_width: [["id"], ["width"]],
+    set_border_style: [["id"], ["style"]],
+    set_xloc: [["id"], ["xloc"]],
+    set_yloc: [["id"], ["yloc"]],
     delete: [["id"]],
     get_text: [["id"]],
     get_x: [["id"]],
@@ -757,12 +778,17 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
   },
   line: {
     set_xy: [["id"], ["x1"], ["y1"], ["x2"], ["y2"]],
-    set_xy1: [["id"], ["x1"], ["y1"]],
-    set_xy2: [["id"], ["x2"], ["y2"]],
+    set_xy1: [["id"], ["x1", "x"], ["y1", "y"]],
+    set_xy2: [["id"], ["x2", "x"], ["y2", "y"]],
+    set_x1: [["id"], ["x1", "x"]],
+    set_y1: [["id"], ["y1", "y"]],
+    set_x2: [["id"], ["x2", "x"]],
+    set_y2: [["id"], ["y2", "y"]],
     set_color: [["id"], ["color"]],
     set_width: [["id"], ["width"]],
     set_style: [["id"], ["style"]],
     set_extend: [["id"], ["extend"]],
+    set_xloc: [["id"], ["xloc"]],
     delete: [["id"]],
     get_price: [["id"], ["x"]],
     get_x1: [["id"]],
@@ -773,44 +799,144 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
   box: {
     set_corners: [["id"], ["left", "x1"], ["top", "y1"], ["right", "x2"], ["bottom", "y2"]],
     set_lefttop: [["id"], ["left", "x1"], ["top", "y1"], ["right", "x2"], ["bottom", "y2"]],
+    set_left: [["id"], ["left"]],
+    set_right: [["id"], ["right"]],
+    set_top: [["id"], ["top"]],
+    set_bottom: [["id"], ["bottom"]],
     set_bgcolor: [["id"], ["bgcolor", "color"]],
     set_border_color: [["id"], ["color", "border_color"]],
+    set_border_width: [["id"], ["width"]],
+    set_border_style: [["id"], ["style"]],
     set_text: [["id"], ["text"]],
+    set_text_color: [["id"], ["color", "text_color"]],
+    set_text_font_family: [["id"], ["font_family"]],
+    set_text_halign: [["id"], ["halign"]],
+    set_text_valign: [["id"], ["valign"]],
+    set_text_size: [["id"], ["size"]],
+    set_text_formatting: [["id"], ["formatting"]],
+    set_text_wrap: [["id"], ["wrap"]],
     set_extend: [["id"], ["extend"]],
+    set_closed: [["id"], ["closed"]],
+    set_rightbottom: [["id"], ["right"], ["bottom"]],
+    get_left: [["id"]],
+    get_right: [["id"]],
+    get_top: [["id"]],
+    get_bottom: [["id"]],
     delete: [["id"]],
   },
   table: {
     cell: [["id"], ["column", "col"], ["row"], ["text"]],
-    cell_set_text: [["id"], ["column", "col"], ["row"], ["text"]],
+    // Interpret positional order is (id, row, column, text), not column-first.
+    cell_set_text: [["id"], ["row"], ["column", "col"], ["text"]],
+    cell_get_text: [["id"], ["row"], ["column", "col"]],
+    cell_set_text_color: [["id"], ["row"], ["column", "col"], ["color", "text"]],
+    cell_set_bgcolor: [["id"], ["row"], ["column", "col"], ["color"]],
+    cell_set_border_color: [["id"], ["row"], ["column", "col"], ["color"]],
+    cell_set_border_width: [["id"], ["row"], ["column", "col"], ["width"]],
+    cell_set_tooltip: [["id"], ["row"], ["column", "col"], ["tooltip", "text"]],
+    cell_set_width: [["id"], ["column", "col"], ["row"], ["width"]],
+    cell_set_height: [["id"], ["column", "col"], ["row"], ["height"]],
+    cell_set_text_halign: [["id"], ["column", "col"], ["row"], ["halign"]],
+    cell_set_text_valign: [["id"], ["column", "col"], ["row"], ["valign"]],
+    cell_set_text_size: [["id"], ["column", "col"], ["row"], ["size"]],
+    cell_set_text_font_family: [["id"], ["column", "col"], ["row"], ["font_family"]],
+    cell_set_text_formatting: [["id"], ["column", "col"], ["row"], ["formatting"]],
     set_position: [["id"], ["position"]],
+    set_bgcolor: [["id"], ["color", "bgcolor"]],
+    set_border_color: [["id"], ["color"]],
+    set_border_width: [["id"], ["width"]],
+    set_frame_color: [["id"], ["color"]],
+    set_frame_width: [["id"], ["width"]],
+    merge_cells: [["id"], ["start_row"], ["start_column", "start_col"], ["end_row"], ["end_column", "end_col"]],
     delete: [["id"]],
   },
   polyline: {
     delete: [["id"]],
+    get_points: [["id"]],
+    set_points: [["id"], ["points"]],
+    set_line_color: [["id"], ["color"]],
+    set_line_width: [["id"], ["width"]],
+    set_line_style: [["id"], ["style"]],
+    set_fill_color: [["id"], ["fill_color", "color"]],
+    set_curved: [["id"], ["curved"]],
+    set_force_overlay: [["id"], ["force_overlay"]],
+    set_closed: [["id"], ["closed"]],
+    set_xloc: [["id"], ["xloc"]],
   },
   linefill: {
     set_color: [["id"], ["color"]],
     delete: [["id"]],
+    get_line1: [["id"]],
+    get_line2: [["id"]],
   },
 };
+
+function emitChartPoint(name: string, args: CallArgs): string | null {
+  const meth = name.slice("chart_point_".length);
+  if (meth === "new" || meth === "from_time") {
+    return `__h.draw.point_new(${pick(args, 0, ["time"], "null")}, ${pick(args, 1, ["price"], "0")})`;
+  }
+  if (meth === "from_index") {
+    return `__h.draw.point_from_index(${pick(args, 0, ["index"], "null")}, ${pick(args, 1, ["price"], "0")})`;
+  }
+  if (meth === "now") {
+    return `__h.draw.point_now(__bar_idx, time, ${pick(args, 0, ["price"], "0")})`;
+  }
+  if (meth === "copy") {
+    return `__h.draw.point_copy(${pick(args, 0, ["point"], "null")})`;
+  }
+  return null;
+}
 
 function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: CallArgs): string | null {
   if (name === "alert" && methodSrc == null) {
     ctx.usesDrawings = true;
     return `__h.draw.alert(__bar_idx, ${pick(args, 0, ["message"], "null")})`;
   }
+  if (name.startsWith("chart_point_")) {
+    const point = emitChartPoint(name, args);
+    if (point != null) ctx.usesDrawings = true;
+    return point;
+  }
   const parsed = drawKindAndMethod(name, methodSrc);
   if (parsed == null) return null;
   const { kind, method } = parsed;
   let code: string | null = null;
-  if (method === "new") {
+  if (method === "all") {
+    code = `__h.draw.all(${JSON.stringify(kind)})`;
+  } else if (method === "copy" && (kind === "line" || kind === "label" || kind === "box" || kind === "polyline")) {
+    code = `__h.draw.copy(${pick(args, 0, ["id"], "null")})`;
+  } else if (method === "new") {
     if (kind === "label") {
-      code = `__h.draw.label_new(__bar_idx, ${pick(args, 2, ["text"], "null")})`;
+      code = `__h.draw.label_new(__bar_idx, ${pick(args, 2, ["text"], "null")}, ${pick(args, 0, ["x"], "0")}, ${pick(args, 1, ["y"], "0")})`;
+    } else if (kind === "line") {
+      code = `__h.draw.line_new(__bar_idx, ${pick(args, 0, ["x1"], "0")}, ${pick(args, 1, ["y1"], "0")}, ${pick(args, 2, ["x2"], "0")}, ${pick(args, 3, ["y2"], "0")})`;
+    } else if (kind === "box") {
+      code = `__h.draw.box_new(__bar_idx, ${pick(args, 0, ["left"], "0")}, ${pick(args, 1, ["top"], "0")}, ${pick(args, 2, ["right"], "0")}, ${pick(args, 3, ["bottom"], "0")})`;
+    } else if (kind === "polyline") {
+      code = `__h.draw.polyline_new(__bar_idx, ${pick(args, 0, ["points"], "null")})`;
     } else if (kind === "linefill") {
-      code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1"], "null")}, ${pick(args, 1, ["id2"], "null")})`;
+      const color = hasArg(args, 2, ["color"]) ? pick(args, 2, ["color"], "null") : "null";
+      code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1", "line1"], "null")}, ${pick(args, 1, ["id2", "line2"], "null")}, ${color})`;
     } else if (DRAW_KINDS.has(kind)) {
       code = `__h.draw.${kind}_new(__bar_idx)`;
     }
+  } else if (kind === "line" && method === "fill") {
+    const color = hasArg(args, 2, ["color"]) ? pick(args, 2, ["color"], "null") : "null";
+    code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1", "line1"], "null")}, ${pick(args, 1, ["id2", "line2"], "null")}, ${color})`;
+  } else if (
+    (kind === "line" && (method === "set_first_point" || method === "set_second_point")) ||
+    (kind === "label" && method === "set_point") ||
+    (kind === "box" && (method === "set_top_left_point" || method === "set_bottom_right_point"))
+  ) {
+    code = `__h.draw.${kind}_${method}(${pick(args, 0, ["id"], "null")}, ${pick(args, 1, ["point"], "null")})`;
+  } else if (kind === "box" && method === "set_xloc") {
+    code = `__h.draw.box_set_xloc(${pick(args, 0, ["id"], "null")}, ${pick(args, 1, ["left"], "null")}, ${pick(args, 2, ["right"], "null")}, ${pick(args, 3, ["xloc"], "null")})`;
+  } else if (kind === "table" && method === "clear") {
+    const id = pick(args, 0, ["id", "table_id"], "null");
+    code = hasArg(args, 1, ["start_row"])
+      ? `__h.draw.table_clear(${id}, ${pick(args, 1, ["start_row"], "null")}, ${pick(args, 2, ["start_column", "start_col"], "null")}, ${pick(args, 3, ["end_row"], "null")}, ${pick(args, 4, ["end_column", "end_col"], "null")})`
+      : `__h.draw.table_clear(${id})`;
   } else {
     const aliased = kind === "box" && method === "set_lefttop" ? "set_corners" : method;
     const params = DRAW_METHODS[kind]?.[method] ?? DRAW_METHODS[kind]?.[aliased];
@@ -855,6 +981,7 @@ function emitUdt(ctx: EmitCtx, name: string, methodSrc: expr | null, args: CallA
 
 const SECURITY_FUNCS = new Set([
   "security",
+  "security_lower_tf",
   "request_security",
   "request_security_lower_tf",
   "request_seed",
@@ -1024,6 +1151,7 @@ function emitStrategyDecl(ctx: EmitCtx, args: CallArgs): string {
   add(["default_qty_type"], "default_qty_type");
   add(["default_qty_value"], "default_qty_value");
   add(["initial_capital"], "initial_capital");
+  add(["currency"], "currency");
   return `__h.strategy.configure({${fields.join(", ")}})`;
 }
 
@@ -1095,8 +1223,50 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
     case "margin_liquidation_price":
     case "position_avg_price":
     case "initial_capital":
+    case "cash":
+    case "position_entry_name":
+    case "account_currency":
+    case "max_contracts_held_all":
+    case "max_contracts_held_long":
+    case "max_contracts_held_short":
+    case "wintrades":
+    case "losstrades":
+    case "eventrades":
+    case "grossprofit":
+    case "grossloss":
+    case "avg_trade":
+    case "avg_winning_trade":
+    case "avg_losing_trade":
+    case "netprofit_percent":
+    case "openprofit_percent":
+    case "grossprofit_percent":
+    case "grossloss_percent":
+    case "avg_trade_percent":
+    case "avg_winning_trade_percent":
+    case "avg_losing_trade_percent":
+    case "max_drawdown":
+    case "max_drawdown_percent":
+    case "max_runup":
+    case "max_runup_percent":
+    case "percent_profitable":
+    case "winrate":
+    case "profitfactor":
+    case "profit_factor":
+    case "capital_held":
+    case "closedtrades_first_index":
       ctx.usesStrategy = true;
       return `__h.strategy.${method}()`;
+    case "commission":
+      return "0";
+    case "default_entry_qty":
+      ctx.usesStrategy = true;
+      return hasArg(args, 0, ["percent_equity"])
+        ? `__h.strategy.default_entry_qty(${pick(args, 0, ["percent_equity"], "null")})`
+        : `__h.strategy.default_entry_qty()`;
+    case "convert_to_account":
+    case "convert_to_symbol":
+      ctx.usesStrategy = true;
+      return hasArg(args, 0, ["value"]) ? `__h.strategy.convert_to(${pick(args, 0, ["value"], "null")})` : "1";
     case "risk_allow_entry_in":
       ctx.usesStrategy = true;
       return `__h.strategy.risk_allow_entry_in(${pick(args, 0, ["value"], "null")})`;
@@ -1106,9 +1276,33 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
     case "risk_max_drawdown":
       ctx.usesStrategy = true;
       return `__h.strategy.risk_max_drawdown(${pick(args, 0, ["value"], "null")}, ${pick(args, 1, ["type"], "null")})`;
-    default:
+    default: {
+      if (method.startsWith("direction_")) {
+        const tail = method.slice("direction_".length);
+        if (tail === "long" || tail === "short" || tail === "all") return JSON.stringify(tail);
+      }
+      if (method.startsWith("oca_")) {
+        const tail = method.slice("oca_".length);
+        if (tail === "none" || tail === "cancel" || tail === "reduce") return JSON.stringify(tail);
+      }
+      if (method.startsWith("commission_")) {
+        const tail = method.slice("commission_".length);
+        if (tail === "percent" || tail === "cash_per_order" || tail === "cash_per_contract") {
+          return JSON.stringify(tail);
+        }
+      }
+      if (method.startsWith("closedtrades_") || method.startsWith("opentrades_")) {
+        ctx.usesStrategy = true;
+        if (method === "opentrades_capital_held") return "__h.strategy.capital_held()";
+        if (method === "closedtrades_first_index") return "__h.strategy.closedtrades_first_index()";
+        const idx = hasArg(args, 0, ["trade_num", "trade_index", "index"])
+          ? pick(args, 0, ["trade_num", "trade_index", "index"], "0")
+          : "0";
+        return `__h.strategy.${method}(${idx})`;
+      }
       if (isStrategyAction(name, method)) ctx.usesStrategy = true;
       return "null";
+    }
   }
 }
 
@@ -1167,7 +1361,7 @@ function emitPlot(ctx: EmitCtx, fname: string, args: CallArgs): string {
     : pick(args, 0, ["series", "source", "price"], "null");
   const i = ctx.plots.length;
   ctx.plots.push({ title });
-  return `plot_${i}[__bar_idx] = __h.naNum(${series})`;
+  return `plot_${i}[__bar_idx] = __h.plotNum(${series})`;
 }
 
 function emitColor(name: string, args: CallArgs): string | null {

@@ -6,15 +6,19 @@
  * Injected as `__h.strategy`. Wraps StrategyBook (fills + ledger + risk).
  */
 import {
+  isStrategyCashAmount,
+  strategyCashAmount,
   StrategyBook,
   type BarOhlc,
   type BrokerSettings,
   type PlaceEntryOpts,
   type PlaceExitOpts,
+  type StrategyCashAmount,
   type StrategyDirection,
   type StrategyEvent,
   type StrategySummary,
 } from "../strategy.ts";
+import { naNum } from "./helpers.ts";
 
 function asDir(v: unknown): StrategyDirection | number | string {
   if (v == null) return "long";
@@ -92,9 +96,13 @@ export class CompileStrategy {
     if (ml != null) broker.margin_long = ml;
     const ms = optNum(rec.margin_short);
     if (ms != null) broker.margin_short = ms;
-    if (typeof rec.default_qty_type === "string") broker.default_qty_type = rec.default_qty_type;
+    // String sentinel or tagged free-cash (`strategy.cash`) both select cash sizing.
+    if (typeof rec.default_qty_type === "string" || isStrategyCashAmount(rec.default_qty_type)) {
+      broker.default_qty_type = rec.default_qty_type;
+    }
     const dqv = optNum(rec.default_qty_value);
     if (dqv != null) broker.default_qty_value = dqv;
+    if (typeof rec.currency === "string" && rec.currency !== "") broker.currency = rec.currency;
     if (Object.keys(broker).length) this.book.configure(broker);
     const capital = optNum(rec.initial_capital);
     if (capital != null) this.book.initialCapital = capital;
@@ -210,6 +218,250 @@ export class CompileStrategy {
 
   initial_capital(): number {
     return this.book.initialCapital;
+  }
+
+  /** Free cash tagged so `default_qty_type=strategy.cash` still selects cash sizing. */
+  cash(): StrategyCashAmount {
+    return strategyCashAmount(this.book.cash(this.mark));
+  }
+
+  position_entry_name(): string {
+    return this.book.position_entry_name;
+  }
+
+  account_currency(): string {
+    return this.book.account_currency;
+  }
+
+  /** Zero-arg form is `percent_equity=100` (interpret `strategy.default_entry_qty`). */
+  default_entry_qty(percent?: unknown): number | null {
+    const pct = arguments.length === 0 || percent === undefined ? 100 : naNum(percent);
+    if (pct == null) return null;
+    return (this.book.initialCapital * (pct / 100)) / 100;
+  }
+
+  /** Identity FX stub. Missing arg → 1; na / non-finite → na. */
+  convert_to(value?: unknown): number | null {
+    if (arguments.length === 0 || value === undefined) return 1;
+    return naNum(value);
+  }
+
+  max_contracts_held_all(): number {
+    return this.book.maxContractsHeldAll();
+  }
+
+  max_contracts_held_long(): number {
+    return this.book.maxContractsHeldLong();
+  }
+
+  max_contracts_held_short(): number {
+    return this.book.maxContractsHeldShort();
+  }
+
+  capital_held(): number {
+    return this.book.capitalHeld();
+  }
+
+  closedtrades_first_index(): number {
+    return this.book.closedtrades_first_index;
+  }
+
+  wintrades(): number {
+    return this.book.wintrades;
+  }
+
+  losstrades(): number {
+    return this.book.losstrades;
+  }
+
+  eventrades(): number {
+    return this.book.eventrades;
+  }
+
+  grossprofit(): number {
+    return this.book.grossprofit;
+  }
+
+  grossloss(): number {
+    return this.book.grossloss;
+  }
+
+  avg_trade(): number {
+    return this.book.avgTrade();
+  }
+
+  avg_winning_trade(): number {
+    return this.book.avgWinningTrade();
+  }
+
+  avg_losing_trade(): number {
+    return this.book.avgLosingTrade();
+  }
+
+  netprofit_percent(): number {
+    return this.book.netprofitPercent(this.mark);
+  }
+
+  openprofit_percent(): number {
+    return this.book.openprofitPercent(this.mark);
+  }
+
+  grossprofit_percent(): number {
+    return this.book.grossprofitPercent();
+  }
+
+  grossloss_percent(): number {
+    return this.book.grosslossPercent();
+  }
+
+  avg_trade_percent(): number {
+    return this.book.avgTradePercent();
+  }
+
+  avg_winning_trade_percent(): number {
+    return this.book.avgWinningTradePercent();
+  }
+
+  avg_losing_trade_percent(): number {
+    return this.book.avgLosingTradePercent();
+  }
+
+  max_drawdown(): number {
+    return this.book.maxDrawdown();
+  }
+
+  max_drawdown_percent(): number {
+    return this.book.maxDrawdownPercent();
+  }
+
+  max_runup(): number {
+    return this.book.maxRunup();
+  }
+
+  max_runup_percent(): number {
+    return this.book.maxRunupPercent();
+  }
+
+  percent_profitable(): number {
+    return this.book.percentProfitable();
+  }
+
+  winrate(): number {
+    return this.book.percentProfitable();
+  }
+
+  profitfactor(): number {
+    return this.book.profitFactor();
+  }
+
+  profit_factor(): number {
+    return this.book.profitFactor();
+  }
+
+  closedtrades_entry_bar_index(i?: unknown): number {
+    return this.book.closedEntryBar(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_entry_price(i?: unknown): number {
+    return this.book.closedEntryPrice(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_exit_bar_index(i?: unknown): number {
+    return this.book.closedExitBar(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_exit_price(i?: unknown): number {
+    return this.book.closedExitPrice(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_profit(i?: unknown): number {
+    return this.book.closedProfit(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_size(i?: unknown): number {
+    return this.book.closedSize(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_entry_id(i?: unknown): string {
+    return this.book.closedId(this.idx(i)) ?? "";
+  }
+
+  closedtrades_exit_id(i?: unknown): string {
+    return this.book.closedId(this.idx(i)) ?? "";
+  }
+
+  closedtrades_commission(i?: unknown): number {
+    return this.book.closedCommission(this.idx(i)) ?? 0;
+  }
+
+  closedtrades_entry_time(i?: unknown): number {
+    return this.book.closedEntryTime(this.idx(i));
+  }
+
+  closedtrades_exit_time(i?: unknown): number {
+    return this.book.closedExitTime(this.idx(i));
+  }
+
+  closedtrades_entry_comment(i?: unknown): string {
+    return this.book.closedEntryComment(this.idx(i));
+  }
+
+  closedtrades_exit_comment(i?: unknown): string {
+    return this.book.closedExitComment(this.idx(i));
+  }
+
+  closedtrades_max_drawdown(i?: unknown): number {
+    return this.book.closedMaxDrawdown(this.idx(i));
+  }
+
+  closedtrades_max_runup(i?: unknown): number {
+    return this.book.closedMaxRunup(this.idx(i));
+  }
+
+  opentrades_entry_bar_index(i?: unknown): number {
+    return this.book.openEntryBar(this.idx(i)) ?? 0;
+  }
+
+  opentrades_entry_price(i?: unknown): number {
+    return this.book.openEntryPrice(this.idx(i)) ?? 0;
+  }
+
+  opentrades_size(i?: unknown): number {
+    return this.book.openSize(this.idx(i)) ?? 0;
+  }
+
+  opentrades_entry_id(i?: unknown): string {
+    return this.book.openId(this.idx(i)) ?? "";
+  }
+
+  opentrades_profit(i?: unknown): number {
+    return this.book.openProfit(this.idx(i), this.mark) ?? 0;
+  }
+
+  opentrades_entry_time(i?: unknown): number {
+    return this.book.openEntryTime(this.idx(i));
+  }
+
+  opentrades_entry_comment(i?: unknown): string {
+    return this.book.openEntryComment(this.idx(i));
+  }
+
+  opentrades_commission(i?: unknown): number {
+    return this.book.openCommission(this.idx(i));
+  }
+
+  opentrades_max_drawdown(i?: unknown): number {
+    return this.book.openMaxDrawdown(this.idx(i));
+  }
+
+  opentrades_max_runup(i?: unknown): number {
+    return this.book.openMaxRunup(this.idx(i));
+  }
+
+  private idx(i: unknown): number {
+    if (typeof i === "boolean") return i ? 1 : 0;
+    if (typeof i === "number" && Number.isFinite(i)) return Math.trunc(i);
+    return 0;
   }
 
   risk_allow_entry_in(value?: unknown): void {
