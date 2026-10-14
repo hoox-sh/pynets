@@ -4,6 +4,7 @@
  *
  * Pine `str.*` helpers. `null` is na.
  */
+import { timestampToMs } from "./time.ts";
 
 function asStr(x: unknown): string | null {
   if (x == null) return null;
@@ -303,8 +304,8 @@ function coerceFormatTimeMs(time: unknown): number | null {
   if (raw == null || typeof raw === "boolean" || typeof raw === "string") return null;
   if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
   let ts = Math.trunc(raw);
-  // Python: 0 < timestamp < 10_000_000_000 → Unix seconds, coerce to ms.
-  if (ts > 0 && ts < 10_000_000_000) ts *= 1000;
+  // Python `utility._timestamp_to_ms`: Unix seconds (< 1e11) become ms.
+  ts = timestampToMs(ts) ?? ts;
   return ts;
 }
 

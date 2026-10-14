@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Token } from "antlr4";
 import PinescriptLexer from "../src/generated/PinescriptLexer.ts";
-import { tokenize } from "../src/ast/helper.ts";
+import { parse, tokenize } from "../src/ast/helper.ts";
 
 function names(source: string): string[] {
   return tokenize(source)
@@ -30,5 +30,42 @@ describe("lexer indent / dedent", () => {
     expect(joined).not.toContain("INDENT");
     expect(joined).toContain("PLUS");
     expect(joined.filter((t) => t === "NEWLINE")).toHaveLength(1);
+  });
+});
+
+describe("lexer square-bracket wrap parity (Sept 2026 release notes)", () => {
+  test("wrapped [...] allows any indent without INDENT/DEDENT", () => {
+    for (const n of [1, 2, 3, 4, 8]) {
+      const pad = " ".repeat(n);
+      const toks = names(`x = close[\n${pad}1]\nplot(x)\n`);
+      expect(toks).not.toContain("INDENT");
+      expect(toks).not.toContain("DEDENT");
+      expect(() =>
+        parse(`//@version=5\nindicator("t")\nx = close[\n${pad}1]\nplot(x)\n`),
+      ).not.toThrow();
+    }
+  });
+
+  test("wrapped history-ref expression and tuple parse", () => {
+    for (const n of [1, 2, 3]) {
+      const pad = " ".repeat(n);
+      expect(() =>
+        parse(`//@version=5\nindicator("t")\nx = close[1 +\n${pad}2]\nplot(x)\n`),
+      ).not.toThrow();
+      expect(() =>
+        parse(`//@version=5\nindicator("t")\n[a, b] = [close,\n${pad}open]\nplot(a)\n`),
+      ).not.toThrow();
+    }
+  });
+
+  test("newline directly before the closing bracket parses", () => {
+    expect(() =>
+      parse('//@version=5\nindicator("t")\nx = close[1\n]\nplot(x)\n'),
+    ).not.toThrow();
+  });
+
+  test("unbalanced bracket does not poison later parses", () => {
+    expect(() => parse('//@version=5\nindicator("t")\nplot(close[1)\n')).toThrow();
+    expect(() => parse('//@version=5\nindicator("t")\nplot(close)\n')).not.toThrow();
   });
 });

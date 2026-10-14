@@ -103,8 +103,32 @@ export class CompileDraw {
     return this.book.boxNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
   }
 
-  table_new(bar: unknown): number {
-    return this.book.tableNew(n(bar, 0));
+  table_new(
+    bar: unknown,
+    position?: unknown,
+    columns?: unknown,
+    rows?: unknown,
+    bgcolor?: unknown,
+    frameColor?: unknown,
+    frameWidth?: unknown,
+    borderColor?: unknown,
+    borderWidth?: unknown,
+    forceOverlay?: unknown,
+  ): number {
+    // Pine positional order: (position, columns, rows, bgcolor, frame_color,
+    // frame_width, border_color, border_width, force_overlay) — Python
+    // `compiler.py` table emit SoT (columns then rows).
+    const extra: Record<string, unknown> = {};
+    if (position != null) extra.position = position;
+    putNum(extra, "columns", columns);
+    putNum(extra, "rows", rows);
+    if (bgcolor != null) extra.bgcolor = bgcolor;
+    if (frameColor != null) extra.frame_color = frameColor;
+    putNum(extra, "frame_width", frameWidth);
+    if (borderColor != null) extra.border_color = borderColor;
+    putNum(extra, "border_width", borderWidth);
+    if (forceOverlay != null) extra.force_overlay = forceOverlay;
+    return this.book.tableNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
   }
 
   polyline_new(bar: unknown, points?: unknown): number {

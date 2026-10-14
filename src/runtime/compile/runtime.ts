@@ -79,7 +79,7 @@ import {
 } from "../footprint.ts";
 import { resolveCurrencyRate, resolveSeed } from "../request.ts";
 import { TaEngine } from "../ta.ts";
-import { utcPartsFromMs, timestamp, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
+import { utcPartsFromMs, timestamp, timestampToMs, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
 import { TickerId } from "../ticker.ts";
 import { timeframeInSeconds, timeframePeriodChanged } from "../timeframe.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
@@ -203,8 +203,8 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     second: calendarSecond,
     dayofweek: calendarDayofweek,
     timestamp,
-    weekOfYear,
-    timeTradingDay,
+    weekOfYear: calendarWeekOfYear,
+    timeTradingDay: calendarTimeTradingDay,
     timeframeInSeconds: timeframeInSecondsOrDaily,
     timeframeChange,
     timeClose,
@@ -339,10 +339,25 @@ function NA_FN(v?: unknown): number | null {
   return isNaCell(v) ? 1 : 0;
 }
 
-/** Unix-ms → UTC calendar part. na / non-finite time → null. */
+/** Unix-ms → UTC calendar part. na / non-finite time → null. Unix-second stamps become ms (Python `utility._timestamp_to_ms`). */
 function utcPart(t: unknown, key: keyof UtcParts): number | null {
   if (typeof t !== "number" || !Number.isFinite(t)) return null;
-  return utcPartsFromMs(t)[key];
+  const ms = timestampToMs(t);
+  return ms == null ? null : utcPartsFromMs(ms)[key];
+}
+
+/** `weekofyear(t)` with unix-seconds coercion (Python `_resolve_timestamp_arg`). */
+function calendarWeekOfYear(t: unknown): number | null {
+  if (typeof t !== "number" || !Number.isFinite(t)) return null;
+  const ms = timestampToMs(t);
+  return ms == null ? null : weekOfYear(ms);
+}
+
+/** `time_tradingday(t)` with unix-seconds coercion (Python `_resolve_timestamp_arg`). */
+function calendarTimeTradingDay(t: unknown): number | null {
+  if (typeof t !== "number" || !Number.isFinite(t)) return null;
+  const ms = timestampToMs(t);
+  return ms == null ? null : timeTradingDay(ms);
 }
 
 function calendarYear(t: unknown): number | null {

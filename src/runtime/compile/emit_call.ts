@@ -953,6 +953,10 @@ function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: Call
       code = `__h.draw.box_new(__bar_idx, ${pick(args, 0, ["left"], "0")}, ${pick(args, 1, ["top"], "0")}, ${pick(args, 2, ["right"], "0")}, ${pick(args, 3, ["bottom"], "0")})`;
     } else if (kind === "polyline") {
       code = `__h.draw.polyline_new(__bar_idx, ${pick(args, 0, ["points"], "null")})`;
+    } else if (kind === "table") {
+      // Pine positional order: (position, columns, rows, bgcolor, frame_color,
+      // frame_width, border_color, border_width, force_overlay).
+      code = `__h.draw.table_new(__bar_idx, ${pick(args, 0, ["position"], "null")}, ${pick(args, 1, ["columns"], "null")}, ${pick(args, 2, ["rows"], "null")}, ${pick(args, 3, ["bgcolor"], "null")}, ${pick(args, 4, ["frame_color"], "null")}, ${pick(args, 5, ["frame_width"], "null")}, ${pick(args, 6, ["border_color"], "null")}, ${pick(args, 7, ["border_width"], "null")}, ${pick(args, 8, ["force_overlay"], "null")})`;
     } else if (kind === "linefill") {
       const color = hasArg(args, 2, ["color"]) ? pick(args, 2, ["color"], "null") : "null";
       code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1", "line1"], "null")}, ${pick(args, 1, ["id2", "line2"], "null")}, ${color})`;

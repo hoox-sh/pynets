@@ -114,7 +114,7 @@ import {
   mathToDegrees,
   mathToRadians,
 } from "./math.ts";
-import { utcPartsFromMs, timestamp, timeTradingDay, weekOfYear } from "./time.ts";
+import { utcPartsFromMs, timestamp, timestampToMs, timeTradingDay, weekOfYear } from "./time.ts";
 import {
   LibraryModule,
   LibraryRegistry,
@@ -5149,11 +5149,24 @@ function evalDrawingCall(fname: string | null, node: Call, env: Env): Value | un
     return NA;
   }
   if (fname === "table.new") {
+    // Pine positional order is (position, columns, rows, bgcolor,
+    // frame_color, frame_width, border_color, border_width, force_overlay).
+    // Python `_handle_table_new` SoT (columns then rows, not rows then columns).
     const extra: Record<string, unknown> = {};
     const position = drawRaw(node, env, 0, ["position"]);
     if (position !== undefined) extra.position = position;
-    putFinite(extra, "rows", drawNum(node, env, 1, ["rows"]));
-    putFinite(extra, "columns", drawNum(node, env, 2, ["columns"]));
+    putFinite(extra, "columns", drawNum(node, env, 1, ["columns"]));
+    putFinite(extra, "rows", drawNum(node, env, 2, ["rows"]));
+    const bgcolor = drawRaw(node, env, 3, ["bgcolor"]);
+    if (bgcolor !== undefined) extra.bgcolor = bgcolor;
+    const frameColor = drawRaw(node, env, 4, ["frame_color"]);
+    if (frameColor !== undefined) extra.frame_color = frameColor;
+    putFinite(extra, "frame_width", drawNum(node, env, 5, ["frame_width"]));
+    const borderColor = drawRaw(node, env, 6, ["border_color"]);
+    if (borderColor !== undefined) extra.border_color = borderColor;
+    putFinite(extra, "border_width", drawNum(node, env, 7, ["border_width"]));
+    const forceOverlay = drawRaw(node, env, 8, ["force_overlay"]);
+    if (forceOverlay !== undefined) extra.force_overlay = forceOverlay;
     return book.tableNew(env.barIndex, extra);
   }
   if (fname === "polyline.new") {
@@ -6194,9 +6207,10 @@ function syminfoPrefix(node: Call, env: Env): string {
 }
 
 function calendarMs(node: Call, env: Env): number | null {
+  // Python `_timestamp_to_ms`: chart hosts store opens in seconds.
   const arg = callArg(node.args, 0, ["time", "timestamp"]);
-  if (arg == null) return num(env.ctx.time);
-  return unwrap(evalExpr(arg, env));
+  if (arg == null) return timestampToMs(num(env.ctx.time));
+  return timestampToMs(unwrap(evalExpr(arg, env)));
 }
 
 function evalLibraryMemberCall(mod: LibraryModule, attr: string, node: Call, env: Env): Value {

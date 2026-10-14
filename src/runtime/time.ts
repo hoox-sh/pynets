@@ -19,6 +19,18 @@ export interface UtcParts {
 const MIN_T = -62_167_219_200; // ~year 0001
 const MAX_T = 253_402_300_799; // ~year 9999
 
+/**
+ * Unix seconds (< 1e11) become milliseconds; millisecond stamps pass through.
+ * Python `utility._timestamp_to_ms` SoT. Chart hosts often store bar opens
+ * in seconds — `hour(time)` divides by 1000, so a seconds stamp collapses
+ * a multi-day chart into one clock hour. `null`/`na` stays `null`.
+ */
+export function timestampToMs(ts: number | null | undefined): number | null {
+  if (ts == null || !Number.isFinite(ts)) return null;
+  if (Math.abs(ts) < 1.0e11) return ts * 1000.0;
+  return ts;
+}
+
 /** Unix-ms → UTC parts. Matches Python `utc_parts_from_ms`. */
 export function utcPartsFromMs(ms: number): UtcParts {
   let t = Number.isFinite(ms) ? Math.trunc(ms / 1000) : 0;

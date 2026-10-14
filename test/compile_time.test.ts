@@ -108,4 +108,28 @@ describe("compile vs interpret time", () => {
     expect(compiled.error).toBeUndefined();
     expect(compiled.mode).toBe("compile");
   });
+
+  test("calendar calls treat unix-second bar times as milliseconds", () => {
+    // Python `utility._timestamp_to_ms` SoT via interpret; compile must not
+    // diverge between modes (host.py: "packing-only drift is a host bug").
+    const secBars = [0, 1, 2, 25].map((h) => ({
+      time: 1_704_067_200 + h * 3_600, // 2024-01-01 00:00 UTC in seconds
+      close: 1,
+    }));
+    const src = `//@version=5
+indicator("t")
+plot(hour(time), "h")
+plot(hour(), "hc")
+plot(weekofyear(time), "w")`;
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, secBars);
+    const interpreted = new Runtime("TEST").run(src, secBars, { mode: "interpret" });
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.plots).toEqual(interpreted.plots);
+    for (const key of Object.keys(interpreted.series)) {
+      expect(compiled.series[key]).toEqual(interpreted.series[key]);
+    }
+    expect(compiled.series.h).toEqual([0, 1, 2, 1]);
+    expect(compiled.series.w).toEqual([1, 1, 1, 1]);
+  });
 });

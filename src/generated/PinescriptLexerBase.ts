@@ -73,6 +73,10 @@ export default class PinescriptLexerBase extends Lexer {
   private _lastPendingTokenType = 0;
   private _lastPendingTokenTypeFromDefaultChannel = 0;
   private _numOpens = 0;
+  // Open square brackets (history-refs / tuples). Tracked separately from
+  // parens so wrapped `[...]` allows any indentation, like `(...)`.
+  // Python `PinescriptLexerBase._numSqBrackets` SoT (Sept 2026 release notes).
+  private _numSqBrackets = 0;
   private _indentLengthStack: number[] = [];
   private _inputStarted = false;
 
@@ -129,6 +133,7 @@ export default class PinescriptLexerBase extends Lexer {
     this._lastPendingTokenType = 0;
     this._lastPendingTokenTypeFromDefaultChannel = 0;
     this._numOpens = 0;
+    this._numSqBrackets = 0;
     this._indentLengthStack = [];
     this._inputStarted = false;
   }
@@ -147,11 +152,17 @@ export default class PinescriptLexerBase extends Lexer {
     const tok = this._currentToken!;
     const tokType = tok.type;
     const C = this.C;
-    if (tokType === C.LPAR || tokType === C.LSQB) {
+    if (tokType === C.LPAR) {
       this._numOpens += 1;
       this._addPendingToken(tok);
-    } else if (tokType === C.RPAR || tokType === C.RSQB) {
-      this._numOpens -= 1;
+    } else if (tokType === C.LSQB) {
+      this._numSqBrackets += 1;
+      this._addPendingToken(tok);
+    } else if (tokType === C.RPAR) {
+      this._numOpens = Math.max(0, this._numOpens - 1);
+      this._addPendingToken(tok);
+    } else if (tokType === C.RSQB) {
+      this._numSqBrackets = Math.max(0, this._numSqBrackets - 1);
       this._addPendingToken(tok);
     } else if (tokType === C.NEWLINE) {
       this._handleNEWLINEToken();
@@ -264,7 +275,14 @@ export default class PinescriptLexerBase extends Lexer {
   }
 
   private _handleNEWLINEToken(): void {
-    if (this._numOpens > 0 || this._operators.has(this._lastPendingTokenTypeFromDefaultChannel)) {
+    // Newlines inside (...) or [...] are hidden (Python parity): wrapped
+    // history-refs / tuples may use any indentation without emitting
+    // INDENT/DEDENT mid-expression.
+    if (
+      this._numOpens > 0 ||
+      this._numSqBrackets > 0 ||
+      this._operators.has(this._lastPendingTokenTypeFromDefaultChannel)
+    ) {
       this._hideAndAddPendingToken(this._currentToken!);
       return;
     }

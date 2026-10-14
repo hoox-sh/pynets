@@ -305,4 +305,21 @@ plot(ft.time, "ftt")
 plot(ft.price, "ftp")`,
     );
   });
+
+  test("table.new columns then rows plus style fields match interpret", () => {
+    const { interpret, compile } = expectSame(
+      `indicator("t")
+var table tb = table.new(position.top_right, 3, 2, color.red)
+plot(1, "one")`,
+    );
+    for (const out of [interpret, compile]) {
+      const table = (out.drawings ?? []).find((d) => d.kind === "table");
+      expect(table?.extra?.columns).toBe(3);
+      expect(table?.extra?.rows).toBe(2);
+      expect(table?.extra?.position).toBe("top_right");
+    }
+    const pick = (out: RuntimeResult) =>
+      (out.drawings ?? []).find((d) => d.kind === "table")?.extra;
+    expect(pick(compile)).toEqual(pick(interpret));
+  });
 });

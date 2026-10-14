@@ -186,6 +186,29 @@ plot(array.get(b, 1), "box")`,
     );
   });
 
+  test("hour() treats unix-second bar times as milliseconds", () => {
+    // Chart hosts store opens in seconds. Python `_timestamp_to_ms` SoT:
+    // `hour(time)` / `hour()` convert, but the bare `hour` series stays raw.
+    const T0S = 1_704_067_200; // 2024-01-01 00:00 UTC in seconds
+    const bars = [0, 1, 2, 25].map((h) => ({
+      time: T0S + h * 3_600,
+      close: 1,
+    }));
+    const py = matchPython(
+      `//@version=5
+indicator("t")
+plot(hour(time), "h")
+plot(hour(), "hc")
+plot(dayofmonth(time), "d")
+plot(hour, "hb")`,
+      bars,
+    );
+    expect(nums(py.series.h)).toEqual([0, 1, 2, 1]);
+    expect(nums(py.series.hc)).toEqual(nums(py.series.h));
+    expect(nums(py.series.d)).toEqual([1, 1, 1, 2]);
+    // matchPython already asserts TS == Python on the raw bare-hour series.
+  });
+
   test("plotcandle and plotbar primary series is close", () => {
     const bars = [0, 1, 2].map((i) => ({
       time: T0 + i * HOUR,

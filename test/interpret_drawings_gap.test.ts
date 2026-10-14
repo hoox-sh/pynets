@@ -230,4 +230,38 @@ plot(q.price, "qp")`,
       BARS,
     );
   });
+
+  test("table.new stores columns then rows plus style fields (Pine order)", () => {
+    const out = new Runtime("TEST").run(
+      `//@version=5
+indicator("t")
+var table t = table.new(position.top_right, 3, 2, color.red)
+plot(1, "one")`,
+      BARS,
+      { mode: "interpret" },
+    );
+    expect(out.error).toBeUndefined();
+    const table = (out.drawings ?? []).find((d) => d.kind === "table");
+    expect(table).toBeDefined();
+    // Pine positional order: (position, columns, rows, bgcolor, …).
+    expect(table?.extra?.columns).toBe(3);
+    expect(table?.extra?.rows).toBe(2);
+    expect(table?.extra?.position).toBe("top_right");
+    expect(table?.extra?.bgcolor).toEqual({ r: 255, g: 0, b: 0, a: 255 });
+  });
+
+  test("table.new kwargs override positionally", () => {
+    const out = new Runtime("TEST").run(
+      `//@version=5
+indicator("t")
+var table t = table.new(position.bottom_left, columns=4, rows=5)
+plot(1, "one")`,
+      BARS,
+      { mode: "interpret" },
+    );
+    expect(out.error).toBeUndefined();
+    const table = (out.drawings ?? []).find((d) => d.kind === "table");
+    expect(table?.extra?.columns).toBe(4);
+    expect(table?.extra?.rows).toBe(5);
+  });
 });
