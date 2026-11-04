@@ -11,7 +11,12 @@ Product manuals live on the PYNE docs site (same structure as `hoox.sh/pyne/docs
 | JS compile | https://hoox.sh/pyne/docs/pynets/compile |
 | Parity | https://hoox.sh/pyne/docs/pynets/parity |
 | Missing features | https://hoox.sh/pyne/docs/pynets/missing-features |
+| Parity status (repo) | [`../PARITY.md`](../PARITY.md) |
 | Ecosystem | https://hoox.sh/pyne/docs/reference/ecosystem |
 | Modes | https://hoox.sh/pyne/docs/enduser/reference/modes |
+
+Current parity snapshot: **PYNE 0.6.32** (`bun test` 1322 pass). The repo
+[`PARITY.md`](../PARITY.md) tracks the remaining advanced analytics and
+history-list quirks; update it whenever a builtin wave lands.
 
 Writing rules: `pynescript/docs/WRITING.md`. Sync to the landing site with `hoox-landing-page/scripts/sync-product-docs.mjs`.

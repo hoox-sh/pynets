@@ -156,13 +156,13 @@ describe("ta.dev incremental", () => {
 });
 
 describe("ta.variance incremental", () => {
-  test("period 3 on [1,2,3,4] is sample variance", () => {
+  test("period 3 on [1,2,3,4] is population variance", () => {
     const ta = new TaEngine();
     const out = [1, 2, 3, 4].map((x) => ta.variance("var:0", x, 3));
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
-    expect(out[2]).toBeCloseTo(1);
-    expect(out[3]).toBeCloseTo(1);
+    expect(out[2]).toBeCloseTo(2 / 3);
+    expect(out[3]).toBeCloseTo(2 / 3);
   });
 
   test("matches stdev^2; period<=1 is na; na poisons window", () => {

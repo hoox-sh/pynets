@@ -15,7 +15,7 @@ TypeScript / Bun library for **Pine Script**: parse, unparse, and interpret.
 Same public names as Python [`pynescript`](https://github.com/hoox-sh/pyne): `parse`, `unparse`, `Runtime.run`.
 Python `pynescript.runtime` is the **source of truth**. When semantics disagree, Python wins. This is not a TradingView platform certification.
 
-**Docs (hoox.sh):** [PyneTS](https://hoox.sh/pyne/docs/pynets) · [install](https://hoox.sh/pyne/docs/pynets/install) · [runtime](https://hoox.sh/pyne/docs/pynets/runtime) · [CLI](https://hoox.sh/pyne/docs/pynets/cli) · [JS compile](https://hoox.sh/pyne/docs/pynets/compile) · [parity](https://hoox.sh/pyne/docs/pynets/parity) · [missing features](https://hoox.sh/pyne/docs/pynets/missing-features) · [ecosystem](https://hoox.sh/pyne/docs/reference/ecosystem)
+**Docs (hoox.sh):** [PyneTS](https://hoox.sh/pyne/docs/pynets) · [install](https://hoox.sh/pyne/docs/pynets/install) · [runtime](https://hoox.sh/pyne/docs/pynets/runtime) · [CLI](https://hoox.sh/pyne/docs/pynets/cli) · [JS compile](https://hoox.sh/pyne/docs/pynets/compile) · [parity](https://hoox.sh/pyne/docs/pynets/parity) · [missing features](https://hoox.sh/pyne/docs/pynets/missing-features) · [parity status](PARITY.md) · [ecosystem](https://hoox.sh/pyne/docs/reference/ecosystem)
 
 ```ts
 import { parse, unparse, Runtime } from "@hoox-sh/pynets";
@@ -134,7 +134,7 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 
 **Language** — `var` / `varip` / `:=`, tuples, `if` / `for` / `while` / `switch`, UDFs, `type` / `enum`, `import`, `library()`.
 
-**`ta.*`** — SMA/EMA/RMA/WMA/VWMA/HMA/ALMA/DEMA/TEMA/KAMA/SWMA, RSI, ATR, Supertrend, Keltner, BB/BBW, MACD, Stoch, CCI, WPR, DMI/ADX, SAR, MFI, CMO, TSI, COG, stdev/dev/variance, highest/lowest, crossover/crossunder, volume (OBV, PVT, AD, WAD, NVI/PVI, III, WVAD), pivots, barssince, valuewhen, percentiles, and the v3/v4 bare names. Also `uo`, `rci`, `dpo`, `kst`, `stochrsi`, `donchian`, `ichimoku`, `bb_pct`, `emv`, `fractal`, `atr_stop`, `zigzag`, and the Python bar-mode detectors (`hammer`, `gap_detector`, `macd_signal`, `acceleration_factor`, `stoch_smooth`, `engulfing`, `inside_bar_pattern`, `double_top_bottom`, `voi`, `bid_ask_imbalance`, `rsi_oversold_overbought`, `rsi_divergence`, `cumulative_delta`, `volume_momentum`, `volume_profile_high` / `low`, `volume_thrust`). Compile emits the same names. A chart-series plot that Python leaves `na` (`beta`, `r_squared`, `comovement`, `apo`, `skewness`, `kurtosis`, `parkinson`, `garman_klass`, and the same class) stays unwired.
+**`ta.*`** — SMA/EMA/RMA/WMA/VWMA/HMA/ALMA/DEMA/TEMA/KAMA/SWMA, RSI, ATR, Supertrend, Keltner, BB/BBW, MACD, Stoch, CCI, WPR, DMI/ADX, SAR, MFI, CMO, TSI, COG, stdev/dev/variance, highest/lowest, crossover/crossunder, volume (OBV, PVT, AD, WAD, NVI/PVI, III, WVAD), pivots, barssince, valuewhen, percentiles, and the v3/v4 bare names. Also `uo`, `rci`, `dpo`, `kst`, `stochrsi`, `donchian`, `ichimoku`, `bb_pct`, `emv`, `fractal`, `atr_stop`, `zigzag`, the Python bar-mode detectors (`hammer`, `gap_detector`, `macd_signal`, `acceleration_factor`, `stoch_smooth`, `engulfing`, `inside_bar_pattern`, `double_top_bottom`, `voi`, `bid_ask_imbalance`, `rsi_oversold_overbought`, `rsi_divergence`, `cumulative_delta`, `volume_momentum`, `volume_profile_high` / `low`, `volume_thrust`), and the statistical / risk analytics waves: `sma_weighted`, `apo`, `atr_normalized`, `beta`, `r_squared`, `comovement`, `skewness`, `kurtosis`, `volume_weighted_momentum`, `parkinson`, `garman_klass`, `mean_reversion_score`, `market_condition`, `order_flow_imbalance`, `liquidity_score`, `fear_greed_index`, `crowd_sentiment`, `smart_money_flow`, `trend_confirmation_score`, `max_loss_level`, `profit_lock_level`, `position_sizing`, `kelly_criterion`, `risk_reward_ratio`, `risk_reward_asymmetry`, `probability_of_movement`, `trend_strength`, `breakeven_level`, `market_structure_pivot`, `position_sizing_score`, `trailing_exit_level`, `optimal_entry_zone`, `mean_reversion_entry`, `multi_timeframe_signal`, `market_timing_index`, `regime_adaptive_signal`, `strategy_score`, `breakout_detection`. Compile emits the same names. See [`PARITY.md`](PARITY.md) for the remaining advanced analytics.
 
 **`math.*` / `str.*` / `color.*` / `input.*` / `log.*`** — the Python set, including `nz`, `iff`, `fixnan`, `timestamp`, `weekofyear`, `time_tradingday`.
 
@@ -142,7 +142,7 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 
 **`matrix.*`** — shape ops, predicates, `mult` / `inv` / **`pinv`** / `pow` / `kron` / `rank` / **eigenvalues / eigenvectors**, plus row/col `sum` / `avg` / `min` / `max` / `mode`, fill, reverse, copy, `stdev`, `variance`.
 
-**`strategy.*`** — entry/exit/order, pending limit/stop, commission/slippage/pyramiding, open/closed trade accessors, **`strategy.risk.*`**, **OCA cancel/reduce**. `strategy.cash` is free cash and still selects cash sizing for `default_qty_type`.
+**`strategy.*`** — entry/exit/order, pending limit/stop, commission/slippage/pyramiding, open/closed trade accessors, **`strategy.risk.*`**, **OCA cancel/reduce**. Market orders placed on bar N fill at the **open of bar N+1** (PYNE 0.6.29 reference-Pine flow), and trade `entry_time` / `exit_time` use bar timestamps. `strategy.cash` is free cash and still selects cash sizing for `default_qty_type`.
 
 **Drawings / alerts** — `line` / `label` / `box` / `table` / `polyline` / `linefill` getters and setters, `*.all`, `*.copy`, `chart.point.*`; `alert` / `alertcondition` with Python frequency tokens (`alert.freq_*`). `plot.style_*` tokens. `timenow` is the dataset last-bar time on every bar.
 
@@ -289,7 +289,7 @@ import {
 
 ## Development
 
-Agent brief: [`AGENTS.md`](AGENTS.md) · contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md) · changes: [`CHANGELOG.md`](CHANGELOG.md)
+Agent brief: [`AGENTS.md`](AGENTS.md) · contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md) · changes: [`CHANGELOG.md`](CHANGELOG.md) · parity status: [`PARITY.md`](PARITY.md)
 
 ```bash
 git clone https://github.com/hoox-sh/pynets.git
@@ -298,6 +298,8 @@ bun install
 bun test
 bun run typecheck
 ```
+
+Parity tests run against the local PYNE checkout (`$PYNESCRIPT_ROOT`, default `/home/jango/Git/pynescript`) by putting `$PYNESCRIPT_ROOT/src` on `PYTHONPATH`; they skip cleanly when PYNE is absent. The current snapshot is verified against **PYNE 0.6.32**.
 
 Generated files under `src/generated/` are committed so `bun test` does not require Java. Local development is Bun only — do not add npm/yarn/pnpm lockfiles.
 

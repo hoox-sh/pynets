@@ -128,7 +128,7 @@ describe("compile vs interpret strategy", () => {
     expect(events.some((ev) => eventText(ev).includes("entry"))).toBe(true);
   });
 
-  test("entry then close_all on last bar: last position_size is 0 and extras/events have close_all or flatten", () => {
+  test("entry then close_all on last bar: close_all queues for the next bar and events include close_all", () => {
     const compiled = new Runtime("TEST", { mode: "compile" }).run(CLOSE_ALL_SRC, BARS);
     const interpreted = new Runtime("TEST").run(CLOSE_ALL_SRC, BARS);
     const fromCompile = compileToResult(CLOSE_ALL_SRC, BARS);
@@ -138,8 +138,10 @@ describe("compile vs interpret strategy", () => {
     expect(compiled.mode).toBe("compile");
     expect(fromCompile.mode).toBe("compile");
 
-    expect(lastPlot(compiled.plots)).toBeCloseTo(0, 9);
-    expect(lastPlot(interpreted.plots)).toBeCloseTo(0, 9);
+    // Entry fills on bar 2; close_all placed on the last bar fills next bar
+    // (none here), so the last position_size stays 1.
+    expect(lastPlot(compiled.plots)).toBeCloseTo(1, 9);
+    expect(lastPlot(interpreted.plots)).toBeCloseTo(1, 9);
 
     const events = collectEvents(compiled, fromCompile);
     const blob = `${events.map(eventText).join(" ")} ${extrasBlob(compiled, fromCompile)}`;
@@ -181,12 +183,14 @@ describe("compile vs interpret strategy", () => {
     const src = `strategy("t")
 if bar_index == 0
     strategy.entry("L", strategy.long, 1)
+if bar_index == 1
     strategy.exit("X", profit=100)
 plot(strategy.position_size)`;
     const ohlcv = [
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
       { open: 100.2, high: 100.5, low: 100, close: 100.4, volume: 1000, time: 1_700_000_060_000 },
       { open: 100.4, high: 101.5, low: 100.2, close: 101.2, volume: 1000, time: 1_700_000_120_000 },
+      { open: 101.2, high: 102, low: 101, close: 101.5, volume: 1000, time: 1_700_000_180_000 },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -194,7 +198,7 @@ plot(strategy.position_size)`;
     expect(interpreted.error).toBeUndefined();
     expect(compiled.mode).toBe("compile");
     expect(compiled.plots).toEqual(interpreted.plots);
-    expect(compiled.plots).toEqual([1, 1, 0]);
+    expect(compiled.plots).toEqual([0, 1, 0, 0]);
   });
 
   test("trail_points=0 does not disable trail_offset", () => {
@@ -219,11 +223,13 @@ plot(strategy.position_size)`;
     const src = `strategy("t")
 if bar_index == 0
     strategy.entry("L", strategy.long, 10)
+if bar_index == 1
     strategy.exit("X", qty_percent=50)
 plot(strategy.position_size)`;
     const ohlcv = [
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_060_000 },
+      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_120_000 },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -264,14 +270,16 @@ plot(strategy.position_avg_price)`;
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
       { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
       { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    expect(compiled.plots[1]).toBeCloseTo(110);
-    expect(compiled.plots[2]).toBeCloseTo(110);
+    expect(compiled.plots[1]).toBeCloseTo(120);
+    expect(compiled.plots[2]).toBeCloseTo(125);
+    expect(compiled.plots[3]).toBeCloseTo(125);
   });
 
   test("strategy.avg_price_futures token selects sticky avg", () => {
@@ -287,13 +295,16 @@ plot(strategy.position_avg_price)`;
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
       { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
       { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    expect(compiled.plots[2]).toBeCloseTo(110);
+    expect(compiled.plots[1]).toBeCloseTo(120);
+    expect(compiled.plots[2]).toBeCloseTo(125);
+    expect(compiled.plots[3]).toBeCloseTo(125);
   });
 
   test("stock default reweights FIFO avg after partial close", () => {
@@ -309,14 +320,16 @@ plot(strategy.position_avg_price)`;
       { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
       { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
       { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
+      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    expect(compiled.plots[1]).toBeCloseTo(110);
-    expect(compiled.plots[2]).toBeCloseTo(120);
+    expect(compiled.plots[1]).toBeCloseTo(120);
+    expect(compiled.plots[2]).toBeCloseTo(125);
+    expect(compiled.plots[3]).toBeCloseTo(130);
   });
 
   test("cash default qty scales by leverage", () => {
@@ -333,8 +346,9 @@ plot(strategy.position_size)`;
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    // qty = 1000 * 10 / 100 = 100
-    expect(compiled.plots[0]).toBeCloseTo(100);
+    // qty = 1000 * 10 / 100 = 100, filled at the next bar open
+    expect(compiled.plots[0]).toBeCloseTo(0);
+    expect(compiled.plots[1]).toBeCloseTo(100);
   });
 
   test("margin_liquidation_price after leveraged long matches interpret", () => {
@@ -351,7 +365,7 @@ plot(strategy.margin_liquidation_price)`;
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    // liq = 100 * (1 - 1/10) = 90
-    expect(compiled.plots[0]).toBeCloseTo(90);
+    // liq = 100 * (1 - 1/10) = 90 after the next-bar fill
+    expect(compiled.plots[1]).toBeCloseTo(90);
   });
 });

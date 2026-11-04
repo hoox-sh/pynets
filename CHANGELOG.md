@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04
+
+Parity upgrade against PYNE 0.6.32: the Python probe now imports the local
+source checkout, incremental TA drift is fixed, and the strategy broker uses
+next-bar market fills.
+
+### Added
+- Wave 11 statistical / advanced `ta.*`: `sma_weighted`, `apo`, `atr_normalized`, `beta`, `r_squared`, `comovement`, `skewness`, `kurtosis`, `volume_weighted_momentum`, `parkinson`, `garman_klass`, `mean_reversion_score`, `market_condition`, `order_flow_imbalance`, `liquidity_score`, `fear_greed_index`, `crowd_sentiment`, `smart_money_flow`, `trend_confirmation_score`, `max_loss_level`, `profit_lock_level` (interpret + compile).
+- Wave 12 risk / sizing / timing `ta.*`: `position_sizing`, `kelly_criterion`, `risk_reward_ratio`, `risk_reward_asymmetry`, `probability_of_movement`, `trend_strength`, `breakeven_level`, `market_structure_pivot`, `position_sizing_score`, `trailing_exit_level`, `optimal_entry_zone`, `mean_reversion_entry`, `multi_timeframe_signal`, `market_timing_index`, `regime_adaptive_signal`, `strategy_score`, `breakout_detection` (interpret + compile).
+- `PARITY.md` tracking the remaining advanced analytics and history-list quirks.
+
+### Changed
+- Parity tests run against the local PYNE checkout (`$PYNESCRIPT_ROOT/src`) through a `PYTHONPATH` wrapper instead of a stale venv install.
+- Strategy market orders placed on bar N fill at the open of bar N+1; orders never fill on their placement bar; `entry_time` / `exit_time` use bar timestamps. Compile uses the same flow.
+- `ta.stdev`, `ta.variance`, and Bollinger bands use population variance (ddof=0).
+- `ta.atr` seeds bar 0 with `high - low`.
+- Compile `hold()` preserves string values (string-valued TA results survive assignment).
+
+### Fixed
+- Bar-mode incremental parity for `ta.zigzag`, `ta.acceleration_factor`, `ta.stoch_smooth`, `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`, `ta.rsi_divergence`, `ta.cumulative_delta`, `ta.volume_momentum`, and `ta.volume_thrust`.
+
 ## [0.5.0] - 2026-09-27
 
 Python `Runtime.run` footprint mock, plot style / alert frequency tokens, and `alert()` gating. Compile emits the same names.

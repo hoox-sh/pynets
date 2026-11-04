@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { interpret, Runtime } from "../src/index.ts";
 
-const BARS = [100, 110].map((close, i) => ({
+const BARS = [100, 110, 120].map((close, i) => ({
   open: close,
   high: close + 1,
   low: close - 1,
@@ -28,9 +28,10 @@ plot(strategy.closedtrades.profit(0), title="p")`,
       BARS,
     );
     expect(out.error).toBeUndefined();
-    expect(out.series.plot?.[1]).toBe(1);
-    expect(out.series.w?.[1]).toBe(1);
-    expect(out.series.p?.[1]).toBeCloseTo(10);
+    // Entry fills bar 1, close queues and fills bar 2 at the open (120).
+    expect(out.series.plot?.[2]).toBe(1);
+    expect(out.series.w?.[2]).toBe(1);
+    expect(out.series.p?.[2]).toBeCloseTo(10);
   });
 
   test("UDT new + field", () => {

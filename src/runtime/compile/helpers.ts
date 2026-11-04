@@ -20,9 +20,10 @@ export function naNum(v: unknown): number | null {
   return NA;
 }
 
-/** Store cell or object handle. Objects (array/map/matrix/UDT) stay intact. */
+/** Store cell or object handle. Objects (array/map/matrix/UDT) and strings stay intact. */
 export function hold(v: unknown): unknown {
   if (v != null && typeof v === "object") return v;
+  if (typeof v === "string") return v;
   return naNum(v);
 }
 

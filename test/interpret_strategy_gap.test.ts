@@ -69,9 +69,10 @@ plot(strategy.cash, "cash")`,
     const cash = nums(py.series.cash);
     expect(typeof cash[0]).toBe("number");
     expect(cash[0]).not.toBeNaN();
-    // 2 contracts × 100 entry = 200 held; free cash = 100000 - 200
-    expect(cash[0]).toBeCloseTo(99_800);
-    expect(cash[1]).toBeCloseTo(99_820);
+    // Entry placed bar 0 fills at bar 1 open (110): cash stays 100000 on bar 0.
+    expect(cash[0]).toBeCloseTo(100_000);
+    expect(cash[1]).toBeCloseTo(99_780);
+    expect(cash[2]).toBeCloseTo(99_800);
   });
 
   test("default_qty_type=strategy.cash still sizes cash entries", () => {
@@ -82,8 +83,9 @@ if bar_index == 0
 plot(strategy.position_size, "qty")`,
       BARS,
     );
-    // 500 cash / 100 price = 5 contracts
-    expect(nums(py.series.qty)[0]).toBeCloseTo(5);
+    // 500 cash / 100 price = 5 contracts, filled at the next bar open.
+    expect(nums(py.series.qty)[0]).toBeCloseTo(0);
+    expect(nums(py.series.qty)[1]).toBeCloseTo(5);
   });
 
   test("account_currency and max_contracts_held_all after a fill", () => {
@@ -99,6 +101,10 @@ plot(strategy.position_entry_name == "L" ? 1 : 0, "ename")`,
   });
 
   test("closedtrades.entry_time / profit after close", () => {
+    const bars4: OHLCVBar[] = [
+      ...BARS,
+      { open: 130, high: 130, low: 130, close: 130, volume: 1, time: 1_700_000_180_000 },
+    ];
     const py = matchPython(
       `strategy("t", initial_capital=100000)
 if bar_index == 0
@@ -108,11 +114,12 @@ if bar_index == 2
 plot(strategy.closedtrades.entry_time(0), "etime")
 plot(strategy.closedtrades.profit(0), "profit")
 plot(strategy.closedtrades, "n")`,
-      BARS,
+      bars4,
     );
-    expect(nums(py.series.etime)[2]).toBe(1_700_000_000_000);
-    expect(nums(py.series.profit)[2]).toBeCloseTo(20);
-    expect(nums(py.series.n)[2]).toBe(1);
+    // Entry fills at bar 1 open (110), close fills at bar 3 open (130).
+    expect(nums(py.series.etime)[3]).toBe(1_700_000_060_000);
+    expect(nums(py.series.profit)[3]).toBeCloseTo(20);
+    expect(nums(py.series.n)[3]).toBe(1);
   });
 
   test("oca.none / commission.percent plot as strings (equality vs Python)", () => {

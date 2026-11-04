@@ -56,8 +56,9 @@ plot(c, "cash")
 plot(strategy.cash(), "call")`;
     const { compile } = expectSame(src);
     const cash = nums(compile.series.cash);
-    expect(cash[0]).toBeCloseTo(99_800);
-    expect(cash[1]).toBeCloseTo(99_820);
+    expect(cash[0]).toBeCloseTo(100_000);
+    expect(cash[1]).toBeCloseTo(99_780);
+    expect(cash[2]).toBeCloseTo(99_800);
     expect(nums(compile.series.call)).toEqual(cash);
   });
 
@@ -68,7 +69,8 @@ if bar_index == 0
     strategy.entry("L", strategy.long)
 plot(strategy.position_size, "qty")`,
     );
-    expect(nums(compile.series.qty)[0]).toBeCloseTo(5);
+    expect(nums(compile.series.qty)[0]).toBeCloseTo(0);
+    expect(nums(compile.series.qty)[1]).toBeCloseTo(5);
   });
 
   test("strategy series, trade fields, and qty-type constants", () => {

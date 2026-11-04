@@ -124,6 +124,7 @@ export class CompileStrategy {
       high: num(high, this.mark),
       low: num(low, this.mark),
       close: this.mark,
+      time: this.time,
     };
     this.ohlc = ohlc;
     this.book.processPending(this.bar, ohlc);
@@ -141,18 +142,19 @@ export class CompileStrategy {
       comment: opts?.comment,
       oca_name: opts?.oca_name,
       oca_type: opts?.oca_type,
+      deferMarket: true,
     });
   }
 
   close(id?: unknown, qty?: unknown): void {
-    this.book.fillClose(this.bar, str(id, ""), this.mark, {
+    this.book.placeClose(this.bar, str(id, ""), this.mark, {
       time: this.time,
       qty: optNum(qty),
     });
   }
 
   close_all(_comment?: unknown): void {
-    this.book.closeAll(this.bar, this.mark);
+    this.book.placeCloseAll(this.bar, this.mark);
   }
 
   order(id?: unknown, direction?: unknown, qty?: unknown, opts?: PlaceEntryOpts): void {
@@ -174,6 +176,7 @@ export class CompileStrategy {
       price: this.mark,
       time: this.time,
       ohlc: this.ohlc,
+      deferMarket: true,
     });
   }
 

@@ -155,6 +155,44 @@ const TA_METHODS = new Set([
   "volume_profile_high",
   "volume_profile_low",
   "volume_thrust",
+  "sma_weighted",
+  "apo",
+  "atr_normalized",
+  "beta",
+  "r_squared",
+  "comovement",
+  "skewness",
+  "kurtosis",
+  "volume_weighted_momentum",
+  "parkinson",
+  "garman_klass",
+  "mean_reversion_score",
+  "market_condition",
+  "order_flow_imbalance",
+  "liquidity_score",
+  "fear_greed_index",
+  "crowd_sentiment",
+  "smart_money_flow",
+  "trend_confirmation_score",
+  "max_loss_level",
+  "profit_lock_level",
+  "position_sizing",
+  "kelly_criterion",
+  "risk_reward_ratio",
+  "risk_reward_asymmetry",
+  "probability_of_movement",
+  "trend_strength",
+  "breakeven_level",
+  "market_structure_pivot",
+  "position_sizing_score",
+  "trailing_exit_level",
+  "optimal_entry_zone",
+  "mean_reversion_entry",
+  "multi_timeframe_signal",
+  "market_timing_index",
+  "regime_adaptive_signal",
+  "strategy_score",
+  "breakout_detection",
 ]);
 
 /**
@@ -530,6 +568,26 @@ function hasArg(args: CallArgs, index: number, names: string[]): boolean {
   return index >= 0 && index < args.pos.length;
 }
 
+/** Bare series names: Python sees a `PineSeries`, so list-only handlers return `na`. */
+const BARE_SERIES_NAMES = new Set([
+  "open",
+  "high",
+  "low",
+  "close",
+  "volume",
+  "hl2",
+  "hlc3",
+  "ohlc4",
+  "hlcc4",
+  "time",
+  "time_close",
+]);
+
+function hasSeriesArg(args: CallArgs): boolean {
+  const isSeries = (n: expr): boolean => n.kind === "Name" && BARE_SERIES_NAMES.has(n.id);
+  return args.posNodes.some(isSeries) || Object.values(args.kwNodes).some(isSeries);
+}
+
 /** True when a keyword argument named one of *names* is present (interpret hasKwarg). */
 function hasAnyKw(args: CallArgs, names: string[]): boolean {
   return names.some((n) => Object.hasOwn(args.kw, n));
@@ -565,6 +623,11 @@ function cellOf(expr: string): string {
  */
 function cellList(expr: string): string {
   return `(() => { const __v = ${expr}; const __cell = (e) => (e == null ? null : typeof e === "boolean" ? (e ? 1 : 0) : (typeof e === "number" && Number.isFinite(e) ? e : null)); if (__v != null && typeof __v.size === "function" && typeof __v.get === "function") { const __n = __v.size(); const __o = []; for (let __i = 0; __i < __n; __i++) __o.push(__cell(__v.get(__i))); return __o; } return [__cell(__v)]; })()`;
+}
+
+/** Interpret `seriesLastCell`: array → last cell; scalar → the value itself. */
+function cellLast(expr: string): string {
+  return `(() => { const __v = ${expr}; const __cell = (e) => (e == null ? null : typeof e === "boolean" ? (e ? 1 : 0) : (typeof e === "number" && Number.isFinite(e) ? e : null)); if (__v != null && typeof __v.size === "function" && typeof __v.get === "function") { const __n = __v.size(); return __n === 0 ? null : __cell(__v.get(__n - 1)); } return __cell(__v); })()`;
 }
 
 const DRAW_KINDS = new Set(["label", "line", "box", "table", "polyline", "linefill"]);
@@ -1623,6 +1686,11 @@ function taCall(method: string, site: string, parts: string[]): string {
   return `__h.ta.${method}(${site}, ${parts.join(", ")})`;
 }
 
+/** Call a stateless TaEngine method (no call-site argument). */
+function taPure(method: string, parts: string[]): string {
+  return `__h.ta.${method}(${parts.join(", ")})`;
+}
+
 function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (!TA_METHODS.has(method)) return "null";
   if (method === "ad") method = "accdist";
@@ -2093,17 +2161,31 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "stoch_smooth") {
-    return `__h.ta.stochSmooth(${cellOf(pick(args, 0, ["high"], "null"))}, ${cellOf(pick(args, 1, ["low"], "null"))}, ${cellOf(pick(args, 2, ["close"], "null"))}, ${cellOf(pick(args, 3, ["period", "length"], "null"))}, ${cellOf(pick(args, 4, ["smooth_k", "k"], "null"))}, ${cellOf(pick(args, 5, ["smooth_d", "d"], "null"))})`;
+    return taCall("stochSmooth", site, [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+      cellOf(pick(args, 2, ["close"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+      cellOf(pick(args, 4, ["smooth_k", "k"], "null")),
+      cellOf(pick(args, 5, ["smooth_d", "d"], "null")),
+    ]);
   }
   if (method === "engulfing") {
-    // Bar-mode sentinel. Args are still evaluated (interpret reads all four).
-    return `(() => { ${cellOf(pick(args, 0, ["open"], "null"))}; ${cellOf(pick(args, 1, ["high"], "null"))}; ${cellOf(pick(args, 2, ["low"], "null"))}; ${cellOf(pick(args, 3, ["close"], "null"))}; return __h.ta.engulfing(); })()`;
+    // Args are still evaluated (interpret reads all four); high/low are unused.
+    return `(() => { const __o = ${cellOf(pick(args, 0, ["open"], "null"))}; ${cellOf(pick(args, 1, ["high"], "null"))}; ${cellOf(pick(args, 2, ["low"], "null"))}; const __c = ${cellOf(pick(args, 3, ["close"], "null"))}; return __h.ta.engulfing(${site}, __o, __c); })()`;
   }
   if (method === "inside_bar_pattern") {
-    return `(() => { ${cellOf(pick(args, 0, ["high"], "null"))}; ${cellOf(pick(args, 1, ["low"], "null"))}; return __h.ta.insideBarPattern(); })()`;
+    return taCall("insideBarPattern", site, [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+    ]);
   }
   if (method === "double_top_bottom") {
-    return `(() => { ${cellOf(pick(args, 0, ["high"], "null"))}; ${cellOf(pick(args, 1, ["low"], "null"))}; return __h.ta.doubleTopBottom(${cellOf(pick(args, 2, ["period", "length"], "null"))}); })()`;
+    return taCall("doubleTopBottom", site, [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+    ]);
   }
   if (method === "voi") {
     return `__h.ta.voi(${cellOf(pick(args, 0, ["buy_volume", "buy"], "null"))}, ${cellOf(pick(args, 1, ["sell_volume", "sell"], "null"))})`;
@@ -2117,7 +2199,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (method === "rsi_divergence") {
     // Missing period is 0 (interpret `period ?? 0`), not the engine's null → na.
     const period = `((__n) => (__n == null ? 0 : __n))(${cellOf(pick(args, 1, ["period", "length"], "null"))})`;
-    return `__h.ta.rsiDivergence(${cellList(pick(args, 0, ["rsi_series", "series", "source"], "null"))}, ${period})`;
+    return taCall("rsiDivergence", site, [
+      cellLast(pick(args, 0, ["rsi_series", "series", "source"], "null")),
+      period,
+    ]);
   }
   if (method === "cumulative_delta") {
     return taCall("cumulativeDelta", site, [
@@ -2150,6 +2235,235 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       cellOf(pick(args, 1, ["volume"], "null")),
       cellOf(pick(args, 2, ["volume_sma", "vol_sma", "sma"], "null")),
       `((__n) => (__n == null ? 0.3 : __n))(${sens})`,
+    ]);
+  }
+  if (method === "sma_weighted") {
+    return taCall("smaWeighted", site, [
+      cellOf(pick(args, 0, ["series", "source"], "null")),
+      cellOf(pick(args, 1, ["period", "length"], "null")),
+      pick(args, 2, ["weight_type", "weight"], '"linear"'),
+    ]);
+  }
+  if (method === "apo") {
+    return taCall("apo", site, [
+      cellOf(pick(args, 0, ["series", "source"], "null")),
+      cellOf(pick(args, 1, ["fast_period", "fast"], "null")),
+      cellOf(pick(args, 2, ["slow_period", "slow"], "null")),
+    ]);
+  }
+  if (method === "atr_normalized") {
+    return taCall("atrNormalized", site, [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+      cellOf(pick(args, 2, ["close"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "beta" || method === "r_squared" || method === "comovement") {
+    const fn = method === "beta" ? "beta" : method === "r_squared" ? "rSquared" : "comovement";
+    return taCall(fn, site, [
+      cellOf(pick(args, 0, ["series1", "series", "source"], "null")),
+      cellOf(pick(args, 1, ["series2", "series_b", "other"], "null")),
+      cellOf(pick(args, 2, ["length", "period"], "null")),
+    ]);
+  }
+  if (method === "skewness" || method === "kurtosis") {
+    return taCall(method, site, [
+      cellOf(pick(args, 0, ["series", "source"], "null")),
+      cellOf(pick(args, 1, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "volume_weighted_momentum") {
+    return taCall("volumeWeightedMomentum", site, [
+      cellOf(pick(args, 0, ["series", "source"], "null")),
+      cellOf(pick(args, 1, ["volume"], "null")),
+      cellOf(pick(args, 2, ["length", "period"], "null")),
+    ]);
+  }
+  if (method === "parkinson") {
+    if (hasSeriesArg(args)) return "null";
+    return `__h.ta.parkinson(${cellOf(pick(args, 0, ["high"], "null"))}, ${cellOf(pick(args, 1, ["low"], "null"))})`;
+  }
+  if (method === "garman_klass") {
+    if (hasSeriesArg(args)) return "null";
+    return `__h.ta.garmanKlass(${cellOf(pick(args, 0, ["high"], "null"))}, ${cellOf(pick(args, 1, ["low"], "null"))}, ${cellOf(pick(args, 2, ["close"], "null"))}, ${cellOf(pick(args, 3, ["open"], "null"))})`;
+  }
+  if (method === "mean_reversion_score") {
+    return taCall("meanReversionScore", site, [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["sma"], "null")),
+      cellOf(pick(args, 2, ["stdev", "std_dev"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "market_condition") {
+    return taCall("marketCondition", site, [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["atr"], "null")),
+      cellOf(pick(args, 2, ["sma_period", "sma_length"], "null")),
+      cellOf(pick(args, 3, ["stdev_period", "stdev_length"], "null")),
+    ]);
+  }
+  if (method === "order_flow_imbalance") {
+    return taCall("orderFlowImbalance", site, [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+      cellOf(pick(args, 2, ["close"], "null")),
+      cellOf(pick(args, 3, ["volume"], "null")),
+      cellOf(pick(args, 4, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "liquidity_score") {
+    return taCall("liquidityScore", site, [
+      cellOf(pick(args, 0, ["volume"], "null")),
+      cellOf(pick(args, 1, ["volatility"], "null")),
+      cellOf(pick(args, 2, ["spread"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "fear_greed_index") {
+    return `__h.ta.fearGreedIndex(${cellOf(pick(args, 0, ["rsi"], "null"))}, ${cellOf(pick(args, 1, ["vix"], "null"))}, ${cellOf(pick(args, 2, ["put_call", "put_call_ratio"], "null"))}, ${cellOf(pick(args, 3, ["breadth"], "null"))})`;
+  }
+  if (method === "crowd_sentiment") {
+    return `__h.ta.crowdSentiment(${cellOf(pick(args, 0, ["price_agreement", "price"], "null"))}, ${cellOf(pick(args, 1, ["volume_agreement", "volume"], "null"))}, ${cellOf(pick(args, 2, ["time_agreement", "time"], "null"))})`;
+  }
+  if (method === "smart_money_flow") {
+    return `__h.ta.smartMoneyFlow(${cellOf(pick(args, 0, ["price_change"], "null"))}, ${cellOf(pick(args, 1, ["volume"], "null"))}, ${cellOf(pick(args, 2, ["time_since_high", "time_high"], "null"))}, ${cellOf(pick(args, 3, ["time_since_low", "time_low"], "null"))})`;
+  }
+  if (method === "trend_confirmation_score") {
+    return `__h.ta.trendConfirmationScore(${cellOf(pick(args, 0, ["momentum"], "null"))}, ${cellOf(pick(args, 1, ["trend_alignment"], "null"))}, ${cellOf(pick(args, 2, ["strength"], "null"))}, ${cellOf(pick(args, 3, ["rsi"], "null"))}, ${cellOf(pick(args, 4, ["rsi_alignment"], "null"))})`;
+  }
+  if (method === "max_loss_level") {
+    return `__h.ta.maxLossLevel(${cellOf(pick(args, 0, ["entry", "entry_price"], "null"))}, ${cellOf(pick(args, 1, ["account", "account_size"], "null"))}, ${cellOf(pick(args, 2, ["max_loss_pct", "max_loss_percent"], "null"))})`;
+  }
+  if (method === "profit_lock_level") {
+    return `__h.ta.profitLockLevel(${cellOf(pick(args, 0, ["entry", "entry_price"], "null"))}, ${cellOf(pick(args, 1, ["current", "current_price"], "null"))}, ${cellOf(pick(args, 2, ["trail_pct", "trail_percent"], "null"))}, ${cellOf(pick(args, 3, ["direction"], "null"))})`;
+  }
+  if (method === "position_sizing") {
+    return taPure("positionSizing", [
+      cellOf(pick(args, 0, ["account", "account_size"], "null")),
+      cellOf(pick(args, 1, ["risk_pct", "risk_percent"], "null")),
+      cellOf(pick(args, 2, ["entry", "entry_price"], "null")),
+      cellOf(pick(args, 3, ["stop", "stop_price"], "null")),
+    ]);
+  }
+  if (method === "kelly_criterion") {
+    return taPure("kellyCriterion", [
+      cellOf(pick(args, 0, ["win_rate"], "null")),
+      cellOf(pick(args, 1, ["avg_win"], "null")),
+      cellOf(pick(args, 2, ["avg_loss"], "null")),
+    ]);
+  }
+  if (method === "risk_reward_ratio") {
+    return taPure("riskRewardRatio", [
+      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
+      cellOf(pick(args, 1, ["stop", "stop_price"], "null")),
+      cellOf(pick(args, 2, ["target", "target_price"], "null")),
+    ]);
+  }
+  if (method === "risk_reward_asymmetry") {
+    return taPure("riskRewardAsymmetry", [
+      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
+      cellOf(pick(args, 1, ["stop", "stop_price"], "null")),
+      cellOf(pick(args, 2, ["target", "target_price"], "null")),
+      cellOf(pick(args, 3, ["win_rate"], "null")),
+    ]);
+  }
+  if (method === "probability_of_movement") {
+    return taPure("probabilityOfMovement", [
+      cellOf(pick(args, 0, ["current", "current_price"], "null")),
+      cellOf(pick(args, 1, ["target", "target_price"], "null")),
+      cellOf(pick(args, 2, ["atr"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "trend_strength") {
+    return taPure("trendStrength", [
+      cellOf(pick(args, 0, ["price", "source"], "null")),
+      cellOf(pick(args, 1, ["adx"], "null")),
+      cellOf(pick(args, 2, ["rsi"], "null")),
+    ]);
+  }
+  if (method === "breakeven_level") {
+    return taPure("breakevenLevel", [
+      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
+      cellOf(pick(args, 1, ["quantity", "qty"], "null")),
+      cellOf(pick(args, 2, ["commission"], "null")),
+      cellOf(pick(args, 3, ["slippage"], "null")),
+      cellOf(pick(args, 4, ["direction"], "null")),
+    ]);
+  }
+  if (method === "market_structure_pivot") {
+    return taPure("marketStructurePivot", [
+      cellOf(pick(args, 2, ["close"], "null")),
+    ]);
+  }
+  if (method === "position_sizing_score") {
+    return taPure("positionSizingScore", [
+      cellOf(pick(args, 0, ["account_risk", "risk"], "null")),
+      cellOf(pick(args, 1, ["volatility"], "null")),
+      cellOf(pick(args, 2, ["conviction"], "null")),
+      cellOf(pick(args, 3, ["correlation"], "null")),
+    ]);
+  }
+  if (method === "trailing_exit_level") {
+    return taPure("trailingExitLevel", [
+      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
+      cellOf(pick(args, 1, ["current", "current_price"], "null")),
+      cellOf(pick(args, 2, ["atr"], "null")),
+      cellOf(pick(args, 3, ["multiplier", "mult"], "null")),
+      cellOf(pick(args, 4, ["step"], "null")),
+    ]);
+  }
+  if (method === "optimal_entry_zone") {
+    return taPure("optimalEntryZone", [cellOf(pick(args, 2, ["close"], "null"))]);
+  }
+  if (method === "mean_reversion_entry") {
+    return taPure("meanReversionEntry", [
+      cellOf(pick(args, 0, ["price", "source"], "null")),
+      cellOf(pick(args, 1, ["sma"], "null")),
+      cellOf(pick(args, 2, ["stdev", "std_dev"], "null")),
+      cellOf(pick(args, 4, ["threshold"], "null")),
+    ]);
+  }
+  if (method === "multi_timeframe_signal") {
+    return taPure("multiTimeframeSignal", [
+      cellOf(pick(args, 0, ["s1", "signal1"], "null")),
+      cellOf(pick(args, 1, ["s2", "signal2"], "null")),
+      cellOf(pick(args, 2, ["s3", "signal3"], "null")),
+      cellOf(pick(args, 3, ["w1", "weight1"], "null")),
+      cellOf(pick(args, 4, ["w2", "weight2"], "null")),
+      cellOf(pick(args, 5, ["w3", "weight3"], "null")),
+    ]);
+  }
+  if (method === "market_timing_index") {
+    return taPure("marketTimingIndex", [
+      cellOf(pick(args, 0, ["trend"], "null")),
+      cellOf(pick(args, 1, ["momentum"], "null")),
+      cellOf(pick(args, 2, ["volatility"], "null")),
+      cellOf(pick(args, 3, ["sentiment"], "null")),
+    ]);
+  }
+  if (method === "regime_adaptive_signal") {
+    return taPure("regimeAdaptiveSignal", [
+      cellOf(pick(args, 0, ["signal_strength", "strength"], "null")),
+      pick(args, 1, ["volatility_regime", "vol_regime"], '""'),
+      pick(args, 2, ["trend_regime"], '""'),
+    ]);
+  }
+  if (method === "strategy_score") {
+    return taPure("strategyScore", [
+      cellOf(pick(args, 0, ["rsi"], "null")),
+      cellOf(pick(args, 1, ["macd"], "null")),
+      cellOf(pick(args, 2, ["ema_cross"], "null")),
+      cellOf(pick(args, 3, ["trend"], "null")),
+    ]);
+  }
+  if (method === "breakout_detection") {
+    return taPure("breakoutDetection", [
+      cellOf(pick(args, 0, ["close", "source"], "null")),
+      cellOf(pick(args, 1, ["resistance"], "null")),
+      cellOf(pick(args, 2, ["support"], "null")),
     ]);
   }
   return "null";

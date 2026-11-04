@@ -30,7 +30,7 @@ export interface BrokerSettings {
 }
 
 export interface StrategyEvent {
-  type: "entry" | "close" | "exit" | "cancel" | "close_all" | "cancel_all" | "fill";
+  type: "entry" | "close" | "exit" | "cancel" | "close_all" | "cancel_all" | "fill" | "order";
   id: string;
   direction?: StrategyDirection;
   qty?: number | null;
@@ -63,11 +63,16 @@ export interface PendingOrder {
   oca_name?: string | null;
   oca_type?: OcaType;
   /** Unset on entry orders so existing pending snapshots stay exact. */
-  kind?: "entry" | "exit";
+  kind?: "entry" | "exit" | "close" | "close_all";
   from_entry?: string | null;
   trail_offset?: number | null;
   trail_activation?: number | null;
   trail_active?: boolean;
+  /** Market order queued for the next bar open (PYNE 0.6.29 `placed_bar` gate). */
+  deferred?: boolean;
+  /** `strategy.entry` target-position semantics at fill time. */
+  is_entry?: boolean;
+  comment?: string;
 }
 
 export interface PlaceEntryOpts {
@@ -79,6 +84,8 @@ export interface PlaceEntryOpts {
   time?: number;
   oca_name?: string | null;
   oca_type?: string | null;
+  /** Queue a market order for the next bar open instead of filling now. */
+  deferMarket?: boolean;
 }
 
 /** Named `strategy.exit` args (Pine: id, from_entry, qty, qty_percent, …). */
@@ -99,6 +106,8 @@ export interface PlaceExitOpts {
   time?: number;
   /** Current bar OHLC so a newly placed exit can fill same bar. */
   ohlc?: BarOhlc;
+  /** Queue a level-less market exit for the next bar open. */
+  deferMarket?: boolean;
 }
 
 /** One open or closed strategy trade (qty is absolute). */
@@ -140,6 +149,8 @@ export interface BarOhlc {
   high?: number;
   low?: number;
   close?: number;
+  /** Bar timestamp used for trade `entry_time` / `exit_time`. */
+  time?: number;
 }
 
 /** Snapshot of book-level performance scalars (for RuntimeResult). */
@@ -905,6 +916,64 @@ export class StrategyBook {
     });
   }
 
+  /**
+   * `strategy.close` — queue a market cover for the next bar open and emit
+   * the placement `close` event (PYNE 0.6.29). A flat book only emits.
+   */
+  placeClose(
+    bar: number,
+    id: string,
+    price?: number,
+    opts?: { qty?: number | null; time?: number; comment?: string },
+  ): void {
+    const b = isFiniteNumber(bar) ? bar : 0;
+    const oid = String(id ?? "");
+    this.ensureSanePosition();
+    if (this.position.qty !== 0) {
+      const absPos = Math.abs(this.position.qty);
+      const rawQty = opts?.qty;
+      const q =
+        isFiniteNumber(rawQty) && rawQty >= 0 ? Math.min(Math.abs(rawQty), absPos) : absPos;
+      if (q > 0) {
+        this.upsertPending({
+          id: `${oid}:close`,
+          direction: this.position.qty > 0 ? "short" : "long",
+          qty: q,
+          limit: null,
+          stop: null,
+          bar: b,
+          kind: "close",
+          deferred: true,
+          comment: opts?.comment,
+        });
+      }
+    }
+    this.close(b, oid);
+  }
+
+  /**
+   * `strategy.close_all` — queue a market flatten for the next bar open and
+   * emit the placement `close_all` event (PYNE 0.6.29).
+   */
+  placeCloseAll(bar: number, price?: number, opts?: { comment?: string }): void {
+    const b = isFiniteNumber(bar) ? bar : 0;
+    this.ensureSanePosition();
+    if (this.position.qty !== 0) {
+      this.upsertPending({
+        id: "close_all",
+        direction: this.position.qty > 0 ? "short" : "long",
+        qty: Math.abs(this.position.qty),
+        limit: null,
+        stop: null,
+        bar: b,
+        kind: "close_all",
+        deferred: true,
+        comment: opts?.comment,
+      });
+    }
+    this.events.push({ type: "close_all", id: "", bar: b });
+  }
+
   exit(bar: number, id: string, qty?: number | null): void {
     const event: StrategyEvent = {
       type: "exit",
@@ -949,8 +1018,9 @@ export class StrategyBook {
 
   /**
    * Place an entry. No limit/stop → market via fillEntry (needs `opts.price`).
-   * Otherwise records a pending order. Always emits an `entry` event
-   * (market path emits it through fillEntry).
+   * With `deferMarket`, a market entry is queued and fills at the next bar
+   * open (PYNE 0.6.29 reference-Pine flow). Otherwise records a pending
+   * limit/stop order. Always emits a placement event.
    */
   placeEntry(
     bar: number,
@@ -961,10 +1031,44 @@ export class StrategyBook {
   ): void {
     const limit = optLevel(opts?.limit);
     const stop = optLevel(opts?.stop);
+    const b = isFiniteNumber(bar) ? bar : 0;
+    const oid = String(id ?? "");
     if (limit == null && stop == null) {
+      if (opts?.deferMarket === true) {
+        const dir = mapDirection(direction);
+        const absQty = isFiniteNumber(qty) ? Math.abs(qty) : Number.NaN;
+        if (!isFiniteNumber(absQty) || absQty <= 0) return;
+        const t = isFiniteNumber(opts?.time) ? opts.time : b;
+        if (!this.riskAllowsEntry(dir, t)) return;
+        const mark = isFiniteNumber(opts?.price) ? opts.price : 0;
+        const capped = this.capQtyByMaxPosition(absQty, mark);
+        if (!isFiniteNumber(capped) || capped <= 0) return;
+        // Same-direction add gate (PYNE pyramiding cap = pyramiding + 1).
+        const signed = dir === "long" ? capped : -capped;
+        if (this.position.qty !== 0 && Math.sign(this.position.qty) === Math.sign(signed)) {
+          const maxEntries = this.pyramiding !== undefined ? this.pyramiding + 1 : 1;
+          const allowed =
+            this.pyramiding !== undefined && this.pyramiding > 0 && this.opentrades < maxEntries;
+          if (!allowed) return;
+        }
+        this.upsertPending({
+          id: oid,
+          direction: dir,
+          qty: capped,
+          limit: null,
+          stop: null,
+          bar: b,
+          kind: "entry",
+          is_entry: true,
+          deferred: true,
+          comment: opts?.comment,
+        });
+        this.events.push({ type: "order", id: oid, direction: dir, qty: capped, bar: b });
+        return;
+      }
       if (isFiniteNumber(opts?.price)) {
         const dir = mapDirection(direction);
-        const t = isFiniteNumber(opts?.time) ? opts.time : bar;
+        const t = isFiniteNumber(opts?.time) ? opts.time : b;
         this.updateEquityExtremes(opts.price);
         if (!this.riskAllowsEntry(dir, t)) return;
         this.fillEntry(bar, id, direction, qty, opts.price, opts);
@@ -973,8 +1077,6 @@ export class StrategyBook {
     }
     const dir = mapDirection(direction);
     const absQty = isFiniteNumber(qty) ? Math.abs(qty) : Number.NaN;
-    const b = isFiniteNumber(bar) ? bar : 0;
-    const oid = String(id ?? "");
     this.entry(b, oid, dir, isFiniteNumber(absQty) ? absQty : qty);
     if (!isFiniteNumber(absQty) || absQty === 0) return;
     const pending: PendingOrder = { id: oid, direction: dir, qty: absQty, limit, stop, bar: b };
@@ -1043,6 +1145,23 @@ export class StrategyBook {
 
     const t = isFiniteNumber(opts?.time) ? opts.time : b;
     if (limitP == null && stopP == null && !hasTrail) {
+      if (opts?.deferMarket === true) {
+        const closeDir: StrategyDirection = isLong ? "short" : "long";
+        this.upsertPending({
+          id: `${oid}:close`,
+          direction: closeDir,
+          qty,
+          limit: null,
+          stop: null,
+          bar: b,
+          kind: "exit",
+          from_entry: fromEntry,
+          deferred: true,
+          comment: opts?.comment,
+        });
+        this.events.push({ type: "order", id: oid, direction: closeDir, qty, bar: b });
+        return;
+      }
       if (!isFiniteNumber(opts?.price)) return;
       this.reducePosition(b, oid, opts.price, qty, fromEntry, t, opts?.comment);
       return;
@@ -1132,14 +1251,26 @@ export class StrategyBook {
     const filled: string[] = [];
     for (const order of this.pending.slice()) {
       if (!this.pending.some((p) => p.id === order.id)) continue;
+      // Reference Pine: an order placed during bar N becomes active for bar
+      // N+1 — never fills on its own placement bar.
+      if (order.bar === b) continue;
       if (order.kind === "exit" && isTrailOrder(order)) updateTrailStop(order, high, low);
-      const px = triggerPrice(order, open, high, low);
+      let px: number | null;
+      if (order.limit == null && order.stop == null) px = open;
+      else px = triggerPrice(order, open, high, low);
       if (px == null) continue;
       this.dropPending(order.id);
+      const emitEntry = order.kind === "entry" || order.deferred === true;
+      const barTime = isFiniteNumber(ohlc.time) ? ohlc.time : undefined;
       const applied =
         order.kind === "exit"
-          ? this.applyExitFill(b, order, px)
-          : this.applyEntryFill(b, order.id, order.direction, order.qty, px, false);
+          ? this.applyExitFill(b, order, px, barTime)
+          : order.kind === "close" || order.kind === "close_all"
+            ? this.applyCloseFill(b, order, px, barTime)
+            : this.applyEntryFill(b, order.id, order.direction, order.qty, px, emitEntry, {
+                comment: order.comment,
+                time: barTime,
+              });
       if (applied) {
         const q = Math.abs(this.fills.at(-1)?.qty ?? order.qty);
         this.ocaAfterFill(order, q, b);
@@ -1154,6 +1285,27 @@ export class StrategyBook {
       }
     }
     return filled;
+  }
+
+  /** Apply a queued market close/close_all at the next bar open. */
+  private applyCloseFill(
+    bar: number,
+    order: PendingOrder,
+    price: number,
+    time?: number,
+  ): boolean {
+    this.ensureSanePosition();
+    if (this.position.qty === 0 || !isFiniteNumber(price)) return false;
+    const absPos = Math.abs(this.position.qty);
+    const rawQty = order.qty;
+    const q = isFiniteNumber(rawQty) && rawQty > 0 ? Math.min(Math.abs(rawQty), absPos) : absPos;
+    if (!(q > 0)) return false;
+    if (q < absPos - 1e-12) {
+      this.reducePosition(bar, order.id, price, q, order.from_entry ?? null, time, order.comment);
+    } else {
+      this.flattenAt(bar, order.id, price, time, order.comment);
+    }
+    return true;
   }
 
   /** Market entry at `price`. Flat/same-dir adds qty; opposite closes then reverses. */
@@ -1302,9 +1454,9 @@ export class StrategyBook {
     return { status: "ok", qty: Math.min(rawQty, target) };
   }
 
-  private applyExitFill(bar: number, order: PendingOrder, price: number): boolean {
+  private applyExitFill(bar: number, order: PendingOrder, price: number, time?: number): boolean {
     const t = isFiniteNumber(bar) ? bar : 0;
-    return this.reducePosition(t, order.id, price, order.qty, order.from_entry ?? null, t);
+    return this.reducePosition(t, order.id, price, order.qty, order.from_entry ?? null, time);
   }
 
   private closeLeg(

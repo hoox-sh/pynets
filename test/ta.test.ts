@@ -48,7 +48,7 @@ describe("ta.ema incremental", () => {
 });
 
 describe("ta.atr incremental", () => {
-  test("first bar na then finite", () => {
+  test("bar 0 seeds TR with high-low, then finite", () => {
     const ta = new TaEngine();
     const highs = [10, 12, 13, 15, 16];
     const lows = [8, 9, 10, 11, 12];
@@ -56,8 +56,8 @@ describe("ta.atr incremental", () => {
     const out = highs.map((h, i) => ta.atr("atr:0", h, lows[i]!, closes[i]!, 3));
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
-    expect(out[2]).toBeNull();
-    expect(typeof out[3]).toBe("number");
+    expect(typeof out[2]).toBe("number");
+    expect(Number.isFinite(out[2]!)).toBe(true);
     expect(Number.isFinite(out[3]!)).toBe(true);
   });
 });
@@ -162,21 +162,23 @@ describe("ta.lowest incremental", () => {
 });
 
 describe("ta.stdev incremental", () => {
-  test("period 3 sample stdev of [1,2,3,4,5] is 1", () => {
+  test("period 3 population stdev of [1,2,3,4,5] is sqrt(2/3)", () => {
     const ta = new TaEngine();
     const out = [1, 2, 3, 4, 5].map((x) => ta.stdev("sd:0", x, 3));
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
-    expect(out[2]).toBe(1);
-    expect(out[3]).toBe(1);
-    expect(out[4]).toBe(1);
+    for (let i = 2; i < out.length; i++) expect(out[i]).toBeCloseTo(Math.sqrt(2 / 3));
   });
 
   test("any na in window → na", () => {
     const ta = new TaEngine();
     const src: Cell[] = [1, 2, 3, null, 5];
     const out = src.map((x) => ta.stdev("sd:0", x, 3));
-    expect(out).toEqual([null, null, 1, null, null]);
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBeCloseTo(Math.sqrt(2 / 3));
+    expect(out[3]).toBeNull();
+    expect(out[4]).toBeNull();
   });
 
   test("period<=1 returns null", () => {
@@ -277,16 +279,21 @@ describe("ta.macd incremental", () => {
 });
 
 describe("ta.bb incremental", () => {
-  test("period 3 mult 2: mid=sma, up/lo = mid ± 2*stdev", () => {
+  test("period 3 mult 2: mid=sma, up/lo = mid ± 2*population stdev", () => {
     const ta = new TaEngine();
     const out = [1, 2, 3, 4, 5].map((x) => ta.bb("bb:0", x, 3, 2));
+    const dev = Math.sqrt(2 / 3);
     expect(out[0]).toEqual({ mid: null, up: null, lo: null });
     expect(out[1]).toEqual({ mid: null, up: null, lo: null });
     expect(out[2]!.mid).toBe(2);
-    expect(out[2]!.up).toBe(4);
-    expect(out[2]!.lo).toBe(0);
-    expect(out[3]).toEqual({ mid: 3, up: 5, lo: 1 });
-    expect(out[4]).toEqual({ mid: 4, up: 6, lo: 2 });
+    expect(out[2]!.up).toBeCloseTo(2 + dev * 2);
+    expect(out[2]!.lo).toBeCloseTo(2 - dev * 2);
+    expect(out[3]!.mid).toBe(3);
+    expect(out[3]!.up).toBeCloseTo(3 + dev * 2);
+    expect(out[3]!.lo).toBeCloseTo(3 - dev * 2);
+    expect(out[4]!.mid).toBe(4);
+    expect(out[4]!.up).toBeCloseTo(4 + dev * 2);
+    expect(out[4]!.lo).toBeCloseTo(4 - dev * 2);
   });
 
   test("na in window nulls all bands", () => {
@@ -303,9 +310,10 @@ describe("ta.bbw / ta.cross", () => {
   test("bbw is (up-lo)/mid", () => {
     const ta = new TaEngine();
     const out = [1, 2, 3, 4, 5].map((x) => ta.bbw("bbw:0", x, 3, 2));
+    const dev = Math.sqrt(2 / 3);
     expect(out[0]).toBeNull();
-    expect(out[2]).toBeCloseTo(2);
-    expect(out[4]).toBeCloseTo(1);
+    expect(out[2]).toBeCloseTo((2 * 2 * dev) / 2);
+    expect(out[4]).toBeCloseTo((2 * 2 * dev) / 4);
   });
 
   test("cross is 1 on either direction", () => {

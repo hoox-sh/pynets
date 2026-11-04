@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 
-const BARS = [100, 110].map((close, i) => ({
+const BARS = [100, 110, 120].map((close, i) => ({
   open: close,
   high: close + 1,
   low: close - 1,
@@ -32,7 +32,7 @@ plot(strategy.max_drawdown, title="dd")`,
     expect(out.strategy?.netprofit).toBeCloseTo(10);
     expect(out.strategy?.percentProfitable).toBe(100);
     expect(out.strategy?.closedtrades).toBe(1);
-    expect(out.series.pp?.[1]).toBe(100);
+    expect(out.series.pp?.[2]).toBe(100);
   });
 
   test("str.format_time default", () => {

@@ -101,7 +101,7 @@ plot(strategy.position_size)`,
       BARS,
     );
     expect(out.error).toBeUndefined();
-    expect(out.plots[0]).toBe(2);
+    expect(out.plots[0]).toBe(0);
     expect(out.plots[4]).toBe(2);
   });
 
