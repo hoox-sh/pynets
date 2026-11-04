@@ -218,6 +218,8 @@ export interface RuntimeOptions {
   mode?: RuntimeMode;
   /** Wall-clock budget in seconds. Interpret only; checked every 32 bars. */
   timeout_seconds?: number | null;
+  /** Visit the last bar as a forming realtime bar (`barstate.isrealtime`). */
+  realtimeLastBar?: boolean;
 }
 
 export interface RuntimeFill {
@@ -362,6 +364,8 @@ interface Env {
   maxBarsBackDecls: Array<{ var: Value; num: Value }>;
   /** Python `_alert_fire_bars` keys for `alert` / `alertcondition` freq gating. */
   alertFireBars: Map<string, number>;
+  /** Visit the last bar as a forming realtime bar (`barstate.isrealtime`). */
+  realtimeLastBar: boolean;
 }
 
 export class Runtime {
@@ -420,6 +424,7 @@ export class Runtime {
       timeframe: extraOpts?.timeframe ?? this.timeframe,
       libraries: extraOpts?.libraries != null ? resolveLibraries(extraOpts.libraries) : this.libraries,
       timeout_seconds: extraOpts?.timeout_seconds ?? this.timeout_seconds,
+      realtime_last_bar: extraOpts?.realtimeLastBar ?? false,
     };
     if (mode === "compile") {
       return runCompiled(source, ohlcv, host);
@@ -494,7 +499,7 @@ export class RuntimeStream {
     if (this.closed) return undefined;
     this.bars.push(bar);
     try {
-      const out = this.runtime.run(this.source, this.bars);
+      const out = this.runtime.run(this.source, this.bars, { realtimeLastBar: true });
       for (const h of this.barHandlers) h(out);
       return out;
     } catch (err) {
@@ -504,9 +509,35 @@ export class RuntimeStream {
     }
   }
 
+  /** Number of committed bars in the stream. */
+  get barCount(): number {
+    return this.bars.length;
+  }
+
+  /**
+   * Re-tick the forming last bar with revised OHLCV. The bar count does not
+   * advance; the script is re-evaluated from bar 0, so `once`, TA state, and
+   * broker fills naturally roll back to the revised history.
+   */
+  updateLastBar(bar: OHLCVBar): RuntimeResult {
+    if (this.closed) throw new Error("stream is closed");
+    if (this.bars.length === 0) throw new Error("updateLastBar requires at least one bar");
+    this.bars[this.bars.length - 1] = bar;
+    const out = this.runtime.run(this.source, this.bars, { realtimeLastBar: true });
+    for (const h of this.barHandlers) h(out);
+    return out;
+  }
+
+  /** Append several bars, returning the final result. */
+  appendBars(bars: OHLCVBar[]): RuntimeResult | undefined {
+    let out: RuntimeResult | undefined;
+    for (const bar of bars) out = this.push(bar);
+    return out;
+  }
+
   close(): RuntimeResult {
     this.closed = true;
-    const out = this.runtime.run(this.source, this.bars);
+    const out = this.runtime.run(this.source, this.bars, { realtimeLastBar: false });
     for (const h of this.endHandlers) h(out);
     return out;
   }
@@ -528,6 +559,7 @@ export function interpretTree(
     timeframe?: string | null;
     libraries?: LibraryRegistry;
     timeout_seconds?: number | null;
+    realtime_last_bar?: boolean;
   },
 ): RuntimeResult {
   const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
@@ -566,6 +598,7 @@ export function interpretTree(
     onceFired: new WeakSet(),
     maxBarsBackDecls: [],
     alertFireBars: new Map(),
+    realtimeLastBar: host?.realtime_last_bar ?? false,
   };
 
   const n = ohlcv.length;
@@ -1319,7 +1352,9 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       const t = onceNode.test == null ? 1 : unwrap(evalExpr(onceNode.test, env));
       if (!isTruthy(t)) return NA;
       for (const s of onceNode.body) execStmt(s, env);
-      env.onceFired.add(onceNode);
+      // Python commits the fired flag only on a confirmed bar; unconfirmed
+      // realtime ticks may re-run the body (rollback semantics).
+      if (barIsConfirmed(env)) env.onceFired.add(onceNode);
       return NA;
     }
     case "BoolOp":
@@ -1652,13 +1687,14 @@ function evalAttribute(node: Attribute, env: Env): Value {
     }
     if (node.value.id === "barstate") {
       const last = env.barIndex === env.barCount - 1;
+      const realtime = env.realtimeLastBar && last;
       if (node.attr === "isfirst") return env.barIndex === 0 ? 1 : 0;
       if (node.attr === "islast") return last ? 1 : 0;
-      if (node.attr === "ishistory") return last ? 0 : 1;
+      if (node.attr === "ishistory") return realtime ? 0 : 1;
       if (node.attr === "isconfirmed") return 1;
       if (node.attr === "isnew") return 1;
-      if (node.attr === "isrealtime") return 0;
-      if (node.attr === "islastconfirmedhistory") return last ? 1 : 0;
+      if (node.attr === "isrealtime") return realtime ? 1 : 0;
+      if (node.attr === "islastconfirmedhistory") return realtime ? 0 : last ? 1 : 0;
     }
     if (node.value.id === "session") {
       if (node.attr === "regular") return "regular";
@@ -2470,7 +2506,8 @@ function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOv
     !("timeframe" in extra) &&
     !("libraries" in extra) &&
     !("mode" in extra) &&
-    !("timeout_seconds" in extra)
+    !("timeout_seconds" in extra) &&
+    !("realtimeLastBar" in extra)
   );
 }
 
@@ -2623,6 +2660,7 @@ function runAuto(
     timeframe?: string | null;
     libraries?: LibraryRegistry;
     timeout_seconds?: number | null;
+    realtime_last_bar?: boolean;
   },
 ): RuntimeResult {
   const elig = compileEligible(source);
@@ -2700,7 +2738,7 @@ function normalizeAlertFreq(freq: unknown): string {
   return ALERT_FREQ_ALIASES[s] ?? (s ? s : FREQ_ONCE_PER_BAR);
 }
 
-/** Python `_bar_is_confirmed`. This host sets `barstate.isconfirmed` to 1 on every bar. */
+/** Python `_bar_is_confirmed`: single-tick runs are confirmed (ticks>1 not modeled). */
 function barIsConfirmed(_env: Env): boolean {
   return true;
 }

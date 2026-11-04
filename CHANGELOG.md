@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-04
+
+Realtime stream session API and forming-bar semantics.
+
+### Added
+- `RuntimeStream.updateLastBar(bar)` — re-tick the forming last bar without advancing `barCount`; `once`, TA state, and broker fills recompute from the revised history.
+- `RuntimeStream.appendBars(bars)` and `RuntimeStream.barCount`.
+- `RuntimeOptions.realtimeLastBar` / `Runtime.run(..., { realtimeLastBar: true })` — last bar sees `barstate.isrealtime=1`, `ishistory=0`, `islastconfirmedhistory=0`.
+- `RuntimeStream.push` uses realtime last-bar semantics; `close()` confirms the last bar.
+
+### Changed
+- `barstate.ishistory` is `1` on historical bars (including the last), matching PYNE; the realtime forming bar is `0`.
+- `once` commits its fired flag only on a confirmed bar, ready for multi-tick rollback.
+
+### Fixed
+- README stream example used the non-existent `stream.end()`; it now uses `close()`.
+
 ## [0.8.0] - 2026-11-04
 
 Full builtin surface: every name registered by PYNE's `BuiltinEvaluator`

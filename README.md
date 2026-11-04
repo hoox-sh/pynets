@@ -178,8 +178,16 @@ const stream = rt.stream(source);
 stream.on("bar", (out) => { /* one result per push */ });
 stream.push({ close: 1 });
 stream.push({ close: 2 });
-stream.end();
+
+// Re-tick the forming last bar (does not advance barCount):
+// barstate.isrealtime is 1, ishistory 0; once/TA/broker state recomputes.
+stream.updateLastBar({ open: 2, high: 3, low: 1, close: 2.5 });
+stream.appendBars([{ close: 3 }, { close: 4 }]);
+stream.close(); // confirm the last bar (realtimeLastBar: false)
 ```
+
+`Runtime.run(src, bars, { realtimeLastBar: true })` exposes the same flag for a
+single call.
 
 ### Bars you actually have
 

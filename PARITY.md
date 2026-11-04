@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1374 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1378 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -94,12 +94,27 @@ PYNE's `_expect_list(PineSeries)` returns the series history **newest-first**
 `volatility_regime_score`, `correlation_filter`, breakout/pullback/divergence,
 spread, macro proxies) now match Python.
 
+## Realtime stream
+
+`RuntimeStream` now models a forming last bar:
+
+- `push(bar)` re-runs the script with `realtimeLastBar: true`, so the last bar
+  sees `barstate.isrealtime=1`, `barstate.ishistory=0`,
+  `barstate.islastconfirmedhistory=0`.
+- `updateLastBar(bar)` replaces the forming bar and re-runs without advancing
+  `barCount`; `once`, TA state, and broker fills recompute from the revised
+  history (natural rollback).
+- `appendBars(bars)` and `barCount` round out the session API.
+- `close()` re-runs with `realtimeLastBar: false`, confirming the last bar.
+
+`Runtime.run(..., { realtimeLastBar: true })` exposes the same flag directly.
+Multi-tick re-evaluation (`realtime_ticks > 1`) is not modeled yet; the
+single-tick result matches Python's `realtime_last_bar=True` flags.
+
 ## Remaining work
 
-None of the PYNE-registered builtin names are unported. The remaining work is
-edge semantics, not surface:
-
-- Realtime `once` rollback.
+- Multi-tick realtime windows (`realtime_ticks` / `realtime_bars` /
+  `realtime_from_bar`) with intermediate unconfirmed `once` rollback.
 - `ta.gamma_levels` list indexing on the compile path (`array.get` works;
   `g[0]` does not lower to array indexing).
 - Python quirks where nested `ta.*` arguments are rejected in bar mode
