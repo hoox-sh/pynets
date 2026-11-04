@@ -15,7 +15,7 @@ Product manuals live on the PYNE docs site (same structure as `hoox.sh/pyne/docs
 | Ecosystem | https://hoox.sh/pyne/docs/reference/ecosystem |
 | Modes | https://hoox.sh/pyne/docs/enduser/reference/modes |
 
-Current parity snapshot: **PYNE 0.6.32** (`bun test` 1322 pass). The repo
+Current parity snapshot: **PYNE 0.6.32** (`bun test` 1364 pass). The repo
 [`PARITY.md`](../PARITY.md) tracks the remaining advanced analytics and
 history-list quirks; update it whenever a builtin wave lands.
 

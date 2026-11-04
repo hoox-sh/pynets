@@ -595,6 +595,10 @@ export class TaEngine {
   private readonly marketConditionSites = new Map<string, MarketConditionState>();
   private readonly orderFlowSites = new Map<string, OrderFlowState>();
   private readonly liquiditySites = new Map<string, LiquidityState>();
+  private readonly emaCrossSites = new Map<string, { prevFast: Cell; prevSlow: Cell; count: number }>();
+  private readonly historySites = new Map<string, Cell[]>();
+  private readonly momentumFilterSites = new Map<string, { momentum: Cell[]; volume: Cell[] }>();
+  private readonly volatilityRegimeSites = new Map<string, Cell[]>();
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);
@@ -3127,6 +3131,55 @@ export class TaEngine {
     return v === undefined ? null : v;
   }
 
+  /**
+   * Python `_expect_list(PineSeries)` history: newest-first, capped at 1000.
+   * `h[0]` is the current bar, `h[h.length - 1]` the oldest retained sample.
+   */
+  private hist(site: string, value: Cell): Cell[] {
+    let h = this.historySites.get(site);
+    if (h === undefined) {
+      h = [];
+      this.historySites.set(site, h);
+    }
+    h.unshift(finiteCell(value));
+    if (h.length > 1000) h.pop();
+    return h;
+  }
+
+  /**
+   * Python `_expect_list` input: a Pine array is used as-is (last element is
+   * the `[-1]` index); a series sample appends to the newest-first history.
+   */
+  private windowFor(site: string, value: unknown): Cell[] {
+    if (Array.isArray(value)) {
+      return value.map((v) => (typeof v === "number" ? finiteCell(v) : null));
+    }
+    if (
+      value != null &&
+      typeof value === "object" &&
+      typeof (value as { size?: unknown }).size === "function" &&
+      typeof (value as { get?: unknown }).get === "function"
+    ) {
+      const arr = value as { size: () => number; get: (i: number) => unknown };
+      const out: Cell[] = [];
+      const n = arr.size();
+      for (let i = 0; i < n; i++) {
+        const v = arr.get(i);
+        out.push(typeof v === "number" ? finiteCell(v) : null);
+      }
+      return out;
+    }
+    return this.hist(site, typeof value === "number" ? value : null);
+  }
+
+  private static oldest(h: Cell[]): Cell {
+    return h.length === 0 ? null : h[h.length - 1]!;
+  }
+
+  private static secondOldest(h: Cell[]): Cell {
+    return h.length < 2 ? null : h[h.length - 2]!;
+  }
+
   /** `ta.voi` — non-numeric inputs are 0 (`volume.py`). */
   voi(buy: Cell, sell: Cell): Cell {
     const b = buy !== null && Number.isFinite(buy) ? buy : 0;
@@ -3776,10 +3829,46 @@ export class TaEngine {
     });
   }
 
-  /** `strategies.py` `_builtin_ta_market_structure_pivot` (bar-mode last close). */
-  marketStructurePivot(close: Cell): TaRecord {
-    const c = finiteCell(close) ?? 0;
-    return taRec({ pivot_price: c, structure: "fractal", type: "high" });
+  /**
+   * `advanced.py` `_builtin_ta_market_structure_pivot` (wins MRO over the
+   * strategies variant): oldest `period` highs/lows, midpoint pivot.
+   */
+  marketStructurePivot(
+    site: string,
+    high: unknown,
+    low: unknown,
+    period: Cell,
+    mode: Cell,
+  ): TaRecord {
+    const hh = this.windowFor(`${site}:high`, high);
+    const ll = this.windowFor(`${site}:low`, low);
+    const n = this.coerceTaInt(period, "ta.market_structure_pivot() requires 5 arguments");
+    const m = this.coerceTaInt(mode, "ta.market_structure_pivot() requires 5 arguments");
+    const off = taRec({ pivot_price: 100, strength: 50, structure: "neutral" });
+    if (hh.length === 0 || ll.length === 0 || hh.length < n || n <= 0) return off;
+    const hVals = hh.slice(-n).filter((v): v is number => v !== null);
+    const lVals = ll.slice(-n).filter((v): v is number => v !== null);
+    if (hVals.length === 0 || lVals.length === 0) return off;
+    let pivotHigh = hVals[0]!;
+    let pivotLow = lVals[0]!;
+    for (const v of hVals) if (v > pivotHigh) pivotHigh = v;
+    for (const v of lVals) if (v < pivotLow) pivotLow = v;
+    const price = (pivotHigh + pivotLow) / 2;
+    const range = pivotHigh - pivotLow;
+    let structure = "block";
+    let strength = Math.min(100, range * 0.5);
+    if (m === 0) {
+      structure = "fractal";
+      strength = Math.min(100, range * 2);
+    } else if (m === 1) {
+      structure = "swing";
+      strength = Math.min(100, range * 1.5);
+    }
+    return taRec({
+      pivot_price: finiteOut(price) ?? 0,
+      strength: finiteOut(strength) ?? 0,
+      structure,
+    });
   }
 
   /** `strategies.py` `_builtin_ta_position_sizing_score`. */
@@ -3813,9 +3902,10 @@ export class TaEngine {
     });
   }
 
-  /** `strategies.py` `_builtin_ta_optimal_entry_zone` (bar-mode last close). */
-  optimalEntryZone(close: Cell): TaRecord {
-    const c = finiteCell(close) ?? 0;
+  /** `strategies.py` `_builtin_ta_optimal_entry_zone` (newest-first list: `[-1]` = oldest). */
+  optimalEntryZone(site: string, close: unknown): TaRecord {
+    const h = this.windowFor(`${site}:close`, close);
+    const c = TaEngine.oldest(h) ?? 0;
     return taRec({
       min: finiteOut(c * 0.99) ?? 0,
       max: finiteOut(c * 1.01) ?? 0,
@@ -3827,11 +3917,20 @@ export class TaEngine {
     });
   }
 
-  /** `strategies.py` `_builtin_ta_mean_reversion_entry` (bar-mode last samples). */
-  meanReversionEntry(price: Cell, sma: Cell, stdev: Cell, threshold: Cell): TaRecord {
-    const p = finiteCell(price) ?? 0;
-    const s = finiteCell(sma) ?? 0;
-    const sd = finiteCell(stdev) ?? 1;
+  /** `strategies.py` `_builtin_ta_mean_reversion_entry` (newest-first lists: `[-1]` = oldest). */
+  meanReversionEntry(
+    site: string,
+    price: unknown,
+    sma: unknown,
+    stdev: unknown,
+    threshold: Cell,
+  ): TaRecord {
+    const ph = this.windowFor(`${site}:price`, price);
+    const sh = this.windowFor(`${site}:sma`, sma);
+    const dh = this.windowFor(`${site}:stdev`, stdev);
+    const p = TaEngine.oldest(ph) ?? 0;
+    const s = TaEngine.oldest(sh) ?? 0;
+    const sd = TaEngine.oldest(dh) ?? 1;
     const th = finiteCell(threshold) ?? 0;
     const z = sd !== 0 ? (p - s) / sd : 0;
     return taRec({
@@ -3941,6 +4040,484 @@ export class TaEngine {
       });
     }
     return taRec({ is_breakout: false, breakout_type: "none", breakout_strength: 0 });
+  }
+
+  /** `core.py` `_ema_cross_signal_inc_update`. */
+  emaCrossSignal(site: string, fast: Cell, slow: Cell, threshold: Cell): TaRecord {
+    const off = taRec({ signal: "neutral", strength: 0, trend_direction: 0 });
+    let st = this.emaCrossSites.get(site);
+    if (st === undefined) {
+      st = { prevFast: null, prevSlow: null, count: 0 };
+      this.emaCrossSites.set(site, st);
+    }
+    const f = finiteCell(fast) ?? 0;
+    const s = finiteCell(slow) ?? 0;
+    const th = finiteCell(threshold) ?? 0;
+    st.count += 1;
+    const prevFast = st.prevFast;
+    const prevSlow = st.prevSlow;
+    if (st.count < 2 || prevFast === null || prevSlow === null) {
+      st.prevFast = f;
+      st.prevSlow = s;
+      return off;
+    }
+    const diff = f - s;
+    const prevDiff = prevFast - prevSlow;
+    const crossover = prevDiff <= 0 && diff > 0;
+    const crossunder = prevDiff >= 0 && diff < 0;
+    const strength = Math.abs(diff);
+    const trend = diff > 0 ? 1 : -1;
+    let signal = "neutral";
+    if (crossover && strength > th) signal = "buy";
+    else if (crossunder && strength > th) signal = "sell";
+    st.prevFast = f;
+    st.prevSlow = s;
+    return taRec({ signal, strength: finiteOut(strength) ?? 0, trend_direction: trend });
+  }
+
+  /** `core.py` `_momentum_filter_inc_update`. */
+  momentumFilter(site: string, momentum: Cell, volume: Cell, period: Cell): number {
+    const n = this.coerceTaInt(period, "ta.momentum_filter() requires 3 arguments");
+    if (n <= 0) return 0;
+    let st = this.momentumFilterSites.get(`${site}:${n}`);
+    if (st === undefined) {
+      st = { momentum: [], volume: [] };
+      this.momentumFilterSites.set(`${site}:${n}`, st);
+    }
+    pushCap(st.momentum, finiteCell(momentum), n);
+    pushCap(st.volume, finiteCell(volume), n);
+    if (st.momentum.length < n || st.volume.length < n) return 0;
+    let volSum = 0;
+    for (const v of st.volume) if (v !== null) volSum += v;
+    if (volSum === 0) return 0;
+    let numerator = 0;
+    let paired = false;
+    for (let i = 0; i < n; i++) {
+      const m = st.momentum[i];
+      const v = st.volume[i];
+      if (m !== null && v !== null) {
+        numerator += m * v;
+        paired = true;
+      }
+    }
+    if (!paired) return 0;
+    return finiteOut(numerator / volSum) ?? 0;
+  }
+
+  /** `advanced.py` `_volatility_regime_inc_update`. */
+  volatilityRegime(site: string, atr: Cell, period: Cell): string {
+    const n = this.coerceTaInt(period, "period must be integer");
+    if (n < 1) return "medium";
+    let w = this.volatilityRegimeSites.get(`${site}:${n}`);
+    if (w === undefined) {
+      w = [];
+      this.volatilityRegimeSites.set(`${site}:${n}`, w);
+    }
+    pushCap(w, finiteCell(atr), n);
+    if (w.length < n) return "medium";
+    const recent: number[] = [];
+    for (const v of w) if (v !== null) recent.push(v);
+    if (recent.length === 0) return "medium";
+    const current = recent[recent.length - 1]!;
+    let sum = 0;
+    for (const v of recent) sum += v;
+    const avg = sum / recent.length;
+    if (current < avg * 0.5) return "low";
+    if (current > avg * 2) return "extreme";
+    if (current > avg * 1.3) return "high";
+    return "medium";
+  }
+
+  /** `advanced.py` `_builtin_ta_economic_impact_score`. */
+  economicImpactScore(priceChange: Cell, volatility: Cell, volumeChange: Cell): number {
+    const pc = finiteCell(priceChange) ?? 0;
+    const vol = finiteCell(volatility) ?? 0;
+    const vc = finiteCell(volumeChange) ?? 0;
+    const pcScore = Math.min(100, Math.abs(pc) * 20);
+    const volScore = Math.min(100, vol * 30);
+    const vcScore = Math.min(100, vc * 25);
+    return Math.max(0, Math.min(100, (pcScore + volScore + vcScore) / 3));
+  }
+
+  /** `advanced.py` `_builtin_ta_contrarian_signal`. */
+  contrarianSignal(sentiment: Cell, volatility: Cell, timeSinceExtreme: Cell): TaRecord {
+    const sent = finiteCell(sentiment) ?? 50;
+    const vol = finiteCell(volatility) ?? 1;
+    const time = finiteCell(timeSinceExtreme) ?? 10;
+    let signal = "neutral";
+    let strength = 0.5;
+    let confidence = 0.5;
+    if ((sent > 80 || sent < 20) && vol > 2 && time < 5) {
+      signal = "strong_contrarian";
+      strength = 0.9;
+      confidence = 0.8;
+    } else if (sent > 65 || sent < 35) {
+      signal = "mild_contrarian";
+      strength = 0.6;
+      confidence = 0.6;
+    } else if (sent > 45 && sent < 55) {
+      signal = "follow_crowd";
+      strength = 0.3;
+      confidence = 0.4;
+    }
+    return taRec({ signal, strength, confidence });
+  }
+
+  /** `strategies.py` `_builtin_ta_drawdown_recovery_level`. */
+  drawdownRecoveryLevel(peak: Cell, current: Cell, factor: Cell, period: Cell): TaRecord {
+    const p = finiteCell(peak) ?? 0;
+    const c = finiteCell(current) ?? 0;
+    const f = finiteCell(factor) ?? 0;
+    const n = this.coerceTaInt(period, "ta.drawdown_recovery_level() requires 4 arguments");
+    const drawdown = p > 0 ? (p - c) / p : 0;
+    const recovery = drawdown < 1 ? drawdown / (1 - drawdown) : 0;
+    return taRec({
+      recovery_level: p,
+      percent_needed: finiteOut(recovery * 100) ?? 0,
+      estimated_time: finiteOut(n * f) ?? 0,
+      confidence: 80,
+      drawdown_percent: finiteOut(drawdown * 100) ?? 0,
+      recovery_timeframe: finiteOut(n * f) ?? 0,
+      recovery_confidence: 0.8,
+    });
+  }
+
+  /** `common.py` `_builtin_ta_pivot_point_levels` (high/low/close form). */
+  pivotPointLevels(high: Cell, low: Cell, close: Cell, traditional: boolean): TaRecord {
+    const h = finiteCell(high) ?? 0;
+    const l = finiteCell(low) ?? 0;
+    const c = finiteCell(close) ?? 0;
+    const pivot = (h + l + c) / 3;
+    let r1: number;
+    let s1: number;
+    let r2: number;
+    let s2: number;
+    let r3: number;
+    let s3: number;
+    if (traditional) {
+      r1 = 2 * pivot - l;
+      s1 = 2 * pivot - h;
+      r2 = pivot + (h - l);
+      s2 = pivot - (h - l);
+      r3 = h + 2 * (pivot - l);
+      s3 = l - 2 * (h - pivot);
+    } else {
+      const diff = h - l;
+      r1 = pivot + 0.382 * diff;
+      s1 = pivot - 0.382 * diff;
+      r2 = pivot + 0.618 * diff;
+      s2 = pivot - 0.618 * diff;
+      r3 = pivot + diff;
+      s3 = pivot - diff;
+    }
+    return taRec({
+      pivot: finiteOut(pivot) ?? 0,
+      r1: finiteOut(r1) ?? 0,
+      s1: finiteOut(s1) ?? 0,
+      r2: finiteOut(r2) ?? 0,
+      s2: finiteOut(s2) ?? 0,
+      r3: finiteOut(r3) ?? 0,
+      s3: finiteOut(s3) ?? 0,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_volatility_regime_score` (newest-first lists). */
+  volatilityRegimeScore(
+    site: string,
+    atr: unknown,
+    volatility: unknown,
+    vix: unknown,
+    threshold: Cell,
+  ): TaRecord {
+    const a = this.windowFor(`${site}:atr`, atr);
+    const v = this.windowFor(`${site}:vol`, volatility);
+    const x = this.windowFor(`${site}:vix`, vix);
+    const th = finiteCell(threshold) ?? 50;
+    if (a.length === 0 || v.length === 0 || x.length === 0) {
+      return taRec({ regime: "normal", volatility_score: 50, momentum: "stable" });
+    }
+    const atrVal = TaEngine.oldest(a) ?? 2;
+    const volVal = TaEngine.oldest(v) ?? 0.02;
+    const vixVal = TaEngine.oldest(x) ?? 15;
+    const atrScore = Math.min(100, atrVal * 20);
+    const volScore = Math.min(100, volVal * 100);
+    const vixScore = Math.min(100, vixVal * 2);
+    const score = atrScore * 0.4 + volScore * 0.3 + vixScore * 0.3;
+    let regime: string;
+    if (score < th * 0.5) regime = "low";
+    else if (score < th) regime = "normal";
+    else if (score < th * 1.5) regime = "high";
+    else regime = "extreme";
+    let momentum = "stable";
+    const prevAtr = TaEngine.secondOldest(a);
+    if (a.length > 1 && prevAtr !== null) {
+      if (atrVal > prevAtr * 1.05) momentum = "accelerating";
+      else if (atrVal < prevAtr * 0.95) momentum = "decelerating";
+    }
+    return taRec({ regime, volatility_score: finiteOut(score) ?? 0, momentum });
+  }
+
+  /** `advanced.py` `_builtin_ta_correlation_filter` (newest-first lists). */
+  correlationFilter(
+    site: string,
+    s1: unknown,
+    s2: unknown,
+    s3: unknown,
+    threshold: Cell,
+  ): TaRecord {
+    const h1 = this.windowFor(`${site}:s1`, s1);
+    const h2 = this.windowFor(`${site}:s2`, s2);
+    const h3 = this.windowFor(`${site}:s3`, s3);
+    const histories = [h1, h2, h3].filter((h) => h.length > 0);
+    const off = taRec({ is_correlated: false, signal_agreement: 0, divergence_count: 0 });
+    if (histories.length < 2) return off;
+    const lastVals: number[] = [];
+    for (const h of histories) {
+      const v = TaEngine.oldest(h);
+      if (v !== null) lastVals.push(v);
+    }
+    if (lastVals.length === 0) return off;
+    let agreement = 0;
+    let divergence = 0;
+    for (let i = 0; i < lastVals.length - 1; i++) {
+      for (let j = i + 1; j < lastVals.length; j++) {
+        if (lastVals[i]! * lastVals[j]! > 0) agreement += 1;
+        else divergence += 1;
+      }
+    }
+    const pairs = (lastVals.length * (lastVals.length - 1)) / 2;
+    const pct = pairs > 0 ? (agreement / pairs) * 100 : 0;
+    const th = finiteCell(threshold) ?? 0.7;
+    return taRec({
+      is_correlated: pct / 100 >= th,
+      signal_agreement: finiteOut(pct) ?? 0,
+      divergence_count: divergence,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_advanced_breakout_detector` (newest-first lists). */
+  advancedBreakoutDetector(
+    site: string,
+    price: unknown,
+    volume: unknown,
+    level: Cell,
+    lookback: Cell,
+    volumeMultiplier: Cell,
+  ): TaRecord {
+    const ph = this.windowFor(`${site}:price`, price);
+    const vh = this.windowFor(`${site}:vol`, volume);
+    const lvl = finiteCell(level) ?? 100;
+    const n = this.coerceTaInt(lookback, "ta.advanced_breakout_detector() requires 5 arguments");
+    const mult = finiteCell(volumeMultiplier) ?? 0.5;
+    const off = taRec({ breakout_detected: false, breakout_type: "none", pullback_probability: 0.5 });
+    if (ph.length === 0 || vh.length === 0 || ph.length < 2 || n <= 0) return off;
+    const currentPrice = TaEngine.oldest(ph) ?? 100;
+    const prevPrice = TaEngine.secondOldest(ph) ?? 100;
+    const currentVol = TaEngine.oldest(vh) ?? 1000;
+    const recentVol = vh.slice(-n).filter((v): v is number => v !== null);
+    const avgVol = recentVol.length > 0 ? recentVol.reduce((a, b) => a + b, 0) / recentVol.length : 1000;
+    const gap = currentPrice > lvl && prevPrice <= lvl;
+    const closeBreak = currentPrice > lvl && Math.abs(currentPrice - lvl) < 0.5;
+    const volumeBreak = currentVol > avgVol * (1 + mult);
+    const detected = gap || closeBreak || volumeBreak;
+    let type = "none";
+    if (gap) type = "gap";
+    else if (closeBreak && volumeBreak) type = "volume_break";
+    else if (closeBreak) type = "close_above";
+    const pullback = avgVol !== 0 ? Math.max(0.1, 0.8 - (currentVol / avgVol - 1) * 0.3) : 0.8;
+    return taRec({
+      breakout_detected: detected,
+      breakout_type: type,
+      pullback_probability: finiteOut(pullback) ?? 0.5,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_pullback_bounce_level` (newest-first lists). */
+  pullbackBounceLevel(
+    site: string,
+    high: unknown,
+    low: unknown,
+    trendDirection: Cell,
+    lookback: Cell,
+  ): TaRecord {
+    const hh = this.windowFor(`${site}:high`, high);
+    const ll = this.windowFor(`${site}:low`, low);
+    const trend = this.coerceTaInt(trendDirection, "trend direction must be integer");
+    const n = this.coerceTaInt(lookback, "ta.pullback_bounce_level() requires 5 arguments");
+    const off = taRec({ primary_level: 100, bounce_probability: 0.5, support_strength: 50 });
+    if (hh.length === 0 || ll.length === 0 || n <= 0) return off;
+    const hVals = hh.slice(-n).filter((v): v is number => v !== null);
+    const lVals = ll.slice(-n).filter((v): v is number => v !== null);
+    if (hVals.length === 0 || lVals.length === 0) return off;
+    let swingHigh = hVals[0]!;
+    let swingLow = lVals[0]!;
+    for (const v of hVals) if (v > swingHigh) swingHigh = v;
+    for (const v of lVals) if (v < swingLow) swingLow = v;
+    const range = swingHigh - swingLow;
+    const fib = trend > 0 ? swingLow + range * 0.382 : swingHigh - range * 0.382;
+    const bounce = swingHigh !== 0 ? Math.min(0.95, 0.5 + (range / swingHigh) * 1) : 0.5;
+    const strength = swingHigh !== 0 ? Math.min(100, (range / swingHigh) * 100) : 0;
+    return taRec({
+      primary_level: finiteOut(fib) ?? 0,
+      bounce_probability: finiteOut(bounce) ?? 0.5,
+      support_strength: finiteOut(strength) ?? 0,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_divergence_detector` (newest-first lists). */
+  divergenceDetector(site: string, price: unknown, indicator: unknown, lookback: Cell): TaRecord {
+    const ph = this.windowFor(`${site}:price`, price);
+    const ih = this.windowFor(`${site}:ind`, indicator);
+    const n = this.coerceTaInt(lookback, "lookback must be integer");
+    const off = taRec({ is_bullish: false, is_bearish: false, strength: 0 });
+    if (ph.length < n || ih.length < n) return off;
+    const pv = ph.slice(-n).filter((v): v is number => v !== null);
+    const iv = ih.slice(-n).filter((v): v is number => v !== null);
+    if (pv.length < 2 || iv.length < 2) return off;
+    const priceLower = pv[pv.length - 1]! < pv[0]!;
+    const indHigher = iv[iv.length - 1]! > iv[0]!;
+    const bullish = priceLower && indHigher;
+    const priceHigher = pv[pv.length - 1]! > pv[0]!;
+    const indLower = iv[iv.length - 1]! < iv[0]!;
+    const bearish = priceHigher && indLower;
+    const strength = Math.min(1, Math.abs(iv[iv.length - 1]! - iv[0]!) / 100);
+    return taRec({
+      is_bullish: bullish,
+      is_bearish: bearish,
+      strength: finiteOut(strength) ?? 0,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_momentum_divergence` (newest-first lists). */
+  momentumDivergence(
+    site: string,
+    price: unknown,
+    momentumFast: unknown,
+    momentumSlow: unknown,
+  ): TaRecord {
+    const ph = this.windowFor(`${site}:price`, price);
+    const fh = this.windowFor(`${site}:fast`, momentumFast);
+    const sh = this.windowFor(`${site}:slow`, momentumSlow);
+    const off = taRec({ divergence_type: "none", strength: 0, bars_since: 0 });
+    if (ph.length < 2 || fh.length < 2 || sh.length < 2) return off;
+    const pv = ph.slice(-2).filter((v): v is number => v !== null);
+    const fv = fh.slice(-2).filter((v): v is number => v !== null);
+    const sv = sh.slice(-2).filter((v): v is number => v !== null);
+    if (pv.length < 2 || fv.length < 2 || sv.length < 2) return off;
+    const priceLower = pv[1]! < pv[0]!;
+    const fastHigher = fv[1]! > fv[0]!;
+    const slowHigher = sv[1]! > sv[0]!;
+    const bullish = priceLower && fastHigher && slowHigher;
+    const bearish = !priceLower && !fastHigher && !slowHigher;
+    const type = bullish ? "bullish" : bearish ? "bearish" : "none";
+    const strength = Math.min(1, Math.abs(fv[1]! - fv[0]!) / 100);
+    return taRec({ divergence_type: type, strength: finiteOut(strength) ?? 0, bars_since: 1 });
+  }
+
+  /** `economics.py` `_builtin_ta_spread_analysis` (newest-first lists). */
+  spreadAnalysis(site: string, bid: unknown, ask: unknown, period: Cell): TaRecord {
+    const bh = this.windowFor(`${site}:bid`, bid);
+    const ah = this.windowFor(`${site}:ask`, ask);
+    const n = this.coerceTaInt(period, "ta.spread_analysis() requires 3 arguments");
+    const off = taRec({ avg_spread: 0, spread_percent: 0, spread_trend: "stable" });
+    if (bh.length < n || ah.length < n || n <= 0) return off;
+    const bSlice = bh.slice(-n);
+    const aSlice = ah.slice(-n);
+    const spreads: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const b = bSlice[i] ?? 0;
+      const a = aSlice[i] ?? 0;
+      if (a > b && b > 0) spreads.push(a - b);
+    }
+    if (spreads.length === 0) return off;
+    const avg = spreads.reduce((a, b) => a + b, 0) / spreads.length;
+    const askOld = TaEngine.oldest(ah);
+    const bidOld = TaEngine.oldest(bh);
+    const mid = askOld !== null && bidOld !== null ? (askOld + bidOld) / 2 : 100;
+    const pct = mid > 0 ? (avg / mid) * 100 : 0;
+    let trend = "stable";
+    if (spreads.length >= 2) {
+      const first = spreads[0]!;
+      const last = spreads[spreads.length - 1]!;
+      if (last > first * 1.1) trend = "increasing";
+      else if (last < first * 0.9) trend = "decreasing";
+    }
+    return taRec({
+      avg_spread: finiteOut(avg) ?? 0,
+      spread_percent: finiteOut(pct) ?? 0,
+      spread_trend: trend,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_employment_cycle_indicator` (newest-first lists). */
+  employmentCycleIndicator(
+    site: string,
+    cyclical: unknown,
+    defensive: unknown,
+    unemployment: unknown,
+  ): string {
+    const ch = this.windowFor(`${site}:cyc`, cyclical);
+    const dh = this.windowFor(`${site}:def`, defensive);
+    const uh = this.windowFor(`${site}:unemp`, unemployment);
+    if (ch.length === 0 || dh.length === 0 || uh.length === 0) return "mid_cycle";
+    const cNew = ch[0];
+    const cOld = TaEngine.oldest(ch);
+    const dNew = dh[0];
+    const dOld = TaEngine.oldest(dh);
+    const cycPerf = cNew !== null && cOld !== null && cNew !== 0 ? (cOld - cNew) / cNew : 0;
+    const defPerf = dNew !== null && dOld !== null && dNew !== 0 ? (dOld - dNew) / dNew : 0;
+    const unemp = TaEngine.oldest(uh) ?? 0.05;
+    if (cycPerf > defPerf && unemp < 0.04) return "early_cycle";
+    if (cycPerf > defPerf && unemp < 0.06) return "mid_cycle";
+    if (cycPerf < defPerf && unemp > 0.05) return "late_cycle";
+    return "recession";
+  }
+
+  /** `advanced.py` `_builtin_ta_gdp_growth_proxy` (newest-first lists). */
+  gdpGrowthProxy(site: string, breadth: unknown, volume: unknown, momentum: unknown): number {
+    const bh = this.windowFor(`${site}:breadth`, breadth);
+    const vh = this.windowFor(`${site}:volume`, volume);
+    const mh = this.windowFor(`${site}:momentum`, momentum);
+    if (bh.length === 0 || vh.length === 0 || mh.length === 0) return 0;
+    const b = TaEngine.oldest(bh) ?? 0.5;
+    const bScore = b * 2 - 1;
+    const vNew = vh[0];
+    const vOld = TaEngine.oldest(vh);
+    const vChange = vNew !== null && vOld !== null && vNew !== 0 ? ((vOld - vNew) / vNew) * 100 : 0;
+    const m = TaEngine.oldest(mh) ?? 0;
+    const gdp = bScore * 1.5 + vChange / 100 + m / 100;
+    return Math.max(-2, Math.min(4, gdp));
+  }
+
+  /** `advanced.py` `_builtin_ta_inflation_proxy_indicator` (newest-first lists). */
+  inflationProxyIndicator(site: string, usdIndex: unknown, commodities: unknown, bondYields: unknown): number {
+    const uh = this.windowFor(`${site}:usd`, usdIndex);
+    const ch = this.windowFor(`${site}:comm`, commodities);
+    const yh = this.windowFor(`${site}:yield`, bondYields);
+    if (uh.length === 0 || ch.length === 0 || yh.length === 0) return 0;
+    const uNew = uh[0];
+    const uOld = TaEngine.oldest(uh);
+    const usdChange =
+      uNew !== null && uOld !== null && uNew !== 0 ? -((uOld - uNew) / uNew) * 100 : 0;
+    const cNew = ch[0];
+    const cOld = TaEngine.oldest(ch);
+    const commChange = cNew !== null && cOld !== null && cNew !== 0 ? ((cOld - cNew) / cNew) * 100 : 0;
+    const yNew = yh[0];
+    const yOld = TaEngine.oldest(yh);
+    const yieldsChange = yNew !== null && yOld !== null ? yOld - yNew : 0;
+    const pressure = usdChange * 0.3 + commChange * 0.4 + yieldsChange * 0.3;
+    return Math.max(-100, Math.min(100, pressure * 10));
+  }
+
+  /** `common.py` `_builtin_ta_expected_value`. */
+  expectedValue(returns: number[], probabilities: number[]): number {
+    if (returns.length !== probabilities.length) return 0;
+    let totalProb = 0;
+    for (const p of probabilities) totalProb += p;
+    if (totalProb === 0) return 0;
+    let ev = 0;
+    for (let i = 0; i < returns.length; i++) ev += returns[i]! * probabilities[i]!;
+    return finiteOut(ev / totalProb) ?? 0;
   }
 
   /**

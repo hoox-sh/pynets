@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1322 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1364 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -48,41 +48,52 @@ Wave 12 (risk / sizing / timing):
 `ta.multi_timeframe_signal`, `ta.market_timing_index`,
 `ta.regime_adaptive_signal`, `ta.strategy_score`, `ta.breakout_detection`.
 
+Wave 13 (history / sentiment / macro):
+
+`ta.ema_cross_signal`, `ta.momentum_filter`, `ta.volatility_regime`,
+`ta.economic_impact_score`, `ta.contrarian_signal`,
+`ta.drawdown_recovery_level`, `ta.pivot_point_levels`,
+`ta.volatility_regime_score`, `ta.correlation_filter`,
+`ta.advanced_breakout_detector`, `ta.pullback_bounce_level`,
+`ta.divergence_detector`, `ta.momentum_divergence`, `ta.spread_analysis`,
+`ta.employment_cycle_indicator`, `ta.gdp_growth_proxy`,
+`ta.inflation_proxy_indicator`, `ta.expected_value`.
+
+Also added: bare chart-type aliases `renko` / `kagi` / `linebreak` /
+`pointfigure`, `ticker.inherit`, and bare
+`percentile_linear_interpolation` / `percentile_nearest_rank` aliases.
+
 Every wave ships interpret + JS compile emit and a Python `Runtime.run` parity
-test (`test/interpret_wave11.test.ts`, `test/interpret_wave12.test.ts`).
+test (`test/interpret_wave11.test.ts`, `test/interpret_wave12.test.ts`,
+`test/interpret_wave13.test.ts`).
+
+## History-list semantics
+
+PYNE's `_expect_list(PineSeries)` returns the series history **newest-first**
+(capped at 1000), so `list[-1]` is the oldest retained sample. Wave 13 adds a
+`windowFor` helper to `TaEngine` that mirrors this for both series samples and
+`array.from(...)` inputs. The handlers that depend on it
+(`market_structure_pivot`, `optimal_entry_zone`, `mean_reversion_entry`,
+`volatility_regime_score`, `correlation_filter`, breakout/pullback/divergence,
+spread, macro proxies) now match Python.
 
 ## Remaining work
 
 ### Advanced analytics (not yet ported)
 
-`ta.advanced_breakout_detector`, `ta.contrarian_signal`,
-`ta.correlation_filter`, `ta.divergence_detector`, `ta.drawdown_recovery_level`,
-`ta.economic_impact_score`, `ta.ema_cross_signal`,
-`ta.employment_cycle_indicator`, `ta.expected_value`, `ta.gamma_levels`,
-`ta.gdp_growth_proxy`, `ta.inflation_proxy_indicator`,
-`ta.intelligent_strategy_synthesizer`, `ta.market_structure_pivot` (full
-list/left-right semantics), `ta.momentum_divergence`, `ta.momentum_filter`,
-`ta.pivot_point_levels`, `ta.pullback_bounce_level`, `ta.spread_analysis`,
-`ta.trailing_exit_level` (step semantics), `ta.volatility_regime`,
-`ta.volatility_regime_score`.
+- `ta.gamma_levels` — returns a two-element list; needs a list return type that
+  works on both interpret and compile.
+- `ta.intelligent_strategy_synthesizer` — multi-list + string regime/risk
+  profile synthesis; port after the list-return plumbing.
 
-### History-list quirks
+### Notes
 
-A few PYNE handlers call `_expect_list` on a `PineSeries` and then index
-`[-1]`, which in bar mode reads the **oldest** sample of the newest-first
-history (capped at 1000), not the current bar. `ta.market_structure_pivot`,
-`ta.optimal_entry_zone`, and `ta.mean_reversion_entry` currently use the current
-sample in PyneTS. Matching the quirk needs a per-call-site history window and
-should be done deliberately, with a test pinning the cap.
+- `ta.market_structure_pivot` uses the `advanced.py` semantics (oldest
+  `period` highs/lows, midpoint pivot) because it wins MRO over the
+  `strategies.py` variant.
+- `ta.mean_reversion_entry` parity requires series arguments; Python errors on
+  nested `ta.sma`/`ta.stdev` arguments in bar mode.
 
-### Aliases / constants
-
-- Bare ticker chart types: `renko`, `kagi`, `linebreak`, `pointfigure`.
-- `ticker.inherit`.
-- `last_bar_time` bare-name resolution (currently available via context/time
-  helpers but not as a standalone registered builtin).
-- `ta.percentile_linear_interpolation` / `ta.percentile_nearest_rank` bare
-  aliases.
 
 ## Adding a builtin
 

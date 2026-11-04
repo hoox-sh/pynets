@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
+Wave 13: history-based, sentiment, and macro analytics, plus the newest-first
+list semantics PYNE uses for `_expect_list(PineSeries)`.
+
+### Added
+- `ta.ema_cross_signal`, `ta.momentum_filter`, `ta.volatility_regime`, `ta.economic_impact_score`, `ta.contrarian_signal`, `ta.drawdown_recovery_level`, `ta.pivot_point_levels`, `ta.volatility_regime_score`, `ta.correlation_filter`, `ta.advanced_breakout_detector`, `ta.pullback_bounce_level`, `ta.divergence_detector`, `ta.momentum_divergence`, `ta.spread_analysis`, `ta.employment_cycle_indicator`, `ta.gdp_growth_proxy`, `ta.inflation_proxy_indicator`, `ta.expected_value` (interpret + compile).
+- Bare chart-type ticker aliases `renko`, `kagi`, `linebreak`, `pointfigure`; `ticker.inherit`; bare `percentile_linear_interpolation` / `percentile_nearest_rank` aliases.
+- `TaEngine.windowFor` — newest-first, 1000-sample history matching Python `_expect_list`, for both series and `array.from(...)` inputs.
+
+### Changed
+- `ta.market_structure_pivot` uses the `advanced.py` semantics (oldest `period` highs/lows, midpoint pivot, fractal/swing/block strength).
+- `ta.optimal_entry_zone` and `ta.mean_reversion_entry` read the oldest retained sample (`[-1]`), matching PYNE's newest-first lists.
+
 ## [0.6.0] - 2026-11-04
 
 Parity upgrade against PYNE 0.6.32: the Python probe now imports the local

@@ -193,6 +193,24 @@ const TA_METHODS = new Set([
   "regime_adaptive_signal",
   "strategy_score",
   "breakout_detection",
+  "ema_cross_signal",
+  "momentum_filter",
+  "volatility_regime",
+  "economic_impact_score",
+  "contrarian_signal",
+  "drawdown_recovery_level",
+  "pivot_point_levels",
+  "volatility_regime_score",
+  "correlation_filter",
+  "advanced_breakout_detector",
+  "pullback_bounce_level",
+  "divergence_detector",
+  "momentum_divergence",
+  "spread_analysis",
+  "employment_cycle_indicator",
+  "gdp_growth_proxy",
+  "inflation_proxy_indicator",
+  "expected_value",
 ]);
 
 /**
@@ -405,6 +423,13 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     ctx.needsHeikinashi = true;
     return `"__HEIKINASHI__"`;
   }
+  if (name === "ticker_inherit") {
+    const fallback = pick(args, 0, ["ticker", "tickerid", "from", "source"], `"SYMBOL"`);
+    return pick(args, 1, ["symbol", "ticker"], fallback);
+  }
+  if (name === "renko" || name === "kagi" || name === "linebreak" || name === "pointfigure") {
+    return pick(args, 0, ["ticker", "tickerid", "symbol"], `"SYMBOL"`);
+  }
   // ticker.new / standard / modify / renko / kagi / linebreak / pointfigure → first arg or "SYMBOL"
   if (name.startsWith("ticker_")) {
     return pick(args, 0, ["symbol", "ticker", "tickerid"], `"SYMBOL"`);
@@ -615,6 +640,11 @@ function finiteOr(expr: string, fb: string): string {
 /** Interpret `unwrap`: bool → 1/0, non-finite → null. */
 function cellOf(expr: string): string {
   return `((__c) => (__c == null ? null : typeof __c === "boolean" ? (__c ? 1 : 0) : (typeof __c === "number" && Number.isFinite(__c) ? __c : null)))(${expr})`;
+}
+
+/** Cell or array/object (history-based TA args keep arrays intact). */
+function arrOrCell(expr: string): string {
+  return `((__v) => (__v != null && typeof __v === "object" ? __v : (__v == null ? null : typeof __v === "boolean" ? (__v ? 1 : 0) : (typeof __v === "number" && Number.isFinite(__v) ? __v : null))))(${expr})`;
 }
 
 /**
@@ -2394,8 +2424,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "market_structure_pivot") {
-    return taPure("marketStructurePivot", [
-      cellOf(pick(args, 2, ["close"], "null")),
+    return taCall("marketStructurePivot", site, [
+      arrOrCell(pick(args, 0, ["high_list", "high"], "null")),
+      arrOrCell(pick(args, 1, ["low_list", "low"], "null")),
+      cellOf(pick(args, 3, ["period", "left", "left_bars"], "null")),
+      cellOf(pick(args, 4, ["mode", "right", "right_bars"], "null")),
     ]);
   }
   if (method === "position_sizing_score") {
@@ -2416,13 +2449,13 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "optimal_entry_zone") {
-    return taPure("optimalEntryZone", [cellOf(pick(args, 2, ["close"], "null"))]);
+    return taCall("optimalEntryZone", site, [arrOrCell(pick(args, 2, ["close"], "null"))]);
   }
   if (method === "mean_reversion_entry") {
-    return taPure("meanReversionEntry", [
-      cellOf(pick(args, 0, ["price", "source"], "null")),
-      cellOf(pick(args, 1, ["sma"], "null")),
-      cellOf(pick(args, 2, ["stdev", "std_dev"], "null")),
+    return taCall("meanReversionEntry", site, [
+      arrOrCell(pick(args, 0, ["price", "source"], "null")),
+      arrOrCell(pick(args, 1, ["sma"], "null")),
+      arrOrCell(pick(args, 2, ["stdev", "std_dev"], "null")),
       cellOf(pick(args, 4, ["threshold"], "null")),
     ]);
   }
@@ -2465,6 +2498,134 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       cellOf(pick(args, 1, ["resistance"], "null")),
       cellOf(pick(args, 2, ["support"], "null")),
     ]);
+  }
+  if (method === "ema_cross_signal") {
+    return taCall("emaCrossSignal", site, [
+      cellOf(pick(args, 0, ["fast_ema", "fast"], "null")),
+      cellOf(pick(args, 1, ["slow_ema", "slow"], "null")),
+      cellOf(pick(args, 2, ["threshold"], "null")),
+    ]);
+  }
+  if (method === "momentum_filter") {
+    return taCall("momentumFilter", site, [
+      cellOf(pick(args, 0, ["momentum_raw", "momentum"], "null")),
+      cellOf(pick(args, 1, ["volume"], "null")),
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "volatility_regime") {
+    return taCall("volatilityRegime", site, [
+      cellOf(pick(args, 0, ["atr_series", "atr", "source"], "null")),
+      cellOf(pick(args, 1, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "economic_impact_score") {
+    return taPure("economicImpactScore", [
+      cellOf(pick(args, 0, ["price_change"], "null")),
+      cellOf(pick(args, 1, ["volatility"], "null")),
+      cellOf(pick(args, 2, ["volume_change"], "null")),
+    ]);
+  }
+  if (method === "contrarian_signal") {
+    return taPure("contrarianSignal", [
+      cellOf(pick(args, 0, ["sentiment"], "null")),
+      cellOf(pick(args, 1, ["volatility"], "null")),
+      cellOf(pick(args, 2, ["time_since_extreme", "time_extreme"], "null")),
+    ]);
+  }
+  if (method === "drawdown_recovery_level") {
+    return taPure("drawdownRecoveryLevel", [
+      cellOf(pick(args, 0, ["peak"], "null")),
+      cellOf(pick(args, 1, ["current", "current_price"], "null")),
+      cellOf(pick(args, 2, ["recovery_factor", "factor"], "null")),
+      cellOf(pick(args, 3, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "pivot_point_levels") {
+    return taPure("pivotPointLevels", [
+      cellOf(pick(args, 0, ["high"], "null")),
+      cellOf(pick(args, 1, ["low"], "null")),
+      cellOf(pick(args, 2, ["close"], "null")),
+      pick(args, 3, ["traditional"], "true"),
+    ]);
+  }
+  if (method === "volatility_regime_score") {
+    return taCall("volatilityRegimeScore", site, [
+      arrOrCell(pick(args, 0, ["atr_list", "atr"], "null")),
+      arrOrCell(pick(args, 1, ["volatility_list", "volatility"], "null")),
+      arrOrCell(pick(args, 2, ["vix_list", "vix"], "null")),
+      cellOf(pick(args, 3, ["threshold"], "null")),
+    ]);
+  }
+  if (method === "correlation_filter") {
+    return taCall("correlationFilter", site, [
+      arrOrCell(pick(args, 0, ["signal1_list", "signal1", "s1"], "null")),
+      arrOrCell(pick(args, 1, ["signal2_list", "signal2", "s2"], "null")),
+      arrOrCell(pick(args, 2, ["signal3_list", "signal3", "s3"], "null")),
+      cellOf(pick(args, 4, ["threshold"], "null")),
+    ]);
+  }
+  if (method === "advanced_breakout_detector") {
+    return taCall("advancedBreakoutDetector", site, [
+      arrOrCell(pick(args, 0, ["price_list", "price"], "null")),
+      arrOrCell(pick(args, 1, ["volume_list", "volume"], "null")),
+      cellOf(pick(args, 2, ["level"], "null")),
+      cellOf(pick(args, 3, ["lookback"], "null")),
+      cellOf(pick(args, 4, ["volume_multiplier", "vol_mult"], "null")),
+    ]);
+  }
+  if (method === "pullback_bounce_level") {
+    return taCall("pullbackBounceLevel", site, [
+      arrOrCell(pick(args, 0, ["high_list", "high"], "null")),
+      arrOrCell(pick(args, 1, ["low_list", "low"], "null")),
+      cellOf(pick(args, 3, ["trend_direction", "trend_dir"], "null")),
+      cellOf(pick(args, 4, ["lookback"], "null")),
+    ]);
+  }
+  if (method === "divergence_detector") {
+    return taCall("divergenceDetector", site, [
+      arrOrCell(pick(args, 0, ["price_list", "price"], "null")),
+      arrOrCell(pick(args, 1, ["indicator_list", "indicator"], "null")),
+      cellOf(pick(args, 2, ["lookback"], "null")),
+    ]);
+  }
+  if (method === "momentum_divergence") {
+    return taCall("momentumDivergence", site, [
+      arrOrCell(pick(args, 0, ["price"], "null")),
+      arrOrCell(pick(args, 1, ["momentum_fast", "mom_fast"], "null")),
+      arrOrCell(pick(args, 2, ["momentum_slow", "mom_slow"], "null")),
+    ]);
+  }
+  if (method === "spread_analysis") {
+    return taCall("spreadAnalysis", site, [
+      arrOrCell(pick(args, 0, ["bid"], "null")),
+      arrOrCell(pick(args, 1, ["ask"], "null")),
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+    ]);
+  }
+  if (method === "employment_cycle_indicator") {
+    return taCall("employmentCycleIndicator", site, [
+      arrOrCell(pick(args, 0, ["cyclical_stocks", "cyclical"], "null")),
+      arrOrCell(pick(args, 1, ["defensive_stocks", "defensive"], "null")),
+      arrOrCell(pick(args, 2, ["unemployment_proxy", "unemployment"], "null")),
+    ]);
+  }
+  if (method === "gdp_growth_proxy") {
+    return taCall("gdpGrowthProxy", site, [
+      arrOrCell(pick(args, 0, ["market_breadth", "breadth"], "null")),
+      arrOrCell(pick(args, 1, ["market_volume", "volume"], "null")),
+      arrOrCell(pick(args, 2, ["price_momentum", "momentum"], "null")),
+    ]);
+  }
+  if (method === "inflation_proxy_indicator") {
+    return taCall("inflationProxyIndicator", site, [
+      arrOrCell(pick(args, 0, ["usd_index", "usd"], "null")),
+      arrOrCell(pick(args, 1, ["commodity_prices", "commodities"], "null")),
+      arrOrCell(pick(args, 2, ["bond_yields", "yields"], "null")),
+    ]);
+  }
+  if (method === "expected_value") {
+    return `__h.ta.expectedValue(${cellList(pick(args, 0, ["returns"], "null"))}, ${cellList(pick(args, 1, ["probabilities", "probs"], "null"))})`;
   }
   return "null";
 }
