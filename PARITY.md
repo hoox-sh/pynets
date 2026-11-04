@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1378 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1394 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -96,7 +96,7 @@ spread, macro proxies) now match Python.
 
 ## Realtime stream
 
-`RuntimeStream` now models a forming last bar:
+`RuntimeStream` models a forming last bar:
 
 - `push(bar)` re-runs the script with `realtimeLastBar: true`, so the last bar
   sees `barstate.isrealtime=1`, `barstate.ishistory=0`,
@@ -107,18 +107,48 @@ spread, macro proxies) now match Python.
 - `appendBars(bars)` and `barCount` round out the session API.
 - `close()` re-runs with `realtimeLastBar: false`, confirming the last bar.
 
-`Runtime.run(..., { realtimeLastBar: true })` exposes the same flag directly.
-Multi-tick re-evaluation (`realtime_ticks > 1`) is not modeled yet; the
-single-tick result matches Python's `realtime_last_bar=True` flags.
+## Realtime windows (multi-tick)
+
+`Runtime.run` ports Python's realtime window options; resolution precedence
+mirrors `_resolve_realtime_first` (`realtimeFromBar` > `realtimeBars` >
+`realtimeLastBar` / `realtimeTicks > 1`):
+
+```ts
+rt.run(src, bars, { realtimeFromBar: 12, realtimeTicks: 3 });
+rt.run(src, bars, { realtimeBars: 5, realtimeTicks: 2 });
+```
+
+Bars inside the window are visited once per tick, matching Python
+`_run_batch`:
+
+- Intermediate ticks roll back `var` scope, container contents (array / map /
+  UDT / matrix), UDF-site `var` state, plot cells, TA windows, and broker
+  state; plots capture the final tick only.
+- `varip` re-runs its initializer on every realtime tick (reference varip)
+  and persists across ticks — it also now initializes once and persists on
+  historical bars, matching Python (`varip` ≡ `var` when not realtime).
+- `barstate.isnew` is `0` after the first tick; `isconfirmed` is `0` on
+  intermediate ticks; `once` commits only on confirmed bars.
+- Alerts fire per tick like Python: `freq_all` every tick,
+  `freq_once_per_bar` first tick, `freq_once_per_bar_close` final tick.
+
+## List subscript (`g[0]`)
+
+Python `visit_Subscript` indexes list-valued names newest-first
+(`value[-(offset + 1)]`; OOB / negative / na → na) — `g[0]` is the *last*
+element of `ta.gamma_levels`' `[high, low]`. Both interpret and JS compile
+lower `g[0]` this way for names bound from `ta.gamma_levels`, `array.from`,
+`array.new*`, `array.copy`, `array.concat`, and `array.slice` (compile tracks
+array-valued names; Python's own compile mode returns na here).
 
 ## Remaining work
 
-- Multi-tick realtime windows (`realtime_ticks` / `realtime_bars` /
-  `realtime_from_bar`) with intermediate unconfirmed `once` rollback.
-- `ta.gamma_levels` list indexing on the compile path (`array.get` works;
-  `g[0]` does not lower to array indexing).
 - Python quirks where nested `ta.*` arguments are rejected in bar mode
   (`ta.mean_reversion_entry`); PyneTS accepts them.
+- Python's `data_feed` forming-bar polling during realtime ticks is not
+  modeled; ticks re-visit the same OHLC (Python without a feed does too).
+- `request.security` foreign / HTF without data → `na`; chart series are
+  never invented as foreign data.
 
 ### Notes
 

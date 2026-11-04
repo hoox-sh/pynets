@@ -7,6 +7,8 @@
  * remain the source of truth — interpret registers TypeDef / EnumDef later.
  */
 
+import { cloneValue } from "./clone.ts";
+
 export type UdtField = { name: string; default: unknown };
 
 /** Stored method; `body` is opaque (interpret owns FunctionDef). */
@@ -82,6 +84,26 @@ export class UdtInstance {
 
   getMethod(name: string): UdtMethod | undefined {
     return this.type.getMethod(name);
+  }
+
+  /** Deep clone (realtime tick snapshots). */
+  clone(): UdtInstance {
+    const out = new UdtInstance(this.type);
+    out.restoreContents(this.snapshotContents());
+    return out;
+  }
+
+  /** Deep-cloned field values for realtime tick rollback. */
+  snapshotContents(): Array<[string, unknown]> {
+    const out: Array<[string, unknown]> = [];
+    for (const [k, v] of this.values) out.push([k, cloneValue(v)]);
+    return out;
+  }
+
+  /** Replace fields with clones of `snap` — same instance for aliases. */
+  restoreContents(snap: Array<[string, unknown]>): void {
+    this.values.clear();
+    for (const [k, v] of snap) this.values.set(k, cloneValue(v));
   }
 }
 

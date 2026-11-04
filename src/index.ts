@@ -9,7 +9,7 @@
 export { dump, parse, tokenize, unparse, PinescriptSyntaxError } from "./ast/helper.ts";
 export type { ParseMode } from "./ast/helper.ts";
 export type { AST, Script, Expression } from "./ast/nodes.ts";
-export { Runtime, RuntimeStream, interpret, interpretTree } from "./runtime/interpret.ts";
+export { Runtime, RuntimeStream, interpret, interpretTree, resolveRealtimeWindow } from "./runtime/interpret.ts";
 export type {
   DrawingEvent,
   InputOverrides,

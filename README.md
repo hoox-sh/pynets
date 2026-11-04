@@ -187,7 +187,15 @@ stream.close(); // confirm the last bar (realtimeLastBar: false)
 ```
 
 `Runtime.run(src, bars, { realtimeLastBar: true })` exposes the same flag for a
-single call.
+single call. Multi-tick realtime windows work too (Python `realtime_ticks` /
+`realtime_bars` / `realtime_from_bar`):
+
+```ts
+// Visit bars 12.. as realtime, 3 ticks per bar: intermediate ticks roll back
+// var / TA / broker / plot state (varip persists, plots capture the final tick).
+rt.run(src, bars, { realtimeFromBar: 12, realtimeTicks: 3 });
+rt.run(src, bars, { realtimeBars: 5, realtimeTicks: 2 });
+```
 
 ### Bars you actually have
 

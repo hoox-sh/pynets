@@ -8,6 +8,7 @@
  */
 
 import { UdtInstance } from "./udt.ts";
+import { cloneValue } from "./clone.ts";
 
 /** Numeric/na cell. Arrays may also store UDT instances, strings, and bools. */
 export type Cell = number | null;
@@ -243,6 +244,24 @@ export class PineArray {
     const out = new PineArray();
     for (const v of this.cells) out.push(v);
     return out;
+  }
+
+  /** Deep clone (realtime tick snapshots). */
+  clone(): PineArray {
+    const out = new PineArray();
+    out.restoreContents(this.snapshotContents());
+    return out;
+  }
+
+  /** Deep-cloned slots for realtime tick rollback. */
+  snapshotContents(): unknown[] {
+    return this.cells.map(cloneValue);
+  }
+
+  /** Replace slots with clones of `snap` — same instance, aliases keep identity. */
+  restoreContents(snap: unknown[]): void {
+    this.cells.length = 0;
+    for (const c of snap) this.cells.push(cloneValue(c));
   }
 
   reverse(): void {

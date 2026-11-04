@@ -86,6 +86,19 @@ export const compileArray = {
   get(id: unknown, index?: unknown): unknown {
     return asArray(id)?.get(n(index, 0)) ?? null;
   },
+  /**
+   * Python `visit_Subscript` list path: `arr[0]` is the LAST slot
+   * (`value[-(offset + 1)]`, newest-first like series offsets). `na` /
+   * negative / OOB offsets soft-fail to `na`.
+   */
+  sub(id: unknown, offset?: unknown): unknown {
+    const a = asArray(id);
+    const off = cell(offset);
+    if (a == null || off == null || off < 0) return null;
+    const size = a.size();
+    const i = size - 1 - Math.trunc(off);
+    return i < 0 || i >= size ? null : a.get(i);
+  },
   set(id: unknown, index?: unknown, value?: unknown): unknown {
     asArray(id)?.set(n(index, 0), store(value));
     return id ?? null;

@@ -220,6 +220,12 @@ export interface RuntimeOptions {
   timeout_seconds?: number | null;
   /** Visit the last bar as a forming realtime bar (`barstate.isrealtime`). */
   realtimeLastBar?: boolean;
+  /** Visits per realtime bar (Python `realtime_ticks`; >1 implies a last-bar window). */
+  realtimeTicks?: number;
+  /** Size of the trailing realtime window (Python `realtime_bars`). */
+  realtimeBars?: number;
+  /** First bar index of the realtime window (Python `realtime_from_bar`). */
+  realtimeFromBar?: number | null;
 }
 
 export interface RuntimeFill {
@@ -364,8 +370,18 @@ interface Env {
   maxBarsBackDecls: Array<{ var: Value; num: Value }>;
   /** Python `_alert_fire_bars` keys for `alert` / `alertcondition` freq gating. */
   alertFireBars: Map<string, number>;
-  /** Visit the last bar as a forming realtime bar (`barstate.isrealtime`). */
-  realtimeLastBar: boolean;
+  /** First bar of the realtime window; null = purely historical run. */
+  realtimeFirst: number | null;
+  /** Visits per realtime bar (Python `realtime_ticks`). */
+  realtimeTicks: number;
+  /** True when the current bar is inside the realtime window. */
+  barRealtime: boolean;
+  /** Current tick index within the bar (0 = first visit). */
+  tickIndex: number;
+  /** Total visits for the current bar. */
+  tickCount: number;
+  /** `varip`-declared names — persist across realtime ticks (reference varip). */
+  varipNames: Set<string>;
 }
 
 export class Runtime {
@@ -417,6 +433,12 @@ export class Runtime {
     const extraOpts = extra && !isPlainInputs(extra) ? extra : undefined;
     const mode = extraOpts?.mode ?? this.mode;
     const inputs = mergeInputs(this.inputs, extra);
+    const rt = resolveRealtimeWindow(ohlcv.length, {
+      realtimeLastBar: extraOpts?.realtimeLastBar,
+      realtimeTicks: extraOpts?.realtimeTicks,
+      realtimeBars: extraOpts?.realtimeBars,
+      realtimeFromBar: extraOpts?.realtimeFromBar,
+    });
     const host = {
       symbol: this.symbol,
       inputs,
@@ -424,7 +446,8 @@ export class Runtime {
       timeframe: extraOpts?.timeframe ?? this.timeframe,
       libraries: extraOpts?.libraries != null ? resolveLibraries(extraOpts.libraries) : this.libraries,
       timeout_seconds: extraOpts?.timeout_seconds ?? this.timeout_seconds,
-      realtime_last_bar: extraOpts?.realtimeLastBar ?? false,
+      realtime_first: rt.first,
+      realtime_ticks: rt.ticks,
     };
     if (mode === "compile") {
       return runCompiled(source, ohlcv, host);
@@ -549,6 +572,126 @@ export function interpret(source: string, ohlcv: OHLCVBar[]): { plots: Array<num
   return { plots: out.plots };
 }
 
+/** Python `_snapshot_realtime_scope` analog — one intermediate realtime tick. */
+interface TickSnapshot {
+  ctx: Record<string, Value>;
+  containers: Array<[string, unknown]>;
+  varInited: Set<string>;
+  plotsLens: Map<string, number>;
+  plotMetaLen: number;
+  ta: Array<[string, Map<string, unknown>]>;
+  book: Record<string, unknown>;
+  udfSites: Array<[string, Record<string, Value>, Set<string>, Map<string, number>]>;
+}
+
+function isSnapshotContainer(v: unknown): boolean {
+  return (
+    v !== null &&
+    typeof v === "object" &&
+    typeof (v as { snapshotContents?: unknown }).snapshotContents === "function"
+  );
+}
+
+function isRestoreContainer(v: unknown): v is { restoreContents(snap: unknown): void } {
+  return (
+    v !== null &&
+    typeof v === "object" &&
+    typeof (v as { restoreContents?: unknown }).restoreContents === "function"
+  );
+}
+
+/** Undo state for one intermediate realtime tick (Python `_run_batch` tick loop). */
+function snapshotTickState(env: Env): TickSnapshot {
+  const containers: Array<[string, unknown]> = [];
+  for (const [id, v] of Object.entries(env.ctx)) {
+    if (isSnapshotContainer(v)) {
+      containers.push([id, (v as { snapshotContents(): unknown }).snapshotContents()]);
+    }
+  }
+  const plotsLens = new Map<string, number>();
+  for (const [key, arr] of Object.entries(env.plots)) plotsLens.set(key, arr.length);
+  const udfSites: Array<[string, Record<string, Value>, Set<string>, Map<string, number>]> = [];
+  for (const [key, f] of env.udfSites) {
+    const seriesLens = new Map<string, number>();
+    for (const [name, s] of f.series) seriesLens.set(name, s.length);
+    udfSites.push([key, { ...f.ctx }, new Set(f.varInited), seriesLens]);
+  }
+  return {
+    ctx: { ...env.ctx },
+    containers,
+    varInited: new Set(env.varInited),
+    plotsLens,
+    plotMetaLen: env.plot_meta.length,
+    ta: env.ta.snapshot(),
+    book: env.book.snapshot(),
+    udfSites,
+  };
+}
+
+/**
+ * Roll back one intermediate realtime tick: var scope (varip persists, Python
+ * `_restore_realtime_scope`), container contents in place, UDF-site var state,
+ * plot cells appended this tick (Python `_discard_realtime_plot_tick`), TA
+ * windows (Python `_restore_ta_state`), and broker state. History pushes are
+ * intentionally left alone — the start-of-bar commit already ran.
+ */
+function restoreTickState(env: Env, snap: TickSnapshot): void {
+  const varips = env.varipNames;
+  for (const key of Object.keys(env.ctx)) {
+    if (!(key in snap.ctx) && !varips.has(key)) delete env.ctx[key];
+  }
+  for (const [key, value] of Object.entries(snap.ctx)) {
+    if (varips.has(key)) continue;
+    env.ctx[key] = value;
+  }
+  for (const [id, contents] of snap.containers) {
+    if (varips.has(id)) continue;
+    const cur = env.ctx[id];
+    if (isRestoreContainer(cur)) {
+      (cur as unknown as { restoreContents(snap: unknown): void }).restoreContents(contents);
+    }
+  }
+  const restoredInited = new Set(snap.varInited);
+  for (const id of varips) {
+    if (env.varInited.has(id)) restoredInited.add(id);
+  }
+  env.varInited = restoredInited;
+  for (const key of Object.keys(env.plots)) {
+    const len = snap.plotsLens.get(key);
+    if (len === undefined) delete env.plots[key];
+    else if (env.plots[key]!.length > len) env.plots[key]!.length = len;
+  }
+  env.plot_meta.length = snap.plotMetaLen;
+  env.ta.restore(snap.ta);
+  env.book.restore(snap.book);
+  const siteKeys = new Set(snap.udfSites.map(([key]) => key));
+  for (const key of [...env.udfSites.keys()]) {
+    if (!siteKeys.has(key)) env.udfSites.delete(key);
+  }
+  for (const [key, ctx, varInited, seriesLens] of snap.udfSites) {
+    const f = env.udfSites.get(key);
+    if (f == null) continue;
+    for (const k of Object.keys(f.ctx)) {
+      if (!(k in ctx) && !varips.has(k)) delete f.ctx[k];
+    }
+    for (const [k, v] of Object.entries(ctx)) {
+      if (varips.has(k)) continue;
+      f.ctx[k] = v;
+    }
+    // Roll back per-tick series pushes so the next tick's carry reads the
+    // pre-tick current (Python leaves history alone; frames re-carry per call).
+    for (const [name, len] of seriesLens) {
+      const s = f.series.get(name);
+      if (s != null && s.length > len) s.truncate(len);
+    }
+    const restored = new Set(varInited);
+    for (const id of varips) {
+      if (f.varInited.has(id)) restored.add(id);
+    }
+    f.varInited = restored;
+  }
+}
+
 export function interpretTree(
   tree: AST,
   ohlcv: OHLCVBar[],
@@ -559,7 +702,8 @@ export function interpretTree(
     timeframe?: string | null;
     libraries?: LibraryRegistry;
     timeout_seconds?: number | null;
-    realtime_last_bar?: boolean;
+    realtime_first?: number | null;
+    realtime_ticks?: number;
   },
 ): RuntimeResult {
   const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
@@ -598,7 +742,12 @@ export function interpretTree(
     onceFired: new WeakSet(),
     maxBarsBackDecls: [],
     alertFireBars: new Map(),
-    realtimeLastBar: host?.realtime_last_bar ?? false,
+    realtimeFirst: host?.realtime_first ?? null,
+    realtimeTicks: Math.max(1, host?.realtime_ticks ?? 1),
+    barRealtime: false,
+    tickIndex: 0,
+    tickCount: 1,
+    varipNames: new Set(),
   };
 
   const n = ohlcv.length;
@@ -608,8 +757,9 @@ export function interpretTree(
   const timeoutSec = host?.timeout_seconds;
   const deadline =
     timeoutSec != null && Number.isFinite(timeoutSec) ? performance.now() + timeoutSec * 1000 : null;
+  let aborted = false;
   try {
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n && !aborted; i++) {
       if (deadline != null && (i & 31) === 0 && performance.now() > deadline) {
         timedOut = true;
         barsDone = i;
@@ -629,31 +779,44 @@ export function interpretTree(
         num(env.ctx.close) ?? 0,
       );
 
-      try {
-        for (const stmt of body) {
-          const decl = captureDecl(stmt);
-          if (decl) {
-            if (script_name == null) script_name = decl.name;
-            if (decl.kind === "strategy") {
-              script_type = "strategy";
-              applyStrategyDecl(stmt, env);
-            } else if (decl.kind === "library") {
-              script_type = "library";
-              applyDrawingDecl(stmt, env);
-            } else {
-              applyDrawingDecl(stmt, env);
+      // Python `_run_batch`: bars in the realtime window are visited once per
+      // tick; intermediate ticks roll back var scope, TA windows, the broker,
+      // and plot cells (varip persists).
+      const barRt = env.realtimeFirst != null && i >= env.realtimeFirst;
+      const ticks = barRt ? env.realtimeTicks : 1;
+      env.barRealtime = barRt;
+      env.tickCount = ticks;
+      for (let tick = 0; tick < ticks; tick++) {
+        env.tickIndex = tick;
+        const snap = barRt && tick < ticks - 1 ? snapshotTickState(env) : null;
+        try {
+          for (const stmt of body) {
+            const decl = captureDecl(stmt);
+            if (decl) {
+              if (script_name == null) script_name = decl.name;
+              if (decl.kind === "strategy") {
+                script_type = "strategy";
+                applyStrategyDecl(stmt, env);
+              } else if (decl.kind === "library") {
+                script_type = "library";
+                applyDrawingDecl(stmt, env);
+              } else {
+                applyDrawingDecl(stmt, env);
+              }
+              continue;
             }
-            continue;
+            execStmt(stmt, env);
           }
-          execStmt(stmt, env);
+          if (i === 0 && script_type === "library" && script_name) {
+            finalizeLibrary(env, script_name);
+          }
+        } catch (err) {
+          if (err === LOOP_BREAK || err === LOOP_CONTINUE) break;
+          runError = { error: formatRunError(err), error_kind: "runtime" };
+          aborted = true;
+          break;
         }
-        if (i === 0 && script_type === "library" && script_name) {
-          finalizeLibrary(env, script_name);
-        }
-      } catch (err) {
-        if (err === LOOP_BREAK || err === LOOP_CONTINUE) continue;
-        runError = { error: formatRunError(err), error_kind: "runtime" };
-        break;
+        if (snap) restoreTickState(env, snap);
       }
     }
   } catch (err) {
@@ -931,7 +1094,8 @@ function uniquifyPlotKey(env: Env, node: object, title: string): string {
 }
 
 function isVarMode(stmt: Assign): boolean {
-  return stmt.mode?.kind === "Var";
+  // `varip` matches `var` on historical bars: init on first execution, persist.
+  return stmt.mode?.kind === "Var" || stmt.mode?.kind === "VarIp";
 }
 
 function isTuple(v: Value): v is TupleVal {
@@ -1055,6 +1219,16 @@ function evalAssign(stmt: Assign, env: Env): Value {
   }
   if (stmt.target.kind !== "Name") return NA;
   const id = stmt.target.id;
+  const isVarip = stmt.mode?.kind === "VarIp";
+  if (isVarip) env.varipNames.add(id);
+  if (isVarip && env.barRealtime) {
+    // Reference varip (Python `ast.VarIp` + `barstate.isrealtime`): re-run the
+    // initializer on every realtime tick so the value can track intrabar state.
+    const value = evalExpr(stmt.value, env);
+    bindName(env, id, value);
+    inited.add(id);
+    return value;
+  }
   // var: init on first execution (bar_index==0, or first time the name is missing).
   if (isVarMode(stmt) && (inited.has(id) || (env.barIndex !== 0 && ctxGet(env, id) !== undefined))) {
     inited.add(id);
@@ -1309,6 +1483,14 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       if (node.value.kind === "Name") {
         const s = seriesGet(env, node.value.id);
         if (s) return s.get(offset);
+        // Python `visit_Subscript` list path: array-valued names index
+        // newest-first (`value[-(offset + 1)]`); OOB soft-fails to na.
+        const v = ctxGet(env, node.value.id);
+        if (v instanceof PineArray) {
+          const size = v.size();
+          const i = size - 1 - offset;
+          return i < 0 || i >= size ? NA : (v.get(i) as Value);
+        }
       }
       return NA;
     }
@@ -1687,14 +1869,14 @@ function evalAttribute(node: Attribute, env: Env): Value {
     }
     if (node.value.id === "barstate") {
       const last = env.barIndex === env.barCount - 1;
-      const realtime = env.realtimeLastBar && last;
+      const rt = env.barRealtime;
       if (node.attr === "isfirst") return env.barIndex === 0 ? 1 : 0;
       if (node.attr === "islast") return last ? 1 : 0;
-      if (node.attr === "ishistory") return realtime ? 0 : 1;
-      if (node.attr === "isconfirmed") return 1;
-      if (node.attr === "isnew") return 1;
-      if (node.attr === "isrealtime") return realtime ? 1 : 0;
-      if (node.attr === "islastconfirmedhistory") return realtime ? 0 : last ? 1 : 0;
+      if (node.attr === "ishistory") return rt ? 0 : 1;
+      if (node.attr === "isconfirmed") return barIsConfirmed(env) ? 1 : 0;
+      if (node.attr === "isnew") return rt && env.tickIndex > 0 ? 0 : 1;
+      if (node.attr === "isrealtime") return rt ? 1 : 0;
+      if (node.attr === "islastconfirmedhistory") return rt ? 0 : last ? 1 : 0;
     }
     if (node.value.id === "session") {
       if (node.attr === "regular") return "regular";
@@ -2499,6 +2681,39 @@ function formatRunError(err: unknown): string {
   return "runtime error";
 }
 
+/**
+ * Python `_resolve_realtime_first`: realtime window start (inclusive) + tick
+ * count. Precedence: `realtimeFromBar` > `realtimeBars` > last-bar flags
+ * (`realtimeLastBar` or `realtimeTicks > 1`). `first = null` = purely
+ * historical run.
+ */
+export function resolveRealtimeWindow(nBars: number, opts: {
+  realtimeLastBar?: boolean;
+  realtimeTicks?: number;
+  realtimeBars?: number;
+  realtimeFromBar?: number | null;
+}): { first: number | null; ticks: number } {
+  const intOr = (v: number | undefined | null, fallback: number): number => {
+    if (v == null || !Number.isFinite(v)) return fallback;
+    return Math.trunc(v);
+  };
+  let ticks = intOr(opts.realtimeTicks, 1);
+  if (ticks < 1) ticks = 1;
+  let rtBars = intOr(opts.realtimeBars, 0);
+  if (rtBars < 0) rtBars = 0;
+  if (opts.realtimeFromBar != null) {
+    let first = intOr(opts.realtimeFromBar, 0);
+    if (first < 0) first = 0;
+    if (first >= nBars) return { first: null, ticks };
+    return { first, ticks };
+  }
+  if (rtBars > 0) return { first: nBars > rtBars ? nBars - rtBars : 0, ticks };
+  if (opts.realtimeLastBar || ticks > 1) {
+    return { first: nBars > 0 ? nBars - 1 : null, ticks };
+  }
+  return { first: null, ticks };
+}
+
 function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOverrides {
   return (
     !("inputs" in extra) &&
@@ -2507,7 +2722,10 @@ function isPlainInputs(extra: RuntimeOptions | InputOverrides): extra is InputOv
     !("libraries" in extra) &&
     !("mode" in extra) &&
     !("timeout_seconds" in extra) &&
-    !("realtimeLastBar" in extra)
+    !("realtimeLastBar" in extra) &&
+    !("realtimeTicks" in extra) &&
+    !("realtimeBars" in extra) &&
+    !("realtimeFromBar" in extra)
   );
 }
 
@@ -2660,7 +2878,8 @@ function runAuto(
     timeframe?: string | null;
     libraries?: LibraryRegistry;
     timeout_seconds?: number | null;
-    realtime_last_bar?: boolean;
+    realtime_first?: number | null;
+    realtime_ticks?: number;
   },
 ): RuntimeResult {
   const elig = compileEligible(source);
@@ -2738,9 +2957,9 @@ function normalizeAlertFreq(freq: unknown): string {
   return ALERT_FREQ_ALIASES[s] ?? (s ? s : FREQ_ONCE_PER_BAR);
 }
 
-/** Python `_bar_is_confirmed`: single-tick runs are confirmed (ticks>1 not modeled). */
-function barIsConfirmed(_env: Env): boolean {
-  return true;
+/** Python `_bar_is_confirmed`: false only on intermediate realtime ticks. */
+function barIsConfirmed(env: Env): boolean {
+  return !env.barRealtime || env.tickIndex === env.tickCount - 1;
 }
 
 /** Python `_should_fire_alert`. */

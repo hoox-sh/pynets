@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-04
+
+Multi-tick realtime windows, reference `varip`, and list subscripts.
+
+### Added
+- `RuntimeOptions.realtimeTicks` / `realtimeBars` / `realtimeFromBar` — Python `realtime_ticks` / `realtime_bars` / `realtime_from_bar` realtime windows with `_resolve_realtime_first` precedence (`realtimeFromBar` > `realtimeBars` > last-bar flags).
+- Per-tick rollback for intermediate realtime ticks: `var` scope, container contents (array/map/UDT/matrix, in place so aliases keep identity), UDF-site `var` state and series pushes, plot cells, TA windows, and broker state — matching Python `_run_batch`.
+- `barstate.isnew` is `0` after the first realtime tick; `barstate.isconfirmed` is `0` on intermediate ticks; `once` and `alert.freq_once_per_bar_close` commit on confirmed bars only, `alert.freq_all` fires every tick.
+- List subscript `g[0]` on array-valued names (Python `visit_Subscript` newest-first semantics: `value[-(offset + 1)]`, OOB → na), on both interpret and JS compile, for names bound from `ta.gamma_levels`, `array.from`, `array.new*`, `array.copy`, `array.concat`, `array.slice`.
+- `TaEngine.snapshot`/`restore`, `StrategyBook.snapshot`/`restore`, and `snapshotContents`/`restoreContents`/`clone` on `PineArray`/`PineMap`/`UdtInstance`/`PineMatrix`; `PineSeries.truncate`; shared `cloneValue`.
+- Exported `resolveRealtimeWindow`.
+
+### Fixed
+- `varip` now initializes once and persists across historical bars (previously re-initialized every bar like a plain assignment), and re-runs its initializer on every realtime tick (reference `varip`) — matching Python `visit_Assign` `ast.VarIp` handling.
+
 ## [0.9.0] - 2026-11-04
 
 Realtime stream session API and forming-bar semantics.

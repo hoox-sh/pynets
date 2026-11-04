@@ -21,6 +21,12 @@ export class PineSeries {
     else this.data[this.data.length - 1] = value;
   }
 
+  /** Drop cells beyond `len` (realtime tick rollback). No-op when shorter. */
+  truncate(len: number): void {
+    if (len < 0) return;
+    if (this.data.length > len) this.data.length = len;
+  }
+
   get current(): Cell {
     return this.data.length === 0 ? NA : this.data[this.data.length - 1]!;
   }

@@ -35,7 +35,7 @@ import type {
   UnaryOp,
   While,
 } from "../../ast/nodes.ts";
-import { emitCall, TA_BARE_ATTRS } from "./emit_call.ts";
+import { emitCall, isArrayReturningCall, TA_BARE_ATTRS } from "./emit_call.ts";
 import { emitFunctionDef } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
 
@@ -134,6 +134,7 @@ interface State {
 export function newEmitCtx(): EmitCtx {
   return {
     arrays: new Set(),
+    arrayNames: new Set(),
     plots: [],
     varNames: new Set(),
     functions: [],
@@ -980,6 +981,11 @@ function emitAttribute(state: State, node: Attribute): string {
 function emitSubscript(state: State, node: Subscript): string {
   const slice = node.slice != null ? emitExpr(state, node.slice) : "0";
   const arr = histArray(state, node.value);
+  // Array-valued names index the current PineArray (Python list subscript:
+  // newest-first, `value[-(offset + 1)]`), not series history.
+  if (node.value.kind === "Name" && state.ctx.arrayNames.has((node.value as Name).id)) {
+    return `__h.array.sub(${arr}[__bar_idx], ${slice})`;
+  }
   return `__h.hist(${arr}, __bar_idx, ${slice})`;
 }
 
@@ -1082,11 +1088,23 @@ function emitImport(state: State, node: Import): string {
 function emitAssign(state: State, node: Assign): string {
   const rhs = node.value != null ? emitExpr(state, node.value) : "null";
   const isVar = isVarMode(node.mode);
+  trackArrayName(state, node.target, node.value);
   return emitStore(state, node.target, rhs, isVar);
 }
 
 function emitReAssign(state: State, node: ReAssign): string {
+  trackArrayName(state, node.target, node.value);
   return emitStore(state, node.target, emitExpr(state, node.value), false);
+}
+
+/** Names bound to PineArray results get list-subscript lowering (`g[0]`). */
+function trackArrayName(state: State, target: expr, value: expr | null | undefined): void {
+  if (target.kind !== "Name") return;
+  if (value != null && value.kind === "Call" && isArrayReturningCall((value as Call).func)) {
+    state.ctx.arrayNames.add(target.id);
+  } else {
+    state.ctx.arrayNames.delete(target.id);
+  }
 }
 
 function emitAugAssign(state: State, node: AugAssign): string {

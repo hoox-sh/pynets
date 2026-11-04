@@ -9,6 +9,7 @@
 export type Cell = number | null;
 
 import { PineArray } from "./array.ts";
+import { cloneValue } from "./clone.ts";
 
 interface SmaState {
   period: number;
@@ -601,6 +602,33 @@ export class TaEngine {
   private readonly historySites = new Map<string, Cell[]>();
   private readonly momentumFilterSites = new Map<string, { momentum: Cell[]; volume: Cell[] }>();
   private readonly volatilityRegimeSites = new Map<string, Cell[]>();
+
+  /**
+   * Snapshot every per-site window (Python `_snapshot_ta_state`).
+   * Intermediate realtime ticks push one sample per call site; without
+   * rollback the same bar would be counted N times.
+   */
+  snapshot(): Array<[string, Map<string, unknown>]> {
+    const out: Array<[string, Map<string, unknown>]> = [];
+    for (const [key, value] of Object.entries(this as unknown as Record<string, unknown>)) {
+      if (!(value instanceof Map)) continue;
+      const copy = new Map<string, unknown>();
+      for (const [site, state] of value) copy.set(site, cloneValue(state));
+      out.push([key, copy]);
+    }
+    return out;
+  }
+
+  /** Copy-on-restore (Python `_restore_ta_state`); never throws. */
+  restore(snap: Array<[string, Map<string, unknown>]>): void {
+    const self = this as unknown as Record<string, unknown>;
+    for (const [key, copy] of snap) {
+      const live = self[key];
+      if (!(live instanceof Map)) continue;
+      live.clear();
+      for (const [site, state] of copy) live.set(site, cloneValue(state));
+    }
+  }
 
   sma(site: string, source: Cell, period: number): Cell {
     const n = pinePeriod(period);

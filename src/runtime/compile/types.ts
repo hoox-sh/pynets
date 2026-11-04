@@ -51,6 +51,8 @@ export class CompileIneligibleError extends CompileError {
 /** Visitor state while lowering a Script to JS. */
 export interface EmitCtx {
   arrays: Set<string>;
+  /** Script-scope names bound to PineArray values (list subscript `g[0]`). */
+  arrayNames: Set<string>;
   plots: CompilePlotMeta[];
   varNames: Set<string>;
   functions: string[];

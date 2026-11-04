@@ -8,6 +8,7 @@
  */
 
 import { UdtInstance } from "./udt.ts";
+import { cloneValue } from "./clone.ts";
 
 export type Cell = number | null;
 
@@ -562,6 +563,30 @@ export class PineMatrix {
       const row = this.cells[i]!;
       for (let j = 0; j < this.nCols; j++) row[j] = value;
     }
+  }
+
+  /** Deep clone (realtime tick snapshots). */
+  clone(): PineMatrix {
+    const out = new PineMatrix(this.nRows, this.nCols);
+    out.restoreContents(this.snapshotContents());
+    return out;
+  }
+
+  /** Deep-cloned grid + dims for realtime tick rollback. */
+  snapshotContents(): { cells: unknown[][]; nRows: number; nCols: number } {
+    return {
+      cells: this.cells.map((row) => row.map(cloneValue)),
+      nRows: this.nRows,
+      nCols: this.nCols,
+    };
+  }
+
+  /** Replace grid + dims with clones of `snap` — same instance for aliases. */
+  restoreContents(snap: { cells: unknown[][]; nRows: number; nCols: number }): void {
+    this.cells.length = 0;
+    for (const row of snap.cells) this.cells.push(row.map(cloneValue));
+    this.nRows = snap.nRows;
+    this.nCols = snap.nCols;
   }
 
   transpose(): PineMatrix {

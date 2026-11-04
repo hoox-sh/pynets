@@ -105,6 +105,15 @@ plot(array.get(g, 0), "hi")
 plot(array.get(g, 1), "lo")`,
   },
   {
+    id: "gamma_subscript",
+    body: `g = ta.gamma_levels(0.02, close, 10)
+plot(g[0], "hi")
+plot(g[1], "lo")
+h = array.from(1, 2)
+plot(h[0], "a")
+plot(h[1], "b")`,
+  },
+  {
     id: "synthesizer",
     body: `t = array.from(0.5, 0.6)
 m = array.from(0.4, 0.5)

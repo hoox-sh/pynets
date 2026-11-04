@@ -5,6 +5,9 @@
  * Tiny Pine `map.*` value. Keys are string or finite number; `null` is `na`.
  * Backed by `Map` (never a plain object) so user keys cannot pollute prototypes.
  */
+
+import { cloneValue } from "./clone.ts";
+
 export type Cell = number | null;
 export type MapKey = string | number;
 
@@ -74,6 +77,28 @@ export class PineMap {
     const out = new PineMap();
     for (const k of this.order) out.put(decodeKey(k), this.data.get(k)!);
     return out;
+  }
+
+  /** Deep clone (realtime tick snapshots). */
+  clone(): PineMap {
+    const out = new PineMap();
+    out.restoreContents(this.snapshotContents());
+    return out;
+  }
+
+  /** Deep-cloned entries for realtime tick rollback. */
+  snapshotContents(): { data: Array<[string, Cell]>; order: string[] } {
+    const data: Array<[string, Cell]> = [];
+    for (const [k, v] of this.data) data.push([k, cloneValue(v) as Cell]);
+    return { data, order: [...this.order] };
+  }
+
+  /** Replace entries with clones of `snap` — same instance for aliases. */
+  restoreContents(snap: { data: Array<[string, Cell]>; order: string[] }): void {
+    this.data.clear();
+    this.order.length = 0;
+    for (const [k, v] of snap.data) this.data.set(k, cloneValue(v) as Cell);
+    for (const k of snap.order) this.order.push(k);
   }
 
   putAll(other: PineMap): void {

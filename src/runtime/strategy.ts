@@ -11,6 +11,8 @@
  * fillEntry from flat / reverse leftover opens a trade; flatten moves it to closed.
  */
 
+import { cloneValue } from "./clone.ts";
+
 export type StrategyDirection = "long" | "short";
 /** `strategy(..., avg_price_model=)` — stock FIFO reweight / sticky futures AEP. */
 export type AvgPriceModel = "stock" | "futures" | "inverse";
@@ -439,6 +441,36 @@ export class StrategyBook {
     this.equityPeak = this.initialCapital;
     this.equityTrough = this.initialCapital;
     if (settings) this.applyDeclSettings(settings);
+  }
+
+  /**
+   * Snapshot all broker state (Python `strategy_state.snapshot()` analog)
+   * for realtime tick rollback: events, position, fills, pending orders,
+   * trades, and every counter.
+   */
+  snapshot(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(this as unknown as Record<string, unknown>)) {
+      if (typeof value === "function") continue;
+      out[key] = cloneValue(value);
+    }
+    return out;
+  }
+
+  /** Restore from `snapshot()` — arrays refill in place so aliases keep identity. */
+  restore(snap: Record<string, unknown>): void {
+    const self = this as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(snap)) {
+      const live = self[key];
+      if (Array.isArray(live)) {
+        live.length = 0;
+        for (const item of value as unknown[]) live.push(cloneValue(item));
+      } else if (live !== null && typeof live === "object" && value !== null && typeof value === "object") {
+        Object.assign(live, value);
+      } else {
+        self[key] = cloneValue(value);
+      }
+    }
   }
 
   /** Margin locked in open trades: sum(|entry * size|) / leverage (Python `capital_held`). */

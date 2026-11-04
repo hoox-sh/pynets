@@ -560,6 +560,21 @@ function unwrapSpecialize(node: expr): expr {
   return node;
 }
 
+/**
+ * Calls whose result binds a PineArray value, so a later `name[i]` subscript
+ * lowers to `__h.array.sub` (Python `visit_Subscript` list path) instead of
+ * series history. Python `mode="compile"` does not support list subscripts
+ * (returns na); PyneTS keeps compile aligned with interpret instead.
+ */
+export function isArrayReturningCall(func: expr): boolean {
+  const { name } = resolveCallee(func);
+  if (name === "ta_gamma_levels" || name === "gamma_levels") return true;
+  if (name === "array_from" || name === "array_copy" || name === "array_concat" || name === "array_slice") {
+    return true;
+  }
+  return name.startsWith("array_new");
+}
+
 function collectArgs(node: Call, visit: VisitFn): CallArgs {
   const pos: string[] = [];
   const kw: Record<string, string> = {};
