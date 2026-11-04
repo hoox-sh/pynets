@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-04
+
+Full builtin surface: every name registered by PYNE's `BuiltinEvaluator`
+(941) now resolves in PyneTS, including the capstone synthesizer and
+list-returning gamma levels.
+
+### Added
+- `ta.gamma_levels` — returns a `PineArray` (`array.get(g, 0)` / `array.get(g, 1)`), interpret + compile.
+- `ta.intelligent_strategy_synthesizer` — multi-list trend/momentum/volatility/volume synthesis with market-regime and risk-profile adaptation.
+- `ta.signal_confluence` — dict/map signal agreement, including boolean signals.
+
+### Changed
+- `ta.breakout_detection` treats a bare series argument as `0`, matching PYNE's `isinstance` bar-mode quirk.
+
+### Notes
+- All 941 registered builtin names resolve. `color.*`, `*.all`, `syminfo.ticker`, `timeframe.*`, and `last_bar_time` are handled structurally rather than by quoted dispatch keys; see `PARITY.md`.
+
 ## [0.7.0] - 2026-11-04
 
 Wave 13: history-based, sentiment, and macro analytics, plus the newest-first

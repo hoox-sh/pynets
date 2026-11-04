@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1364 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1374 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -63,9 +63,26 @@ Also added: bare chart-type aliases `renko` / `kagi` / `linebreak` /
 `pointfigure`, `ticker.inherit`, and bare
 `percentile_linear_interpolation` / `percentile_nearest_rank` aliases.
 
+Wave 14 (list return + capstone synthesis):
+
+`ta.gamma_levels` (returns a `PineArray`; use `array.get(g, 0)`),
+`ta.intelligent_strategy_synthesizer`, `ta.signal_confluence`.
+
 Every wave ships interpret + JS compile emit and a Python `Runtime.run` parity
-test (`test/interpret_wave11.test.ts`, `test/interpret_wave12.test.ts`,
-`test/interpret_wave13.test.ts`).
+test (`test/interpret_wave11.test.ts` … `test/interpret_wave14.test.ts`).
+
+## Coverage
+
+All **941** names registered by PYNE's `BuiltinEvaluator` resolve in PyneTS.
+The literal scan still lists a few names that are handled structurally rather
+than by a quoted dispatch key:
+
+- `color.*` — `colorByName` table in `src/runtime/color.ts`.
+- `label.all` / `line.all` / `box.all` / `table.all` / `polyline.all` /
+  `linefill.all` — `drawingAllKind` + `DrawingBook`.
+- `syminfo.ticker`, `timeframe.period` / `main_period` / `multiplier` /
+  `is*` — `Attribute` evaluation.
+- `last_bar_time` — bare series name resolved from the bar context.
 
 ## History-list semantics
 
@@ -79,18 +96,22 @@ spread, macro proxies) now match Python.
 
 ## Remaining work
 
-### Advanced analytics (not yet ported)
+None of the PYNE-registered builtin names are unported. The remaining work is
+edge semantics, not surface:
 
-- `ta.gamma_levels` — returns a two-element list; needs a list return type that
-  works on both interpret and compile.
-- `ta.intelligent_strategy_synthesizer` — multi-list + string regime/risk
-  profile synthesis; port after the list-return plumbing.
+- Realtime `once` rollback.
+- `ta.gamma_levels` list indexing on the compile path (`array.get` works;
+  `g[0]` does not lower to array indexing).
+- Python quirks where nested `ta.*` arguments are rejected in bar mode
+  (`ta.mean_reversion_entry`); PyneTS accepts them.
 
 ### Notes
 
 - `ta.market_structure_pivot` uses the `advanced.py` semantics (oldest
   `period` highs/lows, midpoint pivot) because it wins MRO over the
   `strategies.py` variant.
+- `ta.breakout_detection` treats a bare series argument as `0` (Python
+  `isinstance` check), matching PYNE's bar-mode quirk.
 - `ta.mean_reversion_entry` parity requires series arguments; Python errors on
   nested `ta.sma`/`ta.stdev` arguments in bar mode.
 

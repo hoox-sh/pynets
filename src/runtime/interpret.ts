@@ -4673,10 +4673,14 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
   }
   if (fname === "ta.breakout_detection" || fname === "breakout_detection") {
     const msg = "ta.breakout_detection() requires 3 arguments";
+    const arg = (i: number, names: string[]): Cell => {
+      const e = wave10aArg(i, names, msg);
+      return isSeriesExpr(e, env) ? NA : num(evalExpr(e, env));
+    };
     return env.ta.breakoutDetection(
-      wave11n(0, ["close", "source"], msg),
-      wave11n(1, ["resistance"], msg),
-      wave11n(2, ["support"], msg),
+      arg(0, ["close", "source"]),
+      arg(1, ["resistance"]),
+      arg(2, ["support"]),
     );
   }
   // wave12-end
@@ -4860,6 +4864,35 @@ function evalExtraTa(fname: string | null, node: Call, env: Env, site: string): 
     return env.ta.expectedValue(returns, probs);
   }
   // wave13-end
+  // wave14-start — list-return + capstone synthesis
+  if (fname === "ta.gamma_levels" || fname === "gamma_levels") {
+    const msg = "ta.gamma_levels() requires 3 arguments";
+    const volArg = wave10aArg(0, ["volatility"], msg);
+    const priceArg = wave10aArg(1, ["current_price", "price"], msg);
+    const vol = isSeriesExpr(volArg, env) ? NA : num(evalExpr(volArg, env));
+    const price = isSeriesExpr(priceArg, env) ? NA : num(evalExpr(priceArg, env));
+    return env.ta.gammaLevels(vol, price, wave11n(2, ["period", "length"], msg));
+  }
+  if (
+    fname === "ta.intelligent_strategy_synthesizer" ||
+    fname === "intelligent_strategy_synthesizer"
+  ) {
+    const msg = "ta.intelligent_strategy_synthesizer() requires 6 arguments";
+    return env.ta.intelligentStrategySynthesizer(
+      site,
+      wave13v(0, ["trend_indicators", "trend"], msg),
+      wave13v(1, ["momentum_indicators", "momentum"], msg),
+      wave13v(2, ["volatility_indicators", "volatility"], msg),
+      wave13v(3, ["volume_indicators", "volume"], msg),
+      wave13v(4, ["market_condition", "market_regime"], msg),
+      wave13v(5, ["risk_profile"], msg),
+    );
+  }
+  if (fname === "ta.signal_confluence" || fname === "signal_confluence") {
+    const msg = "ta.signal_confluence() requires 1 argument";
+    return env.ta.signalConfluence(wave13v(0, ["signals"], msg));
+  }
+  // wave14-end
   return undefined;
 }
 

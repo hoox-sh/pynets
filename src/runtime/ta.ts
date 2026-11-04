@@ -8,6 +8,8 @@
 
 export type Cell = number | null;
 
+import { PineArray } from "./array.ts";
+
 interface SmaState {
   period: number;
   window: Cell[];
@@ -4518,6 +4520,168 @@ export class TaEngine {
     let ev = 0;
     for (let i = 0; i < returns.length; i++) ev += returns[i]! * probabilities[i]!;
     return finiteOut(ev / totalProb) ?? 0;
+  }
+
+  /** `advanced.py` `_builtin_ta_gamma_levels` — returns `[high, low]`. */
+  gammaLevels(volatility: Cell, currentPrice: Cell, period: Cell): PineArray {
+    const v = finiteCell(volatility) ?? 0.02;
+    const p = finiteCell(currentPrice) ?? 100;
+    const n = this.coerceTaInt(period, "period must be integer");
+    const volAdjusted = v * Math.sqrt(n);
+    const distance = p * volAdjusted;
+    const out = new PineArray();
+    out.push(finiteOut(p + distance));
+    out.push(finiteOut(p - distance));
+    return out;
+  }
+
+  /** `advanced.py` `_builtin_ta_intelligent_strategy_synthesizer` (wins MRO). */
+  intelligentStrategySynthesizer(
+    site: string,
+    trend: unknown,
+    momentum: unknown,
+    volatility: unknown,
+    volume: unknown,
+    marketCondition: unknown,
+    riskProfile: unknown,
+  ): TaRecord {
+    const th = this.windowFor(`${site}:trend`, trend);
+    const mh = this.windowFor(`${site}:momentum`, momentum);
+    const vh = this.windowFor(`${site}:volatility`, volatility);
+    const volh = this.windowFor(`${site}:volume`, volume);
+    const regime = typeof marketCondition === "string" ? marketCondition : "ranging";
+    const profile = typeof riskProfile === "string" ? riskProfile : "balanced";
+
+    const nums = (h: Cell[]): number[] => h.filter((v): v is number => v !== null);
+    const trendVals = nums(th);
+    const momentumVals = nums(mh);
+    const volatilityVals = nums(vh);
+    const volumeVals = nums(volh);
+    const avg = (vals: number[], fallback: number): number =>
+      vals.length === 0 ? fallback : vals.reduce((a, b) => a + b, 0) / vals.length;
+    const trendAvg = avg(trendVals, 0);
+    const momentumAvg = avg(momentumVals, 0);
+    const volatilityAvg = avg(volatilityVals, 0.5);
+    const volumeAvg = avg(volumeVals, 0);
+
+    const volatilityNormalized = Math.max(0, Math.min(1, volatilityAvg));
+    const composite = trendAvg * 0.4 + momentumAvg * 0.35 + volumeAvg * 0.25;
+    const compositeSignal = Math.max(-1, Math.min(1, composite));
+
+    let agreement = 0;
+    if (Math.abs(trendAvg) > 0.3) agreement += 1;
+    if (Math.abs(momentumAvg) > 0.3) agreement += 1;
+    if (Math.abs(volumeAvg) > 0.3) agreement += 1;
+    const baseConfidence = agreement / 3;
+    const confidence = Math.max(0.1, Math.min(0.99, baseConfidence - volatilityNormalized * 0.3));
+
+    let recommendation: string;
+    if (compositeSignal > 0.6) {
+      recommendation = profile === "aggressive" ? "aggressive_long" : "conservative_long";
+    } else if (compositeSignal > 0.2) {
+      recommendation = "conservative_long";
+    } else if (compositeSignal < -0.6) {
+      recommendation = profile === "aggressive" ? "aggressive_short" : "conservative_short";
+    } else if (compositeSignal < -0.2) {
+      recommendation = "conservative_short";
+    } else {
+      recommendation = "hold";
+    }
+
+    const riskMult = profile === "conservative" ? 0.5 : profile === "aggressive" ? 1.5 : 1;
+    const riskLevel = volatilityNormalized * 50 * riskMult;
+    const absSignal = Math.abs(compositeSignal);
+    const expectedReturn = absSignal * 3;
+
+    let holdingPeriod: string;
+    if (volatilityNormalized > 0.7) holdingPeriod = "scalp";
+    else if (volatilityNormalized > 0.5) holdingPeriod = "day_trade";
+    else if (absSignal > 0.5) holdingPeriod = "swing";
+    else holdingPeriod = "position";
+
+    const shortRec = recommendation === "aggressive_short" || recommendation === "conservative_short";
+    const longRec = recommendation === "aggressive_long" || recommendation === "conservative_long";
+    const stopLoss = shortRec ? -0.7 : longRec ? -0.2 : -0.15;
+    const takeProfit =
+      recommendation === "aggressive_long" || recommendation === "aggressive_short"
+        ? 1.5
+        : longRec || shortRec
+          ? 1.0
+          : 0.5;
+
+    let alignment = 50;
+    if (regime === "trending_up") {
+      if (compositeSignal > 0) alignment = 90;
+      else if (compositeSignal > -0.3) alignment = 60;
+      else alignment = 30;
+    } else if (regime === "trending_down") {
+      if (compositeSignal < 0) alignment = 90;
+      else if (compositeSignal < 0.3) alignment = 60;
+      else alignment = 30;
+    } else if (regime === "ranging") {
+      alignment = 50 + (1 - absSignal) * 30;
+    } else if (regime === "volatile") {
+      alignment = 30 + absSignal * 40;
+    } else {
+      alignment = 40;
+    }
+
+    return taRec({
+      composite_signal: finiteOut(compositeSignal) ?? 0,
+      confidence_level: finiteOut(confidence) ?? 0,
+      strategy_recommendation: recommendation,
+      risk_level: finiteOut(Math.max(0, Math.min(100, riskLevel))) ?? 0,
+      expected_return: finiteOut(expectedReturn) ?? 0,
+      holding_period: holdingPeriod,
+      stop_loss_priority: stopLoss,
+      take_profit_priority: takeProfit,
+      regime_alignment: finiteOut(Math.max(0, Math.min(100, alignment))) ?? 0,
+    });
+  }
+
+  /** `advanced.py` `_builtin_ta_signal_confluence` (dict/map of signals). */
+  signalConfluence(signals: unknown): TaRecord {
+    let vals: unknown[] = [];
+    if (signals != null && typeof signals === "object") {
+      const obj = signals as { values?: () => unknown[] };
+      if (typeof obj.values === "function") {
+        const got = obj.values();
+        vals = Array.isArray(got) ? got : [];
+      } else if (!Array.isArray(signals)) {
+        vals = Object.entries(signals)
+          .filter(([k]) => k !== "__taRecord")
+          .map(([, v]) => v);
+      }
+    }
+    let signalCount = 0;
+    let bullish = 0;
+    let bearish = 0;
+    for (const v of vals) {
+      if (typeof v === "boolean") {
+        if (v) {
+          bullish += 1;
+          signalCount += 1;
+        }
+        continue;
+      }
+      if (typeof v === "number" && Number.isFinite(v)) {
+        if (v > 0) {
+          bullish += 1;
+          signalCount += 1;
+        } else if (v < 0) {
+          bearish += 1;
+          signalCount += 1;
+        }
+      }
+    }
+    const total = vals.length > 0 ? vals.length : 1;
+    const confluence = signalCount / total;
+    const primary = bullish > bearish ? "buy" : bearish > bullish ? "sell" : "neutral";
+    return taRec({
+      signal_count: signalCount,
+      confluence_level: finiteOut(confluence) ?? 0,
+      primary_signal: primary,
+    });
   }
 
   /**

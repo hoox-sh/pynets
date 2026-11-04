@@ -211,6 +211,9 @@ const TA_METHODS = new Set([
   "gdp_growth_proxy",
   "inflation_proxy_indicator",
   "expected_value",
+  "gamma_levels",
+  "intelligent_strategy_synthesizer",
+  "signal_confluence",
 ]);
 
 /**
@@ -611,6 +614,10 @@ const BARE_SERIES_NAMES = new Set([
 function hasSeriesArg(args: CallArgs): boolean {
   const isSeries = (n: expr): boolean => n.kind === "Name" && BARE_SERIES_NAMES.has(n.id);
   return args.posNodes.some(isSeries) || Object.values(args.kwNodes).some(isSeries);
+}
+
+function isSeriesNode(n: expr | undefined): boolean {
+  return n != null && n.kind === "Name" && BARE_SERIES_NAMES.has(n.id);
 }
 
 /** True when a keyword argument named one of *names* is present (interpret hasKwarg). */
@@ -2493,10 +2500,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "breakout_detection") {
+    const arg = (i: number, names: string[]): string =>
+      isSeriesNode(args.posNodes[i]) ? "null" : cellOf(pick(args, i, names, "null"));
     return taPure("breakoutDetection", [
-      cellOf(pick(args, 0, ["close", "source"], "null")),
-      cellOf(pick(args, 1, ["resistance"], "null")),
-      cellOf(pick(args, 2, ["support"], "null")),
+      arg(0, ["close", "source"]),
+      arg(1, ["resistance"]),
+      arg(2, ["support"]),
     ]);
   }
   if (method === "ema_cross_signal") {
@@ -2626,6 +2635,28 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "expected_value") {
     return `__h.ta.expectedValue(${cellList(pick(args, 0, ["returns"], "null"))}, ${cellList(pick(args, 1, ["probabilities", "probs"], "null"))})`;
+  }
+  if (method === "gamma_levels") {
+    const vol = isSeriesNode(args.posNodes[0])
+      ? "null"
+      : cellOf(pick(args, 0, ["volatility"], "null"));
+    const price = isSeriesNode(args.posNodes[1])
+      ? "null"
+      : cellOf(pick(args, 1, ["current_price", "price"], "null"));
+    return taPure("gammaLevels", [vol, price, cellOf(pick(args, 2, ["period", "length"], "null"))]);
+  }
+  if (method === "intelligent_strategy_synthesizer") {
+    return taCall("intelligentStrategySynthesizer", site, [
+      arrOrCell(pick(args, 0, ["trend_indicators", "trend"], "null")),
+      arrOrCell(pick(args, 1, ["momentum_indicators", "momentum"], "null")),
+      arrOrCell(pick(args, 2, ["volatility_indicators", "volatility"], "null")),
+      arrOrCell(pick(args, 3, ["volume_indicators", "volume"], "null")),
+      pick(args, 4, ["market_condition", "market_regime"], '"ranging"'),
+      pick(args, 5, ["risk_profile"], '"balanced"'),
+    ]);
+  }
+  if (method === "signal_confluence") {
+    return taPure("signalConfluence", [pick(args, 0, ["signals"], "null")]);
   }
   return "null";
 }
