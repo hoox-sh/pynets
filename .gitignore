@@ -6,9 +6,18 @@ dist/
 coverage/
 .env
 .env.*
-!.env.example
+!.*.example
 .DS_Store
 .private/
 .grok/
 CLAUDE.local.md
+AGENTS.md
+DESIGN.md
+opencode.json
+.opencode/
 
+
+# OpenOrchestrate runtime state
+.openorchestrate/state.db
+.openorchestrate/state.db-*
+.openorchestrate/logs/
