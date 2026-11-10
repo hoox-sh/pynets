@@ -3,9 +3,9 @@
 > One place for work. Statuses: Todo · Working · Blocked · Ready for Review · Done.
 > Nothing is done until this file says Done.
 
-| task                                               | owner  | status           | priority | proof | blockedReason | source |
-| -------------------------------------------------- | ------ | ---------------- | -------- | ----- | ------------- | ------ |
-| Raise OpenOrchestrate maturity to L7 (daily clock) | oo-ops | Ready for Review |          |       |               |        |
+| task                                               | owner  | status | priority | proof            | blockedReason | source | updated    | Id                                        |
+| -------------------------------------------------- | ------ | ------ | -------- | ---------------- | ------------- | ------ | ---------- | ----------------------------------------- |
+| Raise OpenOrchestrate maturity to L7 (daily clock) | oo-ops | Done   |          | checker 1e90914f |               |        | 2026-11-09 | raise-openorchestrate-maturity-t-40efcee2 |
 
 ## Rules
 
