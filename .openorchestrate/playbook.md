@@ -2,7 +2,7 @@
 
 Project: **@hoox-sh/pynets**
 Owner: the person running this project
-Autonomy: **draft**
+Autonomy: **autopilot**
 
 ## The team
 
