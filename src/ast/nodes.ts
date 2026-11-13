@@ -387,7 +387,8 @@ export interface LShift extends AST {
 export interface RShift extends AST {
   kind: "RShift";
 }
-export type operator = Add | Sub | Mult | Div | Mod | BitAnd | BitOr | BitXor | LShift | RShift;
+export type operator =
+  Add | Sub | Mult | Div | Mod | BitAnd | BitOr | BitXor | LShift | RShift;
 
 export interface Qualify extends AST {
   kind: "Qualify";
@@ -494,7 +495,10 @@ export function name(id: string, ctx: Load | Store = Load): Name {
   return { kind: "Name", id, ctx };
 }
 
-export function constant(value: unknown, kind_lit: string | null = null): Constant {
+export function constant(
+  value: unknown,
+  kind_lit: string | null = null,
+): Constant {
   return { kind: "Constant", value, kind_lit };
 }
 
@@ -502,11 +506,19 @@ export function arg(value: expr, name: string | null = null): Arg {
   return { kind: "Arg", value, name };
 }
 
-export function attribute(value: expr, attrName: string, ctx: Load | Store = Load): Attribute {
+export function attribute(
+  value: expr,
+  attrName: string,
+  ctx: Load | Store = Load,
+): Attribute {
   return { kind: "Attribute", value, attr: attrName, ctx };
 }
 
-export function subscript(value: expr, slice: expr | null = null, ctx: Load | Store = Load): Subscript {
+export function subscript(
+  value: expr,
+  slice: expr | null = null,
+  ctx: Load | Store = Load,
+): Subscript {
   return { kind: "Subscript", value, slice, ctx };
 }
 
@@ -612,7 +624,11 @@ export function param(
   return { kind: "Param", name, default: defaultValue, type };
 }
 
-export function compare(left: expr, ops: compare_op[], comparators: expr[]): Compare {
+export function compare(
+  left: expr,
+  ops: compare_op[],
+  comparators: expr[],
+): Compare {
   return { kind: "Compare", left, ops, comparators };
 }
 
@@ -646,7 +662,10 @@ export function whileExpr(test: expr, body: stmt[] = []): While {
   return { kind: "While", test, body };
 }
 
-export function switchExpr(cases: Case[] = [], subject: expr | null = null): Switch {
+export function switchExpr(
+  cases: Case[] = [],
+  subject: expr | null = null,
+): Switch {
   return { kind: "Switch", cases, subject };
 }
 

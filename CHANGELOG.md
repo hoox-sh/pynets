@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multi-tick realtime windows, reference `varip`, and list subscripts.
 
 ### Added
+
 - `RuntimeOptions.realtimeTicks` / `realtimeBars` / `realtimeFromBar` — Python `realtime_ticks` / `realtime_bars` / `realtime_from_bar` realtime windows with `_resolve_realtime_first` precedence (`realtimeFromBar` > `realtimeBars` > last-bar flags).
 - Per-tick rollback for intermediate realtime ticks: `var` scope, container contents (array/map/UDT/matrix, in place so aliases keep identity), UDF-site `var` state and series pushes, plot cells, TA windows, and broker state — matching Python `_run_batch`.
 - `barstate.isnew` is `0` after the first realtime tick; `barstate.isconfirmed` is `0` on intermediate ticks; `once` and `alert.freq_once_per_bar_close` commit on confirmed bars only, `alert.freq_all` fires every tick.
@@ -20,6 +21,7 @@ Multi-tick realtime windows, reference `varip`, and list subscripts.
 - Exported `resolveRealtimeWindow`.
 
 ### Fixed
+
 - `varip` now initializes once and persists across historical bars (previously re-initialized every bar like a plain assignment), and re-runs its initializer on every realtime tick (reference `varip`) — matching Python `visit_Assign` `ast.VarIp` handling.
 
 ## [0.9.0] - 2026-11-04
@@ -27,16 +29,19 @@ Multi-tick realtime windows, reference `varip`, and list subscripts.
 Realtime stream session API and forming-bar semantics.
 
 ### Added
+
 - `RuntimeStream.updateLastBar(bar)` — re-tick the forming last bar without advancing `barCount`; `once`, TA state, and broker fills recompute from the revised history.
 - `RuntimeStream.appendBars(bars)` and `RuntimeStream.barCount`.
 - `RuntimeOptions.realtimeLastBar` / `Runtime.run(..., { realtimeLastBar: true })` — last bar sees `barstate.isrealtime=1`, `ishistory=0`, `islastconfirmedhistory=0`.
 - `RuntimeStream.push` uses realtime last-bar semantics; `close()` confirms the last bar.
 
 ### Changed
+
 - `barstate.ishistory` is `1` on historical bars (including the last), matching PYNE; the realtime forming bar is `0`.
 - `once` commits its fired flag only on a confirmed bar, ready for multi-tick rollback.
 
 ### Fixed
+
 - README stream example used the non-existent `stream.end()`; it now uses `close()`.
 
 ## [0.8.0] - 2026-11-04
@@ -46,14 +51,17 @@ Full builtin surface: every name registered by PYNE's `BuiltinEvaluator`
 list-returning gamma levels.
 
 ### Added
+
 - `ta.gamma_levels` — returns a `PineArray` (`array.get(g, 0)` / `array.get(g, 1)`), interpret + compile.
 - `ta.intelligent_strategy_synthesizer` — multi-list trend/momentum/volatility/volume synthesis with market-regime and risk-profile adaptation.
 - `ta.signal_confluence` — dict/map signal agreement, including boolean signals.
 
 ### Changed
+
 - `ta.breakout_detection` treats a bare series argument as `0`, matching PYNE's `isinstance` bar-mode quirk.
 
 ### Notes
+
 - All 941 registered builtin names resolve. `color.*`, `*.all`, `syminfo.ticker`, `timeframe.*`, and `last_bar_time` are handled structurally rather than by quoted dispatch keys; see `PARITY.md`.
 
 ## [0.7.0] - 2026-11-04
@@ -62,11 +70,13 @@ Wave 13: history-based, sentiment, and macro analytics, plus the newest-first
 list semantics PYNE uses for `_expect_list(PineSeries)`.
 
 ### Added
+
 - `ta.ema_cross_signal`, `ta.momentum_filter`, `ta.volatility_regime`, `ta.economic_impact_score`, `ta.contrarian_signal`, `ta.drawdown_recovery_level`, `ta.pivot_point_levels`, `ta.volatility_regime_score`, `ta.correlation_filter`, `ta.advanced_breakout_detector`, `ta.pullback_bounce_level`, `ta.divergence_detector`, `ta.momentum_divergence`, `ta.spread_analysis`, `ta.employment_cycle_indicator`, `ta.gdp_growth_proxy`, `ta.inflation_proxy_indicator`, `ta.expected_value` (interpret + compile).
 - Bare chart-type ticker aliases `renko`, `kagi`, `linebreak`, `pointfigure`; `ticker.inherit`; bare `percentile_linear_interpolation` / `percentile_nearest_rank` aliases.
 - `TaEngine.windowFor` — newest-first, 1000-sample history matching Python `_expect_list`, for both series and `array.from(...)` inputs.
 
 ### Changed
+
 - `ta.market_structure_pivot` uses the `advanced.py` semantics (oldest `period` highs/lows, midpoint pivot, fractal/swing/block strength).
 - `ta.optimal_entry_zone` and `ta.mean_reversion_entry` read the oldest retained sample (`[-1]`), matching PYNE's newest-first lists.
 
@@ -77,11 +87,13 @@ source checkout, incremental TA drift is fixed, and the strategy broker uses
 next-bar market fills.
 
 ### Added
+
 - Wave 11 statistical / advanced `ta.*`: `sma_weighted`, `apo`, `atr_normalized`, `beta`, `r_squared`, `comovement`, `skewness`, `kurtosis`, `volume_weighted_momentum`, `parkinson`, `garman_klass`, `mean_reversion_score`, `market_condition`, `order_flow_imbalance`, `liquidity_score`, `fear_greed_index`, `crowd_sentiment`, `smart_money_flow`, `trend_confirmation_score`, `max_loss_level`, `profit_lock_level` (interpret + compile).
 - Wave 12 risk / sizing / timing `ta.*`: `position_sizing`, `kelly_criterion`, `risk_reward_ratio`, `risk_reward_asymmetry`, `probability_of_movement`, `trend_strength`, `breakeven_level`, `market_structure_pivot`, `position_sizing_score`, `trailing_exit_level`, `optimal_entry_zone`, `mean_reversion_entry`, `multi_timeframe_signal`, `market_timing_index`, `regime_adaptive_signal`, `strategy_score`, `breakout_detection` (interpret + compile).
 - `PARITY.md` tracking the remaining advanced analytics and history-list quirks.
 
 ### Changed
+
 - Parity tests run against the local PYNE checkout (`$PYNESCRIPT_ROOT/src`) through a `PYTHONPATH` wrapper instead of a stale venv install.
 - Strategy market orders placed on bar N fill at the open of bar N+1; orders never fill on their placement bar; `entry_time` / `exit_time` use bar timestamps. Compile uses the same flow.
 - `ta.stdev`, `ta.variance`, and Bollinger bands use population variance (ddof=0).
@@ -89,6 +101,7 @@ next-bar market fills.
 - Compile `hold()` preserves string values (string-valued TA results survive assignment).
 
 ### Fixed
+
 - Bar-mode incremental parity for `ta.zigzag`, `ta.acceleration_factor`, `ta.stoch_smooth`, `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`, `ta.rsi_divergence`, `ta.cumulative_delta`, `ta.volume_momentum`, and `ta.volume_thrust`.
 
 ## [0.5.0] - 2026-09-27
@@ -96,11 +109,13 @@ next-bar market fills.
 Python `Runtime.run` footprint mock, plot style / alert frequency tokens, and `alert()` gating. Compile emits the same names.
 
 ### Added
+
 - `request.footprint` Python mock on interpret and compile. `footprint.*` and `volume_row.*` accessors (call form). `request.seed` seeds the mock RNG so numbers match Python.
 - `plot.style_line` … `plot.style_circles` and `alert.freq_once_per_bar` / `once_per_bar_close` / `all` on interpret and compile.
 - `alert()` frequency gating: default once per bar, `"all"` every call, zero-arg is a no-op.
 
 ### Notes
+
 - Realtime `once` rollback and the extension-analytics `ta.*` list are still open.
 - Chart-series plots that Python leaves `na` stay unwired (`ta.beta`, `ta.skewness`, `ta.parkinson`, and the rest of that list).
 
@@ -109,15 +124,18 @@ Python `Runtime.run` footprint mock, plot style / alert frequency tokens, and `a
 Interpret and compile for the next Python `Runtime.run` slice: bar-mode `ta.*` detectors, strategy field emit, drawing-book emit, and host helpers. `array.from` on the compile path collects its arguments.
 
 ### Added
+
 - `ta.hammer`, `ta.gap_detector`, `ta.macd_signal`, `ta.acceleration_factor`, `ta.stoch_smooth`, `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`, `ta.voi`, `ta.bid_ask_imbalance`, `ta.rsi_oversold_overbought`, `ta.rsi_divergence`, `ta.cumulative_delta`, `ta.volume_momentum`, `ta.volume_profile_high`, `ta.volume_profile_low`, `ta.volume_thrust` (interpret and compile; v3/v4 bare aliases). Several are Python’s bar-mode sentinels (`ta.engulfing` is false every bar; `ta.stoch_smooth` is `na` unless both smooth lengths are 1).
 - Compile emit for `strategy.cash` free cash, trade-history getters, and `oca` / `direction` / `commission` constants. `default_qty_type=strategy.cash` still sizes entries as cash.
 - Compile emit for `timenow` / `timenow()`, `max_bars_back`, `alertcondition`, `plot.linestyle_*`, bare `random`, bare `security_lower_tf`.
 - Compile emit for drawing getters and remaining setters, `*.all`, `*.copy`, `chart.point.*`, and `line.fill`.
 
 ### Changed
+
 - Compile `array.from` collects its arguments. It no longer lowers to `array.new(size, initial)`.
 
 ### Notes
+
 - Still unwired because a chart-series plot is `na` on every bar: `ta.skewness`, `ta.kurtosis`, `ta.sma_weighted`, `ta.atr_normalized`, `ta.parkinson`, `ta.garman_klass`, `ta.volume_weighted_momentum`, and `ta.beta`, `ta.r_squared`, `ta.comovement`, `ta.apo`.
 - Footprint / `volume_row`, realtime `once` rollback, and the extension-analytics `ta.*` list are still open.
 
@@ -126,6 +144,7 @@ Interpret and compile for the next Python `Runtime.run` slice: bar-mode `ta.*` d
 `once` / multi-value `switch`, and a Python `Runtime.run` interpret parity slice (drawings, strategy fields, host helpers, TA/matrix). Compile emit for the TA/matrix/host names from that slice.
 
 ### Added
+
 - `once [cond]` structure — parse / unparse / interpret / compile fire the body the first time the test is true (or bar 0 with no test), regen from PYNE grammar
 - multi-value `switch` arms (`1, 2 =>`) match any element on interpret and compile
 - `matrix.sum_row` / `sum_col`, `avg_*`, `min_*`, `max_*`, `mode_*`, `copy_row` / `copy_col`, `fill_row` / `fill_col` / `fill_diagonal`, `reverse_rows` / `reverse_cols`, `stdev`, `variance`
@@ -147,6 +166,7 @@ Interpret and compile for the next Python `Runtime.run` slice: bar-mode `ta.*` d
 - Incremental interpret `ta.ao` / `ta.aroon` (SMA(hl2,5)−SMA(hl2,34); Aroon pair, ties keep oldest)
 
 ### Changed
+
 - Parser regen from PYNE 0.3.11: left-factored typed names; bare `x =` is `Assign`; `=` reassignment only on attribute/subscript
 - Compile `strategy.exit` uses `placeExit` (trail / ticks / `qty_percent` / `from_entry`)
 - Compile arrays keep UDT/object cells; `sort` / `binary_search*` pass `sort_field`

@@ -10,7 +10,12 @@
 import { readFileSync } from "node:fs";
 import { basename, isAbsolute, resolve } from "node:path";
 import { dump, parse, unparse, Runtime } from "./index.ts";
-import type { BrokerSettings, OHLCVBar, RuntimeFill, RuntimeResult } from "./index.ts";
+import type {
+  BrokerSettings,
+  OHLCVBar,
+  RuntimeFill,
+  RuntimeResult,
+} from "./index.ts";
 import {
   Rich,
   VERSION,
@@ -43,7 +48,12 @@ function failUsage(ui: Rich, message: string): never {
 }
 
 function ioCode(err: unknown): string {
-  if (err && typeof err === "object" && "code" in err && typeof (err as { code: unknown }).code === "string") {
+  if (
+    err &&
+    typeof err === "object" &&
+    "code" in err &&
+    typeof (err as { code: unknown }).code === "string"
+  ) {
     return (err as { code: string }).code;
   }
   return "";
@@ -134,14 +144,23 @@ function requireUint(raw: string | undefined, flag: string): number {
     throw new UsageError(`error: ${flag} requires a non-negative integer`);
   }
   const n = Number(raw);
-  if (!Number.isFinite(n) || Number.isNaN(n) || n < 0 || !Number.isSafeInteger(n)) {
+  if (
+    !Number.isFinite(n) ||
+    Number.isNaN(n) ||
+    n < 0 ||
+    !Number.isSafeInteger(n)
+  ) {
     throw new UsageError(`error: ${flag} requires a non-negative integer`);
   }
   return n;
 }
 
 function requireNumber(raw: string | undefined, flag: string): number {
-  if (raw == null || raw === "" || !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw)) {
+  if (
+    raw == null ||
+    raw === "" ||
+    !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw)
+  ) {
     throw new UsageError(`error: ${flag} requires a finite number`);
   }
   const n = Number(raw);
@@ -151,7 +170,11 @@ function requireNumber(raw: string | undefined, flag: string): number {
   return n;
 }
 
-function takeValue(args: string[], i: number, flag: string): { raw: string | undefined; next: number } {
+function takeValue(
+  args: string[],
+  i: number,
+  flag: string,
+): { raw: string | undefined; next: number } {
   const a = args[i]!;
   if (a === flag) return { raw: args[i + 1], next: i + 1 };
   return { raw: a.slice(flag.length + 1), next: i };
@@ -189,7 +212,18 @@ export function parseArgs(argv: string[]): {
   for (let i = 1; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--help" || a === "-h") {
-      return { cmd: "help", file: undefined, bars, json, indent, full, mode, commission, slippage, pyramiding };
+      return {
+        cmd: "help",
+        file: undefined,
+        bars,
+        json,
+        indent,
+        full,
+        mode,
+        commission,
+        slippage,
+        pyramiding,
+      };
     }
     if (a === "--json") {
       json = true;
@@ -241,16 +275,30 @@ export function parseArgs(argv: string[]): {
       i = got.next;
       continue;
     }
-    if (a.startsWith("-") && a !== "-") throw new UsageError(`error: unknown argument: ${a}`);
+    if (a.startsWith("-") && a !== "-")
+      throw new UsageError(`error: unknown argument: ${a}`);
     if (file != null) throw new UsageError(`error: unexpected argument: ${a}`);
     file = a;
   }
-  return { cmd, file, bars, json, indent, full, mode, commission, slippage, pyramiding };
+  return {
+    cmd,
+    file,
+    bars,
+    json,
+    indent,
+    full,
+    mode,
+    commission,
+    slippage,
+    pyramiding,
+  };
 }
 
 function fmtNum(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "na";
-  return Number.isInteger(v) ? String(v) : v.toPrecision(6).replace(/\.?0+$/, "");
+  return Number.isInteger(v)
+    ? String(v)
+    : v.toPrecision(6).replace(/\.?0+$/, "");
 }
 
 function check(ui: Rich, source: string, label: string): void {
@@ -287,7 +335,9 @@ function format(ui: Rich, source: string): void {
 }
 
 function prettyAstDump(text: string, indent: number): string {
-  const step = Number.isFinite(indent) ? Math.max(0, Math.min(8, Math.trunc(indent))) : 2;
+  const step = Number.isFinite(indent)
+    ? Math.max(0, Math.min(8, Math.trunc(indent)))
+    : 2;
   if (step === 0) return text;
   let out = "";
   let depth = 0;
@@ -330,7 +380,12 @@ function prettyAstDump(text: string, indent: number): string {
   return out;
 }
 
-function dumpAst(ui: Rich, source: string, indent: number, full: boolean): void {
+function dumpAst(
+  ui: Rich,
+  source: string,
+  indent: number,
+  full: boolean,
+): void {
   let tree;
   try {
     tree = parse(source);
@@ -380,7 +435,8 @@ function runJson(out: RuntimeOut): void {
   if (out.drawings != null) payload.drawings = out.drawings;
   if (out.fills != null) payload.fills = out.fills;
   if (out.alerts != null) payload.alerts = out.alerts;
-  if (out.compile_fallback_reason != null) payload.compile_fallback_reason = out.compile_fallback_reason;
+  if (out.compile_fallback_reason != null)
+    payload.compile_fallback_reason = out.compile_fallback_reason;
   if (out.auto_backend != null) payload.auto_backend = out.auto_backend;
   if (out.error != null) payload.error = out.error;
   writeJson(payload);
@@ -478,7 +534,13 @@ function printAlerts(ui: Rich, alerts: AlertLike[] | undefined): void {
   );
 }
 
-function runPretty(ui: Rich, label: string, bars: number, out: RuntimeOut, ms: number): void {
+function runPretty(
+  ui: Rich,
+  label: string,
+  bars: number,
+  out: RuntimeOut,
+  ms: number,
+): void {
   if (out.error) fail(ui, out.error, 1);
   const titles = plotTitles(out);
   const lines = [
@@ -532,7 +594,10 @@ function run(
   const t0 = performance.now();
   let out: RuntimeOut;
   try {
-    out = new Runtime("AAPL", { broker, mode }).run(source, syntheticBars(bars));
+    out = new Runtime("AAPL", { broker, mode }).run(
+      source,
+      syntheticBars(bars),
+    );
   } catch (err) {
     fail(ui, err instanceof Error ? err.message : String(err), 1);
   }
@@ -610,7 +675,8 @@ function main(): void {
     return;
   }
 
-  const known = cmd === "check" || cmd === "format" || cmd === "run" || cmd === "dump";
+  const known =
+    cmd === "check" || cmd === "format" || cmd === "run" || cmd === "dump";
   if (!known) {
     failUsage(ui, `error: unknown command: ${cmd}`);
   }

@@ -102,14 +102,32 @@ describe("StrategyBook broker settings", () => {
   test("slippage moves fill price against the trade", () => {
     const book = new StrategyBook({ slippage: 1 });
     book.fillEntry(0, "L", "long", 1, 100);
-    expect(book.fills[0]).toEqual({ bar: 0, id: "L", side: "buy", qty: 1, price: 101 });
+    expect(book.fills[0]).toEqual({
+      bar: 0,
+      id: "L",
+      side: "buy",
+      qty: 1,
+      price: 101,
+    });
     expect(book.position.avgPrice).toBe(101);
     book.fillClose(1, "L", 110);
-    expect(book.fills[1]).toEqual({ bar: 1, id: "L", side: "sell", qty: 1, price: 109 });
+    expect(book.fills[1]).toEqual({
+      bar: 1,
+      id: "L",
+      side: "sell",
+      qty: 1,
+      price: 109,
+    });
 
     const short = new StrategyBook({ slippage: 1 });
     short.fillEntry(0, "S", "short", 1, 100);
-    expect(short.fills[0]).toEqual({ bar: 0, id: "S", side: "sell", qty: 1, price: 99 });
+    expect(short.fills[0]).toEqual({
+      bar: 0,
+      id: "S",
+      side: "sell",
+      qty: 1,
+      price: 99,
+    });
     expect(short.position.avgPrice).toBe(99);
   });
 
@@ -118,7 +136,13 @@ describe("StrategyBook broker settings", () => {
     book.fillEntry(0, "L", "long", 1, 100);
     book.fillEntry(1, "L", "long", 1, 110);
     expect(book.fills).toHaveLength(1);
-    expect(book.fills[0]).toEqual({ bar: 0, id: "L", side: "buy", qty: 1, price: 100 });
+    expect(book.fills[0]).toEqual({
+      bar: 0,
+      id: "L",
+      side: "buy",
+      qty: 1,
+      price: 100,
+    });
     expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
     expect(book.events).toHaveLength(1);
   });
@@ -155,7 +179,11 @@ describe("StrategyBook NaN / Inf harden", () => {
     expect(book.events).toHaveLength(0);
 
     book.fillEntry(4, "L", "long", 1, 100);
-    const snap = { ...book.position, fills: book.fills.length, events: book.events.length };
+    const snap = {
+      ...book.position,
+      fills: book.fills.length,
+      events: book.events.length,
+    };
     book.fillClose(5, "L", Number.NaN);
     book.fillClose(6, "L", Number.POSITIVE_INFINITY);
     expect(book.position.qty).toBe(snap.qty);
@@ -173,7 +201,11 @@ describe("StrategyBook NaN / Inf harden", () => {
   });
 
   test("configure ignores non-finite broker settings", () => {
-    const book = new StrategyBook({ commission: 0.001, slippage: 1, pyramiding: 0 });
+    const book = new StrategyBook({
+      commission: 0.001,
+      slippage: 1,
+      pyramiding: 0,
+    });
     book.configure({
       commission: Number.NaN,
       slippage: Number.POSITIVE_INFINITY,
@@ -284,14 +316,20 @@ describe("StrategyBook pending orders", () => {
       { type: "entry", id: "L", direction: "long", qty: 1, bar: 0 },
     ]);
 
-    expect(book.processPending(1, { open: 105, high: 106, low: 101, close: 104 })).toEqual([]);
+    expect(
+      book.processPending(1, { open: 105, high: 106, low: 101, close: 104 }),
+    ).toEqual([]);
     expect(book.position.qty).toBe(0);
     expect(book.pending).toHaveLength(1);
 
-    expect(book.processPending(2, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["L"]);
+    expect(
+      book.processPending(2, { open: 105, high: 106, low: 99, close: 101 }),
+    ).toEqual(["L"]);
     expect(book.pending).toHaveLength(0);
     expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
-    expect(book.fills).toEqual([{ bar: 2, id: "L", side: "buy", qty: 1, price: 100 }]);
+    expect(book.fills).toEqual([
+      { bar: 2, id: "L", side: "buy", qty: 1, price: 100 },
+    ]);
     expect(book.events.map((e) => e.type)).toEqual(["entry", "fill"]);
   });
 
@@ -301,7 +339,9 @@ describe("StrategyBook pending orders", () => {
     book.cancel(1, "L");
     expect(book.pending).toHaveLength(0);
     expect(book.events.map((e) => e.type)).toEqual(["entry", "cancel"]);
-    expect(book.processPending(2, { open: 105, high: 106, low: 99, close: 101 })).toEqual([]);
+    expect(
+      book.processPending(2, { open: 105, high: 106, low: 99, close: 101 }),
+    ).toEqual([]);
     expect(book.fills).toHaveLength(0);
     expect(book.position.qty).toBe(0);
   });
@@ -499,21 +539,45 @@ describe("StrategyBook risk + OCA", () => {
 
   test("OCA cancel drops sibling after fill", () => {
     const book = new StrategyBook();
-    book.placeEntry(0, "A", "long", 1, { limit: 100, oca_name: "G", oca_type: "cancel" });
-    book.placeEntry(0, "B", "long", 1, { limit: 100, oca_name: "G", oca_type: "strategy.oca.cancel" });
+    book.placeEntry(0, "A", "long", 1, {
+      limit: 100,
+      oca_name: "G",
+      oca_type: "cancel",
+    });
+    book.placeEntry(0, "B", "long", 1, {
+      limit: 100,
+      oca_name: "G",
+      oca_type: "strategy.oca.cancel",
+    });
     expect(book.pending).toHaveLength(2);
-    expect(book.processPending(1, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["A"]);
+    expect(
+      book.processPending(1, { open: 105, high: 106, low: 99, close: 101 }),
+    ).toEqual(["A"]);
     expect(book.pending).toHaveLength(0);
     expect(book.position).toEqual({ qty: 1, avgPrice: 100 });
-    expect(book.fills).toEqual([{ bar: 1, id: "A", side: "buy", qty: 1, price: 100 }]);
-    expect(book.events.some((e) => e.type === "cancel" && e.id === "B")).toBe(true);
+    expect(book.fills).toEqual([
+      { bar: 1, id: "A", side: "buy", qty: 1, price: 100 },
+    ]);
+    expect(book.events.some((e) => e.type === "cancel" && e.id === "B")).toBe(
+      true,
+    );
   });
 
   test("OCA reduce reduces sibling qty after fill", () => {
     const book = new StrategyBook();
-    book.placeEntry(0, "A", "long", 1, { limit: 100, oca_name: "G", oca_type: "reduce" });
-    book.placeEntry(0, "B", "long", 3, { limit: 90, oca_name: "G", oca_type: "strategy.oca.reduce" });
-    expect(book.processPending(1, { open: 105, high: 106, low: 99, close: 101 })).toEqual(["A"]);
+    book.placeEntry(0, "A", "long", 1, {
+      limit: 100,
+      oca_name: "G",
+      oca_type: "reduce",
+    });
+    book.placeEntry(0, "B", "long", 3, {
+      limit: 90,
+      oca_name: "G",
+      oca_type: "strategy.oca.reduce",
+    });
+    expect(
+      book.processPending(1, { open: 105, high: 106, low: 99, close: 101 }),
+    ).toEqual(["A"]);
     expect(book.pending).toHaveLength(1);
     expect(book.pending[0]?.id).toBe("B");
     expect(book.pending[0]?.qty).toBe(2);
@@ -532,7 +596,7 @@ describe("StrategyBook summary stats", () => {
     expect(book.profitFactor()).toBeGreaterThan(0);
     const s = book.summary(110);
     expect(s.netprofit).toBe(10);
-    expect(s.netprofitPercent).toBeCloseTo(100 * 10 / 1_000_000);
+    expect(s.netprofitPercent).toBeCloseTo((100 * 10) / 1_000_000);
     expect(s.openprofit).toBe(0);
     expect(s.equity).toBe(book.equity(110));
     expect(s.wintrades).toBe(1);
@@ -604,7 +668,12 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     expect(book.pending).toHaveLength(1);
     expect(book.pending[0]?.trail_offset).toBeCloseTo(1);
     expect(book.pending[0]?.kind).toBe("exit");
-    book.processPending(1, { open: 109.5, high: 110, low: 109.2, close: 109.8 });
+    book.processPending(1, {
+      open: 109.5,
+      high: 110,
+      low: 109.2,
+      close: 109.8,
+    });
     expect(book.position.qty).toBe(1);
     expect(book.pending[0]?.stop).toBeCloseTo(109);
   });
@@ -616,7 +685,12 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     // points=100 → $1; offset=500 would be $5 if it won
     book.placeExit(0, "XT", { trail_points: 100, trail_offset: 500 });
     expect(book.pending[0]?.trail_offset).toBeCloseTo(1);
-    book.processPending(1, { open: 109.5, high: 110, low: 109.2, close: 109.8 });
+    book.processPending(1, {
+      open: 109.5,
+      high: 110,
+      low: 109.2,
+      close: 109.8,
+    });
     expect(book.position.qty).toBe(2);
     expect(book.pending[0]?.stop).toBeCloseTo(109);
   });
@@ -628,9 +702,23 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     book.placeExit(0, "X", { profit: 100 });
     expect(book.position.qty).toBe(1);
     expect(book.pending[0]?.limit).toBeCloseTo(101);
-    expect(book.processPending(1, { open: 100.2, high: 100.5, low: 100, close: 100.4 })).toEqual([]);
+    expect(
+      book.processPending(1, {
+        open: 100.2,
+        high: 100.5,
+        low: 100,
+        close: 100.4,
+      }),
+    ).toEqual([]);
     expect(book.position.qty).toBe(1);
-    expect(book.processPending(2, { open: 100.4, high: 101.5, low: 100.2, close: 101.2 })).toEqual(["X"]);
+    expect(
+      book.processPending(2, {
+        open: 100.4,
+        high: 101.5,
+        low: 100.2,
+        close: 101.2,
+      }),
+    ).toEqual(["X"]);
     expect(book.position.qty).toBe(0);
     expect(book.closedTrades[0]?.exitPrice).toBeCloseTo(101);
   });
@@ -641,8 +729,17 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     book.fillEntry(0, "L", "long", 1, 100);
     book.placeExit(0, "X", { loss: 50 });
     expect(book.pending[0]?.stop).toBeCloseTo(99.5);
-    expect(book.processPending(1, { open: 100, high: 100.2, low: 99.6, close: 99.8 })).toEqual([]);
-    expect(book.processPending(2, { open: 99.8, high: 99.9, low: 99, close: 99.2 })).toEqual(["X"]);
+    expect(
+      book.processPending(1, {
+        open: 100,
+        high: 100.2,
+        low: 99.6,
+        close: 99.8,
+      }),
+    ).toEqual([]);
+    expect(
+      book.processPending(2, { open: 99.8, high: 99.9, low: 99, close: 99.2 }),
+    ).toEqual(["X"]);
     expect(book.position.qty).toBe(0);
     expect(book.closedTrades[0]?.exitPrice).toBeCloseTo(99.5);
   });
@@ -653,7 +750,9 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     half.placeExit(0, "X", { from_entry: "L", qty_percent: 50, price: 100 });
     expect(half.position.qty).toBe(5);
     expect(half.closedTrades[0]?.qty).toBe(5);
-    expect(half.events.some((e) => e.type === "exit" && e.qty === 5)).toBe(true);
+    expect(half.events.some((e) => e.type === "exit" && e.qty === 5)).toBe(
+      true,
+    );
 
     const wins = new StrategyBook();
     wins.fillEntry(0, "L", "long", 10, 100);
@@ -674,7 +773,11 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     expect(book.openSize(0)).toBe(3);
     expect(book.closedTrades).toHaveLength(1);
     expect(book.closedId(0)).toBe("A");
-    expect(book.events.some((e) => e.type === "exit" && e.id === "XA" && e.qty === 2)).toBe(true);
+    expect(
+      book.events.some(
+        (e) => e.type === "exit" && e.id === "XA" && e.qty === 2,
+      ),
+    ).toBe(true);
   });
 
   test("unknown from_entry is a soft no-op after the exit event", () => {
@@ -684,7 +787,9 @@ describe("StrategyBook exit / trail / qty_percent", () => {
     expect(book.position.qty).toBe(4);
     expect(book.closedtrades).toBe(0);
     expect(book.pending).toHaveLength(0);
-    expect(book.events.some((e) => e.type === "exit" && e.id === "X")).toBe(true);
+    expect(book.events.some((e) => e.type === "exit" && e.id === "X")).toBe(
+      true,
+    );
   });
 });
 
@@ -724,7 +829,10 @@ describe("StrategyBook avg_price_model + leverage", () => {
   });
 
   test("futures: two adds then partial close keeps sticky avg", () => {
-    const book = new StrategyBook({ pyramiding: 1, avg_price_model: "futures" });
+    const book = new StrategyBook({
+      pyramiding: 1,
+      avg_price_model: "futures",
+    });
     book.fillEntry(0, "A", "long", 1, 100);
     book.fillEntry(1, "B", "long", 1, 120);
     expect(book.position.avgPrice).toBeCloseTo(110);
@@ -789,6 +897,8 @@ describe("StrategyBook summary extras", () => {
     expect(book.avgTradePercent()).toBeCloseTo((100 * 10) / 1_000_000);
     expect(book.avgWinningTradePercent()).toBeCloseTo((100 * 10) / 1_000_000);
     expect(book.avgLosingTradePercent()).toBe(0);
-    expect(book.summary(110).netprofitPercent).toBeCloseTo((100 * 10) / 1_000_000);
+    expect(book.summary(110).netprofitPercent).toBeCloseTo(
+      (100 * 10) / 1_000_000,
+    );
   });
 });

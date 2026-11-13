@@ -22,8 +22,22 @@ import { naNum } from "./helpers.ts";
 
 function asDir(v: unknown): StrategyDirection | number | string {
   if (v == null) return "long";
-  if (v === 1 || v === "1" || v === "long" || v === "strategy.long" || v === "buy") return "long";
-  if (v === -1 || v === "-1" || v === "short" || v === "strategy.short" || v === "sell") return "short";
+  if (
+    v === 1 ||
+    v === "1" ||
+    v === "long" ||
+    v === "strategy.long" ||
+    v === "buy"
+  )
+    return "long";
+  if (
+    v === -1 ||
+    v === "-1" ||
+    v === "short" ||
+    v === "strategy.short" ||
+    v === "sell"
+  )
+    return "short";
   return String(v);
 }
 
@@ -51,7 +65,10 @@ function asExitOpts(v: unknown): PlaceExitOpts {
   if (v == null || typeof v !== "object" || Array.isArray(v)) return {};
   const rec = v as Record<string, unknown>;
   return {
-    from_entry: rec.from_entry == null || rec.from_entry === "" ? null : String(rec.from_entry),
+    from_entry:
+      rec.from_entry == null || rec.from_entry === ""
+        ? null
+        : String(rec.from_entry),
     qty: optNum(rec.qty),
     qty_percent: optNum(rec.qty_percent),
     profit: optNum(rec.profit),
@@ -78,7 +95,12 @@ export class CompileStrategy {
 
   /** Apply `strategy(...)` declaration kwargs (every bar, same as interpret). */
   configure(settings?: unknown): void {
-    if (settings == null || typeof settings !== "object" || Array.isArray(settings)) return;
+    if (
+      settings == null ||
+      typeof settings !== "object" ||
+      Array.isArray(settings)
+    )
+      return;
     const rec = settings as Record<string, unknown>;
     const broker: BrokerSettings = {};
     const commission = optNum(rec.commission);
@@ -89,7 +111,8 @@ export class CompileStrategy {
       const pyr = optNum(rec.pyramiding);
       broker.pyramiding = pyr == null ? undefined : Math.trunc(pyr);
     }
-    if (typeof rec.avg_price_model === "string") broker.avg_price_model = rec.avg_price_model;
+    if (typeof rec.avg_price_model === "string")
+      broker.avg_price_model = rec.avg_price_model;
     const leverage = optNum(rec.leverage);
     if (leverage != null) broker.leverage = leverage;
     const ml = optNum(rec.margin_long);
@@ -97,12 +120,16 @@ export class CompileStrategy {
     const ms = optNum(rec.margin_short);
     if (ms != null) broker.margin_short = ms;
     // String sentinel or tagged free-cash (`strategy.cash`) both select cash sizing.
-    if (typeof rec.default_qty_type === "string" || isStrategyCashAmount(rec.default_qty_type)) {
+    if (
+      typeof rec.default_qty_type === "string" ||
+      isStrategyCashAmount(rec.default_qty_type)
+    ) {
       broker.default_qty_type = rec.default_qty_type;
     }
     const dqv = optNum(rec.default_qty_value);
     if (dqv != null) broker.default_qty_value = dqv;
-    if (typeof rec.currency === "string" && rec.currency !== "") broker.currency = rec.currency;
+    if (typeof rec.currency === "string" && rec.currency !== "")
+      broker.currency = rec.currency;
     if (Object.keys(broker).length) this.book.configure(broker);
     const capital = optNum(rec.initial_capital);
     if (capital != null) this.book.initialCapital = capital;
@@ -131,9 +158,15 @@ export class CompileStrategy {
     this.book.markOpenTrades(ohlc.high, ohlc.low, ohlc.close);
   }
 
-  entry(id?: unknown, direction?: unknown, qty?: unknown, opts?: PlaceEntryOpts): void {
+  entry(
+    id?: unknown,
+    direction?: unknown,
+    qty?: unknown,
+    opts?: PlaceEntryOpts,
+  ): void {
     const fillPrice = opts?.price ?? this.mark;
-    const q = qty == null ? this.book.resolveDefaultQty(fillPrice) : num(qty, 1);
+    const q =
+      qty == null ? this.book.resolveDefaultQty(fillPrice) : num(qty, 1);
     this.book.placeEntry(this.bar, str(id, "entry"), asDir(direction), q, {
       price: fillPrice,
       time: opts?.time ?? this.time,
@@ -157,7 +190,12 @@ export class CompileStrategy {
     this.book.placeCloseAll(this.bar, this.mark);
   }
 
-  order(id?: unknown, direction?: unknown, qty?: unknown, opts?: PlaceEntryOpts): void {
+  order(
+    id?: unknown,
+    direction?: unknown,
+    qty?: unknown,
+    opts?: PlaceEntryOpts,
+  ): void {
     this.entry(id, direction, qty, opts);
   }
 
@@ -238,7 +276,8 @@ export class CompileStrategy {
 
   /** Zero-arg form is `percent_equity=100` (interpret `strategy.default_entry_qty`). */
   default_entry_qty(percent?: unknown): number | null {
-    const pct = arguments.length === 0 || percent === undefined ? 100 : naNum(percent);
+    const pct =
+      arguments.length === 0 || percent === undefined ? 100 : naNum(percent);
     if (pct == null) return null;
     return (this.book.initialCapital * (pct / 100)) / 100;
   }
@@ -500,6 +539,8 @@ export interface CompileStrategyExtras {
   __strategy: StrategySummary;
 }
 
-export function createCompileStrategy(settings?: BrokerSettings): CompileStrategy {
+export function createCompileStrategy(
+  settings?: BrokerSettings,
+): CompileStrategy {
   return new CompileStrategy(settings);
 }

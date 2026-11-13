@@ -4,7 +4,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
-import { compileEligible, compileToResult } from "../src/runtime/compile/index.ts";
+import {
+  compileEligible,
+  compileToResult,
+} from "../src/runtime/compile/index.ts";
 
 const BARS = [10, 11, 12, 13, 14].map((close) => ({
   open: close,
@@ -43,7 +46,9 @@ plot(request.security("X", "1D", close))
 
 type Eventish = { type?: string; kind?: string; comment?: string };
 
-function lastPlot(plots: Array<number | null | undefined> | undefined): number | null {
+function lastPlot(
+  plots: Array<number | null | undefined> | undefined,
+): number | null {
   if (plots == null || plots.length === 0) return null;
   const v = plots[plots.length - 1];
   return v == null ? null : v;
@@ -54,7 +59,9 @@ function isNonZero(v: number | null): boolean {
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
-  return v != null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  return v != null && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
 function collectEvents(...roots: unknown[]): Eventish[] {
@@ -94,7 +101,11 @@ function eventText(ev: Eventish): string {
   return `${ev.type ?? ""} ${ev.kind ?? ""} ${ev.comment ?? ""}`.toLowerCase();
 }
 
-function plotsMatch(a: Array<number | null>, b: Array<number | null>, eps = 1e-9): boolean {
+function plotsMatch(
+  a: Array<number | null>,
+  b: Array<number | null>,
+  eps = 1e-9,
+): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
@@ -108,7 +119,10 @@ function plotsMatch(a: Array<number | null>, b: Array<number | null>, eps = 1e-9
 
 describe("compile vs interpret strategy", () => {
   test("strategy.entry on bar 1: last position_size is 1 and events include entry", () => {
-    const compiled = new Runtime("TEST", { mode: "compile" }).run(ENTRY_SRC, BARS);
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(
+      ENTRY_SRC,
+      BARS,
+    );
     const interpreted = new Runtime("TEST").run(ENTRY_SRC, BARS);
     const fromCompile = compileToResult(ENTRY_SRC, BARS);
 
@@ -129,7 +143,10 @@ describe("compile vs interpret strategy", () => {
   });
 
   test("entry then close_all on last bar: close_all queues for the next bar and events include close_all", () => {
-    const compiled = new Runtime("TEST", { mode: "compile" }).run(CLOSE_ALL_SRC, BARS);
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(
+      CLOSE_ALL_SRC,
+      BARS,
+    );
     const interpreted = new Runtime("TEST").run(CLOSE_ALL_SRC, BARS);
     const fromCompile = compileToResult(CLOSE_ALL_SRC, BARS);
 
@@ -149,7 +166,10 @@ describe("compile vs interpret strategy", () => {
   });
 
   test("plot(strategy.position_size) after entry matches interpret within 1e-9", () => {
-    const compiled = new Runtime("TEST", { mode: "compile" }).run(ENTRY_SRC, BARS);
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(
+      ENTRY_SRC,
+      BARS,
+    );
     const interpreted = new Runtime("TEST").run(ENTRY_SRC, BARS);
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
@@ -169,11 +189,17 @@ describe("compile vs interpret strategy", () => {
     expect(fromCompile.mode).toBe("compile");
     expect(lastPlot(fromCompile.plots)).toBe(BARS[BARS.length - 1]!.close);
 
-    const importRun = new Runtime("TEST", { mode: "compile" }).run(IMPORT_SRC, BARS);
+    const importRun = new Runtime("TEST", { mode: "compile" }).run(
+      IMPORT_SRC,
+      BARS,
+    );
     expect(importRun.error).toBeUndefined();
     expect(importRun.mode).toBe("compile");
     expect(lastPlot(importRun.plots)).toBe(BARS[BARS.length - 1]!.close);
-    const requestRun = new Runtime("TEST", { mode: "compile" }).run(REQUEST_SRC, BARS);
+    const requestRun = new Runtime("TEST", { mode: "compile" }).run(
+      REQUEST_SRC,
+      BARS,
+    );
     expect(requestRun.error).toBeUndefined();
     expect(requestRun.mode).toBe("compile");
     expect(requestRun.plots.every((v) => v == null)).toBe(true);
@@ -187,10 +213,38 @@ if bar_index == 1
     strategy.exit("X", profit=100)
 plot(strategy.position_size)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 100.2, high: 100.5, low: 100, close: 100.4, volume: 1000, time: 1_700_000_060_000 },
-      { open: 100.4, high: 101.5, low: 100.2, close: 101.2, volume: 1000, time: 1_700_000_120_000 },
-      { open: 101.2, high: 102, low: 101, close: 101.5, volume: 1000, time: 1_700_000_180_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 100.2,
+        high: 100.5,
+        low: 100,
+        close: 100.4,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 100.4,
+        high: 101.5,
+        low: 100.2,
+        close: 101.2,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
+      {
+        open: 101.2,
+        high: 102,
+        low: 101,
+        close: 101.5,
+        volume: 1000,
+        time: 1_700_000_180_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -208,9 +262,30 @@ if bar_index == 0
     strategy.exit("XT", trail_points=0, trail_offset=100)
 plot(strategy.position_size)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 109.5, high: 110, low: 109.2, close: 109.8, volume: 1000, time: 1_700_000_060_000 },
-      { open: 109.5, high: 109.6, low: 109.1, close: 109.2, volume: 1000, time: 1_700_000_120_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 109.5,
+        high: 110,
+        low: 109.2,
+        close: 109.8,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 109.5,
+        high: 109.6,
+        low: 109.1,
+        close: 109.2,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -227,9 +302,30 @@ if bar_index == 1
     strategy.exit("X", qty_percent=50)
 plot(strategy.position_size)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_060_000 },
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_120_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -267,10 +363,38 @@ if bar_index == 2
     strategy.close("A", qty=1)
 plot(strategy.position_avg_price)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
-      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
-      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 120,
+        high: 120,
+        low: 120,
+        close: 120,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 130,
+        high: 130,
+        low: 130,
+        close: 130,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
+      {
+        open: 140,
+        high: 140,
+        low: 140,
+        close: 140,
+        volume: 1000,
+        time: 1_700_000_180_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -292,10 +416,38 @@ if bar_index == 2
     strategy.close("A", qty=1)
 plot(strategy.position_avg_price)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
-      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
-      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 120,
+        high: 120,
+        low: 120,
+        close: 120,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 130,
+        high: 130,
+        low: 130,
+        close: 130,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
+      {
+        open: 140,
+        high: 140,
+        low: 140,
+        close: 140,
+        volume: 1000,
+        time: 1_700_000_180_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);
@@ -317,10 +469,38 @@ if bar_index == 2
     strategy.close("A", qty=1)
 plot(strategy.position_avg_price)`;
     const ohlcv = [
-      { open: 100, high: 100, low: 100, close: 100, volume: 1000, time: 1_700_000_000_000 },
-      { open: 120, high: 120, low: 120, close: 120, volume: 1000, time: 1_700_000_060_000 },
-      { open: 130, high: 130, low: 130, close: 130, volume: 1000, time: 1_700_000_120_000 },
-      { open: 140, high: 140, low: 140, close: 140, volume: 1000, time: 1_700_000_180_000 },
+      {
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 1000,
+        time: 1_700_000_000_000,
+      },
+      {
+        open: 120,
+        high: 120,
+        low: 120,
+        close: 120,
+        volume: 1000,
+        time: 1_700_000_060_000,
+      },
+      {
+        open: 130,
+        high: 130,
+        low: 130,
+        close: 130,
+        volume: 1000,
+        time: 1_700_000_120_000,
+      },
+      {
+        open: 140,
+        high: 140,
+        low: 140,
+        close: 140,
+        volume: 1000,
+        time: 1_700_000_180_000,
+      },
     ];
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, ohlcv);
     const interpreted = new Runtime("TEST").run(src, ohlcv);

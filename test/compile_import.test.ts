@@ -65,10 +65,17 @@ function interpretRegistered(): { ok: boolean; plots: Array<number | null> } {
   const rt = new Runtime("TEST");
   rt.registerLibrarySource("User", "Geom", 1, LIB_SRC);
   const out = rt.run(REGISTERED_SRC, BARS);
-  return { ok: out.error == null && lastPlot(out.plots) === lastClose() + 1, plots: out.plots };
+  return {
+    ok: out.error == null && lastPlot(out.plots) === lastClose() + 1,
+    plots: out.plots,
+  };
 }
 
-function compileRegistered(): { ok: boolean; error?: string; plots: Array<number | null> } {
+function compileRegistered(): {
+  ok: boolean;
+  error?: string;
+  plots: Array<number | null>;
+} {
   const rt = new Runtime("TEST", { mode: "compile" });
   rt.registerLibrarySource("User", "Geom", 1, LIB_SRC);
   const out = rt.run(REGISTERED_SRC, BARS);
@@ -81,11 +88,17 @@ function compileRegistered(): { ok: boolean; error?: string; plots: Array<number
 
 const parsedLib = parseOk(LIB_SRC);
 const parsedUse = parseOk(REGISTERED_SRC);
-const interpretExport = parsedLib && parsedUse ? interpretRegistered() : { ok: false, plots: [] };
-const compileExport = parsedLib && parsedUse && interpretExport.ok ? compileRegistered() : { ok: false, plots: [] };
+const interpretExport =
+  parsedLib && parsedUse ? interpretRegistered() : { ok: false, plots: [] };
+const compileExport =
+  parsedLib && parsedUse && interpretExport.ok
+    ? compileRegistered()
+    : { ok: false, plots: [] };
 
 describe("compile vs interpret import", () => {
-  test.skipIf(!parsedLib || !parsedUse || !interpretExport.ok || !compileExport.ok)(
+  test.skipIf(
+    !parsedLib || !parsedUse || !interpretExport.ok || !compileExport.ok,
+  )(
     "registered library add1 compile last is close+1 matching interpret",
     () => {
       const compiled = compileRegistered();
@@ -100,7 +113,10 @@ describe("compile vs interpret import", () => {
   test.skipIf(!parseOk(UNRESOLVED_PLOT_CLOSE_SRC))(
     "unresolved import + plot(close) compile last equals close",
     () => {
-      const compiled = new Runtime("TEST", { mode: "compile" }).run(UNRESOLVED_PLOT_CLOSE_SRC, BARS);
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(
+        UNRESOLVED_PLOT_CLOSE_SRC,
+        BARS,
+      );
       expect(compiled.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
       expect(lastPlot(compiled.plots)).toBe(lastClose());
@@ -111,7 +127,10 @@ describe("compile vs interpret import", () => {
   test.skipIf(!parseOk(UNRESOLVED_LIB_CALL_SRC))(
     "unresolved import library call compile last is na",
     () => {
-      const compiled = new Runtime("TEST", { mode: "compile" }).run(UNRESOLVED_LIB_CALL_SRC, BARS);
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(
+        UNRESOLVED_LIB_CALL_SRC,
+        BARS,
+      );
       expect(compiled.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
       expect(lastPlot(compiled.plots)).toBeNull();
@@ -120,14 +139,18 @@ describe("compile vs interpret import", () => {
   );
 
   test.skipIf(!parseOk(FORMAT_SRC))(
-    "str.tonumber(str.format(\"{0}\", 3)) compile last is 3",
+    'str.tonumber(str.format("{0}", 3)) compile last is 3',
     () => {
-      const compiled = new Runtime("TEST", { mode: "compile" }).run(FORMAT_SRC, BARS);
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(
+        FORMAT_SRC,
+        BARS,
+      );
       const interpreted = new Runtime("TEST").run(FORMAT_SRC, BARS);
       expect(compiled.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
       expect(lastPlot(compiled.plots)).toBe(3);
-      if (interpreted.error == null) expect(compiled.plots).toEqual(interpreted.plots);
+      if (interpreted.error == null)
+        expect(compiled.plots).toEqual(interpreted.plots);
     },
   );
 });

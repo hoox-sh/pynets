@@ -9,7 +9,11 @@ export class PinescriptSyntaxError extends Error {
   lineno: number | null;
   col_offset: number | null;
 
-  constructor(message: string, lineno: number | null = null, col_offset: number | null = null) {
+  constructor(
+    message: string,
+    lineno: number | null = null,
+    col_offset: number | null = null,
+  ) {
     super(message);
     this.lineno = lineno;
     this.col_offset = col_offset;

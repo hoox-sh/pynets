@@ -247,7 +247,8 @@ export default class PinescriptLexerBase extends Lexer {
     token.channel = channel;
     token.stop = baseToken.start - 1;
     const names = this.C.symbolicNames ?? this.getSymbolicNames();
-    token.text = text == null ? "<" + String(names?.[type] ?? type) + ">" : text;
+    token.text =
+      text == null ? "<" + String(names?.[type] ?? type) + ">" : text;
     this._addPendingToken(token);
   }
 
@@ -267,7 +268,10 @@ export default class PinescriptLexerBase extends Lexer {
   private _popPendingToken(): CommonToken {
     const tok = this._pendingTokens[this._pendingHead]!;
     this._pendingHead += 1;
-    if (this._pendingHead > 32 && this._pendingHead * 2 > this._pendingTokens.length) {
+    if (
+      this._pendingHead > 32 &&
+      this._pendingHead * 2 > this._pendingTokens.length
+    ) {
       this._pendingTokens = this._pendingTokens.slice(this._pendingHead);
       this._pendingHead = 0;
     }

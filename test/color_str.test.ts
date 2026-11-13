@@ -278,9 +278,9 @@ describe("str helpers", () => {
   });
 
   test("match / format / join", () => {
-    expect(strMatch("It's time to sell some NASDAQ:AAPL!", "[\\w]+:[\\w]+")).toBe(
-      "NASDAQ:AAPL",
-    );
+    expect(
+      strMatch("It's time to sell some NASDAQ:AAPL!", "[\\w]+:[\\w]+"),
+    ).toBe("NASDAQ:AAPL");
     expect(strMatch("abc", "ZZZ")).toBeNull();
     expect(strMatch(null, "a")).toBeNull();
     expect(strMatch("a", null)).toBeNull();

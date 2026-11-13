@@ -104,7 +104,9 @@ describe("weekOfYear", () => {
 
 describe("timeTradingDay", () => {
   test("floors to UTC midnight", () => {
-    expect(timeTradingDay(timestamp(2020, 1, 1, 12, 34, 56)!)).toBe(1_577_836_800_000);
+    expect(timeTradingDay(timestamp(2020, 1, 1, 12, 34, 56)!)).toBe(
+      1_577_836_800_000,
+    );
     expect(timeTradingDay(1_700_000_000_000)).toBe(1_699_920_000_000);
     expect(timeTradingDay(Date.UTC(2020, 0, 1))).toBe(Date.UTC(2020, 0, 1));
   });

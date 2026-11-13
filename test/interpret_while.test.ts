@@ -54,8 +54,11 @@ for i = 2 to 0
     s := s + i
 plot(s)`;
 
-  test.skipIf(!parseOk(downSrc) || !runOk(downSrc))("for-to omitted step goes downward when start > end", () => {
-    const out = interpret(downSrc, BARS);
-    expect(out.plots).toEqual([3]);
-  });
+  test.skipIf(!parseOk(downSrc) || !runOk(downSrc))(
+    "for-to omitted step goes downward when start > end",
+    () => {
+      const out = interpret(downSrc, BARS);
+      expect(out.plots).toEqual([3]);
+    },
+  );
 });

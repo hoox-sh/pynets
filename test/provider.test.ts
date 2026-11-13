@@ -34,9 +34,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function stubFetch(
-  impl: (input: string | URL, init?: RequestInit) => Promise<Response> | Response,
+  impl: (
+    input: string | URL,
+    init?: RequestInit,
+  ) => Promise<Response> | Response,
 ): typeof fetch {
-  return (async (input: string | URL, init?: RequestInit) => impl(input, init)) as typeof fetch;
+  return (async (input: string | URL, init?: RequestInit) =>
+    impl(input, init)) as typeof fetch;
 }
 
 describe("MemoryProvider", () => {
@@ -80,9 +84,13 @@ describe("StaticMapProvider", () => {
       BTC: [{ close: 1 }],
       "BTC:60": [{ close: 2 }],
     });
-    expect(await p.fetch({ symbol: "BTC", timeframe: "60" })).toEqual([{ close: 2 }]);
+    expect(await p.fetch({ symbol: "BTC", timeframe: "60" })).toEqual([
+      { close: 2 },
+    ]);
     expect(await p.fetch({ symbol: "ETH", timeframe: "60" })).toEqual([]);
-    expect(await p.fetch({ symbol: "BTC", timeframe: "D" })).toEqual([{ close: 1 }]);
+    expect(await p.fetch({ symbol: "BTC", timeframe: "D" })).toEqual([
+      { close: 1 },
+    ]);
   });
 
   test("limit slices tail", async () => {
@@ -120,7 +128,14 @@ describe("mapJsonBars", () => {
         [1_700_000_000, 10, 12, 9, 11, 100, 99, 98, 97, 96, 95, 94],
       ]),
     ).toEqual([
-      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      {
+        time: 1_700_000_000_000,
+        open: 10,
+        high: 12,
+        low: 9,
+        close: 11,
+        volume: 100,
+      },
     ]);
   });
 
@@ -132,7 +147,14 @@ describe("mapJsonBars", () => {
       { time: 1_700_000_000_000, close: 11 },
     ]);
     expect(mapJsonBars([[1_700_000_000, 10, 12, 9, 11, 100]])).toEqual([
-      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      {
+        time: 1_700_000_000_000,
+        open: 10,
+        high: 12,
+        low: 9,
+        close: 11,
+        volume: 100,
+      },
     ]);
   });
 
@@ -144,7 +166,14 @@ describe("mapJsonBars", () => {
       { time: 1_700_000_000_000, close: 11 },
     ]);
     expect(mapJsonBars([[1_700_000_000_000, 10, 12, 9, 11, 100]])).toEqual([
-      { time: 1_700_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      {
+        time: 1_700_000_000_000,
+        open: 10,
+        high: 12,
+        low: 9,
+        close: 11,
+        volume: 100,
+      },
     ]);
   });
 
@@ -157,14 +186,22 @@ describe("mapJsonBars", () => {
   });
 
   test("t/o/h/l/c/v keys", () => {
-    expect(
-      mapJsonBars([{ t: 1, o: 10, h: 12, l: 9, c: 11, v: 100 }]),
-    ).toEqual([{ time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 }]);
+    expect(mapJsonBars([{ t: 1, o: 10, h: 12, l: 9, c: 11, v: 100 }])).toEqual([
+      { time: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+    ]);
   });
 
   test("non-finite numbers omit that field", () => {
     expect(
-      mapJsonBars([{ close: 11, open: Number.NaN, high: Infinity, low: -Infinity, volume: 1 }]),
+      mapJsonBars([
+        {
+          close: 11,
+          open: Number.NaN,
+          high: Infinity,
+          low: -Infinity,
+          volume: 1,
+        },
+      ]),
     ).toEqual([{ close: 11, volume: 1 }]);
   });
 
@@ -253,7 +290,9 @@ describe("JsonBarProvider", () => {
           }),
       ),
     });
-    await expect(p.fetch({ symbol: "AAPL" })).rejects.toBeInstanceOf(ProviderError);
+    await expect(p.fetch({ symbol: "AAPL" })).rejects.toBeInstanceOf(
+      ProviderError,
+    );
   });
 
   test("limit slices tail", async () => {
@@ -261,11 +300,14 @@ describe("JsonBarProvider", () => {
       url: () => "https://example.test/bars",
       fetch: stubFetch(() => jsonResponse(SAMPLE)),
     });
-    expect(await p.fetch({ symbol: "AAPL", limit: 2 })).toEqual(SAMPLE_MS.slice(-2));
+    expect(await p.fetch({ symbol: "AAPL", limit: 2 })).toEqual(
+      SAMPLE_MS.slice(-2),
+    );
   });
 
   test("url builder receives symbol/timeframe/limit", async () => {
-    let seen: { symbol: string; timeframe?: string | null; limit?: number } | undefined;
+    let seen:
+      { symbol: string; timeframe?: string | null; limit?: number } | undefined;
     const p = new JsonBarProvider({
       url: (opts) => {
         seen = opts;

@@ -69,10 +69,17 @@ print(json.dumps(out))
   if (codeExit !== 0) {
     throw new Error(stderr || stdout || `python exit ${codeExit}`);
   }
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
   if (actual.length !== expected.length) {
     throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
@@ -90,7 +97,10 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
   const out = new Runtime("TEST").run(src, bars, { mode: "interpret" });
   const series = (out.series ?? {}) as SeriesMap;
   return { error: out.error, series };
@@ -200,63 +210,69 @@ function check(id: string, body: string): void {
   expect(keys.length, id).toBeGreaterThan(0);
   for (const key of keys) {
     const series = ref.series[key] ?? [];
-    expect(series.some((v) => v != null), `${id}.${key} all na`).toBe(true);
+    expect(
+      series.some((v) => v != null),
+      `${id}.${key} all na`,
+    ).toBe(true);
     expectMatch(ts.series[key], series, `${id}.${key}`);
   }
 }
 
-describe.skipIf(!pythonAvailable())("interpret wave10b vs Python Runtime.run", () => {
-  beforeAll(async () => {
-    const jobs = cases.flatMap((c) => [
-      { id: c.id, src: script(c.body), bars },
-      { id: `${c.id}_bare`, src: script(c.bare), bars },
-    ]);
-    const out = await pythonRuns(jobs);
-    Object.assign(py, out);
-  });
+describe.skipIf(!pythonAvailable())(
+  "interpret wave10b vs Python Runtime.run",
+  () => {
+    beforeAll(async () => {
+      const jobs = cases.flatMap((c) => [
+        { id: c.id, src: script(c.body), bars },
+        { id: `${c.id}_bare`, src: script(c.bare), bars },
+      ]);
+      const out = await pythonRuns(jobs);
+      Object.assign(py, out);
+    });
 
-  test("ta.voi", () => {
-    check("voi", cases[0]!.body);
-    check("voi_bare", cases[0]!.bare);
-  });
+    test("ta.voi", () => {
+      check("voi", cases[0]!.body);
+      check("voi_bare", cases[0]!.bare);
+    });
 
-  test("ta.bid_ask_imbalance", () => {
-    check("bid_ask", cases[1]!.body);
-    check("bid_ask_bare", cases[1]!.bare);
-  });
+    test("ta.bid_ask_imbalance", () => {
+      check("bid_ask", cases[1]!.body);
+      check("bid_ask_bare", cases[1]!.bare);
+    });
 
-  test("ta.rsi_oversold_overbought", () => {
-    check("rsi_oo", cases[2]!.body);
-    check("rsi_oo_bare", cases[2]!.bare);
-  });
+    test("ta.rsi_oversold_overbought", () => {
+      check("rsi_oo", cases[2]!.body);
+      check("rsi_oo_bare", cases[2]!.bare);
+    });
 
-  test("ta.rsi_divergence", () => {
-    check("rsi_div", cases[3]!.body);
-    check("rsi_div_bare", cases[3]!.bare);
-  });
+    test("ta.rsi_divergence", () => {
+      check("rsi_div", cases[3]!.body);
+      check("rsi_div_bare", cases[3]!.bare);
+    });
 
-  test("ta.cumulative_delta", () => {
-    check("cum_delta", cases[4]!.body);
-    check("cum_delta_bare", cases[4]!.bare);
-  });
+    test("ta.cumulative_delta", () => {
+      check("cum_delta", cases[4]!.body);
+      check("cum_delta_bare", cases[4]!.bare);
+    });
 
-  test("ta.volume_momentum", () => {
-    check("vol_mom", cases[5]!.body);
-    check("vol_mom_bare", cases[5]!.bare);
-  });
+    test("ta.volume_momentum", () => {
+      check("vol_mom", cases[5]!.body);
+      check("vol_mom_bare", cases[5]!.bare);
+    });
 
-  test("ta.volume_profile_high", () => {
-    check("vph", cases[6]!.body);
-    check("vph_bare", cases[6]!.bare);
-  });
+    test("ta.volume_profile_high", () => {
+      check("vph", cases[6]!.body);
+      check("vph_bare", cases[6]!.bare);
+    });
 
-  test("ta.volume_profile_low", () => {
-    check("vpl", cases[7]!.body);
-    check("vpl_bare", cases[7]!.bare);
-  });
+    test("ta.volume_profile_low", () => {
+      check("vpl", cases[7]!.body);
+      check("vpl_bare", cases[7]!.bare);
+    });
 
-  test("ta.volume_thrust", () => {
-    check("thrust", cases[8]!.body);
-    check("thrust_bare", cases[8]!.bare);
-  });
-});
+    test("ta.volume_thrust", () => {
+      check("thrust", cases[8]!.body);
+      check("thrust_bare", cases[8]!.bare);
+    });
+  },
+);

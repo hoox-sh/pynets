@@ -22,21 +22,25 @@ import {
 
 describe("resolveSecurity same-symbol passthrough", () => {
   test("same symbol returns value", () => {
-    expect(resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, 42)).toBe(
-      42,
-    );
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, 42),
+    ).toBe(42);
   });
 
   test("empty / missing symbol is the host chart", () => {
     expect(resolveSecurity("AAPL", "D", { timeframe: "D" }, 7)).toBe(7);
-    expect(resolveSecurity("AAPL", "D", { symbol: null, timeframe: "D" }, 7)).toBe(7);
-    expect(resolveSecurity("AAPL", "D", { symbol: "", timeframe: "D" }, 7)).toBe(7);
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: null, timeframe: "D" }, 7),
+    ).toBe(7);
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "", timeframe: "D" }, 7),
+    ).toBe(7);
   });
 
   test("case-insensitive ticker match", () => {
-    expect(resolveSecurity("AAPL", "D", { symbol: "aapl", timeframe: "D" }, 1)).toBe(
-      1,
-    );
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "aapl", timeframe: "D" }, 1),
+    ).toBe(1);
   });
 });
 
@@ -50,7 +54,12 @@ describe("resolveSecurity foreign-na", () => {
   test("does not invent a foreign close", () => {
     const hostClose = 185.5;
     expect(
-      resolveSecurity("AAPL", "D", { symbol: "UPVOL.NY", timeframe: "D" }, hostClose),
+      resolveSecurity(
+        "AAPL",
+        "D",
+        { symbol: "UPVOL.NY", timeframe: "D" },
+        hostClose,
+      ),
     ).toBeNull();
   });
 
@@ -64,25 +73,45 @@ describe("resolveSecurity foreign-na", () => {
 describe("resolveSecurity prefix-stripped match", () => {
   test("NASDAQ:AAPL vs host AAPL", () => {
     expect(
-      resolveSecurity("AAPL", "D", { symbol: "NASDAQ:AAPL", timeframe: "D" }, 10),
+      resolveSecurity(
+        "AAPL",
+        "D",
+        { symbol: "NASDAQ:AAPL", timeframe: "D" },
+        10,
+      ),
     ).toBe(10);
   });
 
   test("bare ticker vs host NASDAQ:AAPL", () => {
     expect(
-      resolveSecurity("NASDAQ:AAPL", "D", { symbol: "AAPL", timeframe: "D" }, 10),
+      resolveSecurity(
+        "NASDAQ:AAPL",
+        "D",
+        { symbol: "AAPL", timeframe: "D" },
+        10,
+      ),
     ).toBe(10);
   });
 
   test("same ticker, different exchange prefix", () => {
     expect(
-      resolveSecurity("NASDAQ:AAPL", "D", { symbol: "NYSE:AAPL", timeframe: "D" }, 10),
+      resolveSecurity(
+        "NASDAQ:AAPL",
+        "D",
+        { symbol: "NYSE:AAPL", timeframe: "D" },
+        10,
+      ),
     ).toBe(10);
   });
 
   test("prefix-stripped mismatch stays foreign", () => {
     expect(
-      resolveSecurity("NASDAQ:AAPL", "D", { symbol: "NASDAQ:MSFT", timeframe: "D" }, 10),
+      resolveSecurity(
+        "NASDAQ:AAPL",
+        "D",
+        { symbol: "NASDAQ:MSFT", timeframe: "D" },
+        10,
+      ),
     ).toBeNull();
   });
 });
@@ -90,10 +119,12 @@ describe("resolveSecurity prefix-stripped match", () => {
 describe("resolveSecurity timeframe", () => {
   test("empty / missing request TF is the host TF", () => {
     expect(resolveSecurity("AAPL", "D", { symbol: "AAPL" }, 3)).toBe(3);
-    expect(resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "" }, 3)).toBe(3);
-    expect(resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: null }, 3)).toBe(
-      3,
-    );
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "" }, 3),
+    ).toBe(3);
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: null }, 3),
+    ).toBe(3);
   });
 
   test("different TF same symbol is last-close passthrough", () => {
@@ -176,19 +207,39 @@ describe("isHigherTimeframe / isLowerTimeframe", () => {
 describe("resolveSecurityLowerTf", () => {
   test("foreign is null", () => {
     expect(
-      resolveSecurityLowerTf("AAPL", "D", { symbol: "MSFT", timeframe: "5" }, 42),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "D",
+        { symbol: "MSFT", timeframe: "5" },
+        42,
+      ),
     ).toBeNull();
     expect(
-      resolveSecurityLowerTf("AAPL", "60", { symbol: "MSFT", timeframe: "60" }, 9),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "60",
+        { symbol: "MSFT", timeframe: "60" },
+        9,
+      ),
     ).toBeNull();
   });
 
   test("finer TF same symbol is null (no invented intra-bar array)", () => {
     expect(
-      resolveSecurityLowerTf("AAPL", "60", { symbol: "AAPL", timeframe: "15" }, 9),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "60",
+        { symbol: "AAPL", timeframe: "15" },
+        9,
+      ),
     ).toBeNull();
     expect(
-      resolveSecurityLowerTf("AAPL", "D", { symbol: "AAPL", timeframe: "60" }, 9),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "D",
+        { symbol: "AAPL", timeframe: "60" },
+        9,
+      ),
     ).toBeNull();
     expect(
       resolveSecurityLowerTf("AAPL", "1W", { symbol: "", timeframe: "1" }, 9),
@@ -197,10 +248,20 @@ describe("resolveSecurityLowerTf", () => {
 
   test("same TF same symbol is the value", () => {
     expect(
-      resolveSecurityLowerTf("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, 42),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "D",
+        { symbol: "AAPL", timeframe: "D" },
+        42,
+      ),
     ).toBe(42);
     expect(
-      resolveSecurityLowerTf("AAPL", "15", { symbol: "AAPL", timeframe: "15" }, 7),
+      resolveSecurityLowerTf(
+        "AAPL",
+        "15",
+        { symbol: "AAPL", timeframe: "15" },
+        7,
+      ),
     ).toBe(7);
   });
 });
@@ -288,13 +349,25 @@ describe("resolveForeignNa", () => {
   test("foreign financial is na", () => {
     expect(resolveForeignNa()).toBeNull();
     expect(
-      resolveRequest("request.financial", { symbol: "AAPL" }, { symbol: "MSFT" }),
+      resolveRequest(
+        "request.financial",
+        { symbol: "AAPL" },
+        { symbol: "MSFT" },
+      ),
     ).toBeNull();
     expect(
-      resolveRequest("request.dividends", { symbol: "AAPL" }, { symbol: "MSFT" }),
+      resolveRequest(
+        "request.dividends",
+        { symbol: "AAPL" },
+        { symbol: "MSFT" },
+      ),
     ).toBeNull();
     expect(
-      resolveRequest("request.earnings", { symbol: "AAPL" }, { symbol: "MSFT" }),
+      resolveRequest(
+        "request.earnings",
+        { symbol: "AAPL" },
+        { symbol: "MSFT" },
+      ),
     ).toBeNull();
     expect(
       resolveRequest("request.splits", { symbol: "AAPL" }, { symbol: "MSFT" }),
@@ -310,7 +383,11 @@ describe("resolveForeignNa", () => {
 
 describe("resolveRequest footprint mock", () => {
   test("request.footprint returns a branded mock, not na", () => {
-    const fp = resolveRequest("request.footprint", { symbol: "AAPL" }, [10, 70]) as {
+    const fp = resolveRequest(
+      "request.footprint",
+      { symbol: "AAPL" },
+      [10, 70],
+    ) as {
       buy_volume?: unknown;
       rows?: unknown[];
     };
@@ -325,7 +402,9 @@ describe("resolveSeed", () => {
   test("records seed and returns na", () => {
     expect(resolveSeed(42)).toBeNull();
     expect(lastRequestSeed()).toBe(42);
-    expect(resolveRequest("request.seed", { symbol: "AAPL" }, { seed: 7 })).toBeNull();
+    expect(
+      resolveRequest("request.seed", { symbol: "AAPL" }, { seed: 7 }),
+    ).toBeNull();
     expect(lastRequestSeed()).toBe(7);
   });
 });
@@ -355,19 +434,43 @@ describe("resolveRequest security unchanged", () => {
 describe("resolveSecurity non-finite / empty harden", () => {
   test("non-finite same-symbol value is na", () => {
     expect(
-      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, Number.NaN),
+      resolveSecurity(
+        "AAPL",
+        "D",
+        { symbol: "AAPL", timeframe: "D" },
+        Number.NaN,
+      ),
     ).toBeNull();
     expect(
-      resolveSecurity("AAPL", "D", { symbol: "AAPL", timeframe: "D" }, Number.POSITIVE_INFINITY),
+      resolveSecurity(
+        "AAPL",
+        "D",
+        { symbol: "AAPL", timeframe: "D" },
+        Number.POSITIVE_INFINITY,
+      ),
     ).toBeNull();
     expect(
-      resolveSecurity("AAPL", "15", { symbol: "AAPL", timeframe: "60" }, Number.NEGATIVE_INFINITY),
+      resolveSecurity(
+        "AAPL",
+        "15",
+        { symbol: "AAPL", timeframe: "60" },
+        Number.NEGATIVE_INFINITY,
+      ),
     ).toBeNull();
   });
 
   test("empty symbol + null timeframe still passthrough finite value", () => {
-    expect(resolveSecurity("AAPL", "D", { symbol: "", timeframe: null }, 12)).toBe(12);
-    expect(resolveSecurity("AAPL", null, { symbol: "   ", timeframe: undefined }, 12)).toBe(12);
+    expect(
+      resolveSecurity("AAPL", "D", { symbol: "", timeframe: null }, 12),
+    ).toBe(12);
+    expect(
+      resolveSecurity(
+        "AAPL",
+        null,
+        { symbol: "   ", timeframe: undefined },
+        12,
+      ),
+    ).toBe(12);
   });
 
   test("empty symbol does not invent a foreign close", () => {
@@ -377,6 +480,8 @@ describe("resolveSecurity non-finite / empty harden", () => {
   });
 
   test("null args object is treated as chart passthrough", () => {
-    expect(resolveSecurity("AAPL", "D", null as unknown as { symbol?: string }, 4)).toBe(4);
+    expect(
+      resolveSecurity("AAPL", "D", null as unknown as { symbol?: string }, 4),
+    ).toBe(4);
   });
 });

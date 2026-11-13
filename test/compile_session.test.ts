@@ -62,35 +62,44 @@ function lastPlot(plots: Array<number | null> | undefined): number | null {
 }
 
 describe("compile vs interpret session", () => {
-  test.skipIf(!parseOk(ISMARKET_SRC))("plot(session.ismarket ? 1 : 0) all 1s both backends", () => {
-    const compiled = runCompile(ISMARKET_SRC);
-    const interpreted = runInterpret(ISMARKET_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(interpreted.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(interpreted.plots).toEqual([1, 1, 1, 1]);
-    expect(compiled.plots).toEqual(interpreted.plots);
-  });
+  test.skipIf(!parseOk(ISMARKET_SRC))(
+    "plot(session.ismarket ? 1 : 0) all 1s both backends",
+    () => {
+      const compiled = runCompile(ISMARKET_SRC);
+      const interpreted = runInterpret(ISMARKET_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(interpreted.plots).toEqual([1, 1, 1, 1]);
+      expect(compiled.plots).toEqual(interpreted.plots);
+    },
+  );
 
-  test.skipIf(!parseOk(ISFIRSTBAR_SRC))("plot(session.isfirstbar ? 1 : 0) first 1 rest 0", () => {
-    const compiled = runCompile(ISFIRSTBAR_SRC);
-    const interpreted = runInterpret(ISFIRSTBAR_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(interpreted.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(interpreted.plots).toEqual([1, 0, 0, 0]);
-    expect(compiled.plots).toEqual(interpreted.plots);
-  });
+  test.skipIf(!parseOk(ISFIRSTBAR_SRC))(
+    "plot(session.isfirstbar ? 1 : 0) first 1 rest 0",
+    () => {
+      const compiled = runCompile(ISFIRSTBAR_SRC);
+      const interpreted = runInterpret(ISFIRSTBAR_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(interpreted.plots).toEqual([1, 0, 0, 0]);
+      expect(compiled.plots).toEqual(interpreted.plots);
+    },
+  );
 
-  test.skipIf(!parseOk(IS_HEIKINASHI_SRC))("plot(chart.is_heikinashi ? 1 : 0) all 0", () => {
-    const compiled = runCompile(IS_HEIKINASHI_SRC);
-    const interpreted = runInterpret(IS_HEIKINASHI_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(interpreted.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(interpreted.plots).toEqual([0, 0, 0, 0]);
-    expect(compiled.plots).toEqual(interpreted.plots);
-  });
+  test.skipIf(!parseOk(IS_HEIKINASHI_SRC))(
+    "plot(chart.is_heikinashi ? 1 : 0) all 0",
+    () => {
+      const compiled = runCompile(IS_HEIKINASHI_SRC);
+      const interpreted = runInterpret(IS_HEIKINASHI_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(interpreted.plots).toEqual([0, 0, 0, 0]);
+      expect(compiled.plots).toEqual(interpreted.plots);
+    },
+  );
 
   test.skipIf(!parseOk(FX_USD_USD_SRC) || !parseOk(FX_USD_EUR_SRC))(
     'request.currency_rate("USD", "USD") last 1; request.currency_rate("USD", "EUR") last na',

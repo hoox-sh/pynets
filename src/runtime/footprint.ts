@@ -74,7 +74,9 @@ class PyRandom {
     const mt = this.mt;
     mt[0] = s >>> 0;
     for (let mti = 1; mti < N; mti++) {
-      mt[mti] = (Math.imul(1812433253, mt[mti - 1]! ^ (mt[mti - 1]! >>> 30)) + mti) >>> 0;
+      mt[mti] =
+        (Math.imul(1812433253, mt[mti - 1]! ^ (mt[mti - 1]! >>> 30)) + mti) >>>
+        0;
     }
     this.index = N;
   }
@@ -88,7 +90,10 @@ class PyRandom {
     let k = N > keyLength ? N : keyLength;
     for (; k > 0; k--) {
       mt[i] =
-        ((mt[i]! ^ Math.imul(mt[i - 1]! ^ (mt[i - 1]! >>> 30), 1664525)) + initKey[j]! + j) >>> 0;
+        ((mt[i]! ^ Math.imul(mt[i - 1]! ^ (mt[i - 1]! >>> 30), 1664525)) +
+          initKey[j]! +
+          j) >>>
+        0;
       i++;
       j++;
       if (i >= N) {
@@ -98,7 +103,10 @@ class PyRandom {
       if (j >= keyLength) j = 0;
     }
     for (k = N - 1; k > 0; k--) {
-      mt[i] = ((mt[i]! ^ Math.imul(mt[i - 1]! ^ (mt[i - 1]! >>> 30), 1566083941)) - i) >>> 0;
+      mt[i] =
+        ((mt[i]! ^ Math.imul(mt[i - 1]! ^ (mt[i - 1]! >>> 30), 1566083941)) -
+          i) >>>
+        0;
       i++;
       if (i >= N) {
         mt[0] = mt[N - 1]!;
@@ -146,7 +154,8 @@ function nextRandom(): number {
 }
 
 function asCount(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "number" && Number.isFinite(value))
+    return Math.trunc(value);
   return fallback;
 }
 
@@ -158,7 +167,10 @@ function rowAt(rows: VolumeRow[], idx: number): VolumeRow | null {
  * `request.footprint(num_ticks, va_percentage)` mock.
  * Missing ticks / VA % use Python defaults 100 / 70. No data_feed → vol_scale 1.
  */
-export function createFootprint(numTicks: unknown = 100, vaPercentage: unknown = 70): Footprint {
+export function createFootprint(
+  numTicks: unknown = 100,
+  vaPercentage: unknown = 70,
+): Footprint {
   const n = asCount(numTicks, 100);
   const va = asCount(vaPercentage, 70);
   const rows: VolumeRow[] = [];
@@ -228,7 +240,10 @@ export function footprintRows(fp: unknown): VolumeRow[] {
   return fp instanceof Footprint ? fp.rows.slice() : [];
 }
 
-export function footprintGetRowByPrice(fp: unknown, price: unknown): VolumeRow | null {
+export function footprintGetRowByPrice(
+  fp: unknown,
+  price: unknown,
+): VolumeRow | null {
   if (!(fp instanceof Footprint) || price == null) return null;
   if (typeof price !== "number" || !Number.isFinite(price)) return null;
   for (const row of fp.rows) {
@@ -264,9 +279,13 @@ export function volumeRowTotalVolume(vr: unknown): number {
 }
 
 export function volumeRowHasBuyImbalance(vr: unknown): boolean {
-  return vr instanceof VolumeRow ? Boolean(vr.is_imbalance && vr.buy_volume > vr.sell_volume) : false;
+  return vr instanceof VolumeRow
+    ? Boolean(vr.is_imbalance && vr.buy_volume > vr.sell_volume)
+    : false;
 }
 
 export function volumeRowHasSellImbalance(vr: unknown): boolean {
-  return vr instanceof VolumeRow ? Boolean(vr.is_imbalance && vr.sell_volume > vr.buy_volume) : false;
+  return vr instanceof VolumeRow
+    ? Boolean(vr.is_imbalance && vr.sell_volume > vr.buy_volume)
+    : false;
 }

@@ -43,7 +43,10 @@ function isSortNa(v: unknown): boolean {
 function looksLikeUdt(item: unknown): boolean {
   if (item == null || typeof item !== "object") return false;
   if (item instanceof UdtInstance) return true;
-  return !Array.isArray(item) && Object.prototype.hasOwnProperty.call(item, "__type__");
+  return (
+    !Array.isArray(item) &&
+    Object.prototype.hasOwnProperty.call(item, "__type__")
+  );
 }
 
 function udtFieldNames(item: object): string[] | null {
@@ -52,7 +55,11 @@ function udtFieldNames(item: object): string[] | null {
   if (Object.prototype.hasOwnProperty.call(rec, "__type__")) {
     return Object.keys(rec).filter((k) => k !== "__type__");
   }
-  const udt = (item as { udt?: { fields?: Record<string, unknown> | Array<{ name: string }> } }).udt;
+  const udt = (
+    item as {
+      udt?: { fields?: Record<string, unknown> | Array<{ name: string }> };
+    }
+  ).udt;
   const fields = udt?.fields;
   if (fields == null) return null;
   if (Array.isArray(fields)) return fields.map((f) => f.name);
@@ -92,7 +99,10 @@ function udtFieldKey(item: unknown, sortField: unknown): unknown {
 }
 
 /** Python `_resolve_search_field` — default `0` (first field) on UDT arrays. */
-function resolveSearchField(seq: readonly unknown[], sortField: unknown): unknown {
+function resolveSearchField(
+  seq: readonly unknown[],
+  sortField: unknown,
+): unknown {
   if (sortField != null) return sortField;
   for (const item of seq) {
     if (item == null) continue;
@@ -120,8 +130,10 @@ function keyLt(left: unknown, right: unknown): boolean {
   try {
     return (left as never) < (right as never);
   } catch {
-    return `${String(Object.prototype.toString.call(left))}${String(left)}` <
-      `${String(Object.prototype.toString.call(right))}${String(right)}`;
+    return (
+      `${String(Object.prototype.toString.call(left))}${String(left)}` <
+      `${String(Object.prototype.toString.call(right))}${String(right)}`
+    );
   }
 }
 
@@ -205,7 +217,9 @@ export class PineArray {
   }
 
   last(): Cell {
-    return (this.cells.length === 0 ? null : this.cells[this.cells.length - 1]) as Cell;
+    return (
+      this.cells.length === 0 ? null : this.cells[this.cells.length - 1]
+    ) as Cell;
   }
 
   insert(index: number, value: unknown): void {
@@ -271,7 +285,11 @@ export class PineArray {
   /** In-place; `na` last. Optional *sortField* keys UDT cells (name or index). */
   sort(order: "asc" | "desc" = "asc", sortField?: unknown): void {
     const reverse = order === "desc";
-    this.cells.splice(0, this.cells.length, ...sortWithNaLast(this.cells, reverse, sortField));
+    this.cells.splice(
+      0,
+      this.cells.length,
+      ...sortWithNaLast(this.cells, reverse, sortField),
+    );
   }
 
   /** `array.indexof` — miss is `-1` (Python `ArrayBuiltinsMixin`). */
@@ -478,7 +496,8 @@ export class PineArray {
   }
 
   percentileLinearInterpolation(percentage: number): Cell {
-    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) return null;
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100)
+      return null;
     const sorted = this.finiteSkip().sort((a, b) => a - b);
     if (sorted.length === 0) return null;
     const n = sorted.length;
@@ -491,7 +510,8 @@ export class PineArray {
   }
 
   percentileNearestRank(percentage: number): Cell {
-    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) return null;
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100)
+      return null;
     const sorted = this.finiteSkip().sort((a, b) => a - b);
     if (sorted.length === 0) return null;
     const n = sorted.length;
@@ -526,7 +546,10 @@ export class PineArray {
   }
 
   /** Indices that would sort this array; `na` indices last. */
-  sortIndices(order: "asc" | "desc" = "asc", sortField?: unknown): number[] | null {
+  sortIndices(
+    order: "asc" | "desc" = "asc",
+    sortField?: unknown,
+  ): number[] | null {
     const reverse = order === "desc";
     const nonNa: { key: unknown; idx: number }[] = [];
     const naIdx: number[] = [];
@@ -558,7 +581,11 @@ export class PineArray {
     return nonNa.map((x) => x.idx).concat(naIdx);
   }
 
-  private binarySearchBy(value: unknown, side: "any" | "left" | "right", sortField?: unknown): number {
+  private binarySearchBy(
+    value: unknown,
+    side: "any" | "left" | "right",
+    sortField?: unknown,
+  ): number {
     const seq = this.cells;
     const field = resolveSearchField(seq, sortField ?? null);
     const target = searchTargetKey(value, field);
@@ -571,7 +598,8 @@ export class PineArray {
         if (keyLt(searchElemKey(seq[mid], field), target)) left = mid + 1;
         else right = mid;
       }
-      if (left < n && keyEq(searchElemKey(seq[left], field), target)) return left;
+      if (left < n && keyEq(searchElemKey(seq[left], field), target))
+        return left;
       return -1;
     }
     if (side === "right") {
@@ -582,7 +610,8 @@ export class PineArray {
         if (keyLt(target, searchElemKey(seq[mid], field))) right = mid;
         else left = mid + 1;
       }
-      if (left > 0 && keyEq(searchElemKey(seq[left - 1], field), target)) return left - 1;
+      if (left > 0 && keyEq(searchElemKey(seq[left - 1], field), target))
+        return left - 1;
       return -1;
     }
     let lo = 0;
@@ -622,7 +651,11 @@ export class PineArray {
 }
 
 /** Python `_sort_with_na_last`. */
-function sortWithNaLast(sequence: readonly unknown[], reverse: boolean, sortField?: unknown): unknown[] {
+function sortWithNaLast(
+  sequence: readonly unknown[],
+  reverse: boolean,
+  sortField?: unknown,
+): unknown[] {
   if (sortField == null) {
     const nonNa: unknown[] = [];
     let naCount = 0;

@@ -5,7 +5,11 @@
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 import { MATH_CONSTANTS } from "../src/runtime/interpret.ts";
-import { PYNE_ROOT, pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
+import {
+  PYNE_ROOT,
+  pythonAvailable,
+  pythonBin,
+} from "./helpers/python_runtime.ts";
 
 const BARS = [1, 2, 3].map((close) => ({ close }));
 
@@ -84,15 +88,20 @@ describe("interpret plot.style_* / alert.freq_* constants", () => {
     }
   });
 
-  test.skipIf(!pythonAvailable())("equality 1/0 matches Python Runtime.run series", () => {
-    const src = allEqSrc();
-    const py = pythonSeries(src);
-    expect(py).not.toBeNull();
-    const ts = interpretRun(src);
-    for (const [name, token] of CASES) {
-      const title = name.includes("alert.") ? name.slice("alert.".length) : token;
-      expect(ts.series[title]).toEqual([1, 1, 1]);
-      expect(ts.series[title]).toEqual(py![title]);
-    }
-  });
+  test.skipIf(!pythonAvailable())(
+    "equality 1/0 matches Python Runtime.run series",
+    () => {
+      const src = allEqSrc();
+      const py = pythonSeries(src);
+      expect(py).not.toBeNull();
+      const ts = interpretRun(src);
+      for (const [name, token] of CASES) {
+        const title = name.includes("alert.")
+          ? name.slice("alert.".length)
+          : token;
+        expect(ts.series[title]).toEqual([1, 1, 1]);
+        expect(ts.series[title]).toEqual(py![title]);
+      }
+    },
+  );
 });

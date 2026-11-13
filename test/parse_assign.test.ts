@@ -81,12 +81,24 @@ x := 2
 strategy.initial_capital = 50000
 plot(x)
 `) as Script;
-    const stmts = tree.body.filter((s) => s.kind === "Assign" || s.kind === "ReAssign");
+    const stmts = tree.body.filter(
+      (s) => s.kind === "Assign" || s.kind === "ReAssign",
+    );
     expect(
-      stmts.some((s) => s.kind === "Assign" && s.target.kind === "Name" && s.target.id === "x"),
+      stmts.some(
+        (s) =>
+          s.kind === "Assign" &&
+          s.target.kind === "Name" &&
+          s.target.id === "x",
+      ),
     ).toBe(true);
     expect(
-      stmts.some((s) => s.kind === "ReAssign" && s.target.kind === "Name" && s.target.id === "x"),
+      stmts.some(
+        (s) =>
+          s.kind === "ReAssign" &&
+          s.target.kind === "Name" &&
+          s.target.id === "x",
+      ),
     ).toBe(true);
     expect(
       stmts.some(

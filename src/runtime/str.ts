@@ -142,7 +142,8 @@ export function strRepeat(s: unknown, n: unknown): string | null {
   let count = asInt(n);
   if (count == null) return null;
   if (count < 0) count = 0;
-  if (value.length > 0 && count > Math.floor(MAX_REPEAT_CHARS / value.length)) return null;
+  if (value.length > 0 && count > Math.floor(MAX_REPEAT_CHARS / value.length))
+    return null;
   return value.repeat(count);
 }
 
@@ -288,7 +289,11 @@ function parseTimezoneOffsetHours(timezone: unknown): number {
     z.startsWith("utc+") ||
     z.startsWith("utc-")
   ) {
-    const offsetStr = z.toUpperCase().replaceAll("GMT", "").replaceAll("UTC", "").trim();
+    const offsetStr = z
+      .toUpperCase()
+      .replaceAll("GMT", "")
+      .replaceAll("UTC", "")
+      .trim();
     if (!offsetStr || !/^[+-]?\d+$/.test(offsetStr)) return 0;
     const offset = Number.parseInt(offsetStr, 10);
     return Number.isFinite(offset) ? offset : 0;
@@ -301,7 +306,8 @@ function coerceFormatTimeMs(time: unknown): number | null {
   if (raw != null && typeof raw === "object" && "current" in raw) {
     raw = (raw as { current: unknown }).current;
   }
-  if (raw == null || typeof raw === "boolean" || typeof raw === "string") return null;
+  if (raw == null || typeof raw === "boolean" || typeof raw === "string")
+    return null;
   if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
   let ts = Math.trunc(raw);
   // Python `utility._timestamp_to_ms`: Unix seconds (< 1e11) become ms.
@@ -334,7 +340,9 @@ export function strFormatTime(
   const ms = coerceFormatTimeMs(time);
   if (ms == null) return "NaN";
   const formatStr =
-    format == null ? DEFAULT_FORMAT_TIME : (asStr(format) ?? DEFAULT_FORMAT_TIME);
+    format == null
+      ? DEFAULT_FORMAT_TIME
+      : (asStr(format) ?? DEFAULT_FORMAT_TIME);
   const offsetHours = parseTimezoneOffsetHours(timezone);
   const parts = utcCivilFromMs(ms + offsetHours * 3_600_000);
   const h12 = ((parts.hour - 1) % 12) + 1;
@@ -360,7 +368,9 @@ export function strFormatTime(
     z: formatOffsetHours(offsetHours),
   };
   let formatted = formatStr;
-  for (const key of Object.keys(replacements).sort((a, b) => b.length - a.length)) {
+  for (const key of Object.keys(replacements).sort(
+    (a, b) => b.length - a.length,
+  )) {
     formatted = formatted.split(key).join(replacements[key]!);
   }
   return formatted.replaceAll("'", "");
@@ -412,7 +422,9 @@ export function strJoin(parts: unknown, sep: unknown): string | null {
   if (parts == null) return null;
   if (!Array.isArray(parts)) return null;
   const separator = sep == null ? "" : (asStr(sep) ?? "");
-  return parts.map((item) => (item == null ? "" : String(item))).join(separator);
+  return parts
+    .map((item) => (item == null ? "" : String(item)))
+    .join(separator);
 }
 
 function replaceAll(src: string, tgt: string, rep: string): string {

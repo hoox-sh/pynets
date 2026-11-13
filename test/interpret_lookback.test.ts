@@ -66,14 +66,20 @@ describe("interpret lookback", () => {
   });
 
   const assignSrc = `indicator("t")\nx = close\nplot(x)`;
-  test.skipIf(!parseHasAssign(assignSrc))("parse x = close then plot(x)", () => {
-    const out = interpret(assignSrc, BARS_1_TO_5);
-    expect(out.plots).toEqual([1, 2, 3, 4, 5]);
-  });
+  test.skipIf(!parseHasAssign(assignSrc))(
+    "parse x = close then plot(x)",
+    () => {
+      const out = interpret(assignSrc, BARS_1_TO_5);
+      expect(out.plots).toEqual([1, 2, 3, 4, 5]);
+    },
+  );
 
   const lookbackSrc = `indicator("t")\nx = close\nplot(x[1])`;
-  test.skipIf(!parseHasAssign(lookbackSrc))("parse x = close then plot(x[1])", () => {
-    const out = interpret(lookbackSrc, BARS_1_TO_5);
-    expect(out.plots).toEqual([null, 1, 2, 3, 4]);
-  });
+  test.skipIf(!parseHasAssign(lookbackSrc))(
+    "parse x = close then plot(x[1])",
+    () => {
+      const out = interpret(lookbackSrc, BARS_1_TO_5);
+      expect(out.plots).toEqual([null, 1, 2, 3, 4]);
+    },
+  );
 });

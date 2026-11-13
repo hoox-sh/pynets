@@ -21,7 +21,10 @@ function parseOk(src: string): boolean {
 }
 
 function taHas(method: string): boolean {
-  return typeof (new TaEngine() as unknown as Record<string, unknown>)[method] === "function";
+  return (
+    typeof (new TaEngine() as unknown as Record<string, unknown>)[method] ===
+    "function"
+  );
 }
 
 function interpretHasFinite(src: string): boolean {
@@ -93,7 +96,7 @@ describe("interpret extra TA roc / mom", () => {
     expect(out.plots[1]).toBeNull();
     expect(out.plots[2]).toBeCloseTo(200);
     expect(out.plots[3]).toBeCloseTo(100);
-    expect(out.plots[4]).toBeCloseTo(100 * (5 - 3) / 3);
+    expect(out.plots[4]).toBeCloseTo((100 * (5 - 3)) / 3);
   });
 
   test.skipIf(!momReady())("ta.mom(close, 2) on 1..5", () => {
@@ -122,13 +125,16 @@ describe("interpret alma / cmo / kama / obv / pivot", () => {
     expect(out.plots[4]).toBe(100);
   });
 
-  test.skipIf(!kamaReady())("ta.kama(close, 3) first value after length+1 bars", () => {
-    const out = interpret(KAMA_SRC, BARS);
-    expect(out.plots[0]).toBeNull();
-    expect(out.plots[2]).toBeNull();
-    expect(typeof out.plots[3]).toBe("number");
-    expect(Number.isFinite(out.plots[4]!)).toBe(true);
-  });
+  test.skipIf(!kamaReady())(
+    "ta.kama(close, 3) first value after length+1 bars",
+    () => {
+      const out = interpret(KAMA_SRC, BARS);
+      expect(out.plots[0]).toBeNull();
+      expect(out.plots[2]).toBeNull();
+      expect(typeof out.plots[3]).toBe("number");
+      expect(Number.isFinite(out.plots[4]!)).toBe(true);
+    },
+  );
 
   test.skipIf(!obvReady())("ta.obv() is 0 for the first two bars", () => {
     const out = interpret(OBV_SRC, BARS);
@@ -141,6 +147,8 @@ describe("interpret alma / cmo / kama / obv / pivot", () => {
     const out = interpret(PIVOT_SRC, BARS);
     expect(out.plots[0]).toBeNull();
     expect(out.plots[1]).toBeNull();
-    expect(out.plots.some((v) => typeof v === "number" && Number.isFinite(v))).toBe(true);
+    expect(
+      out.plots.some((v) => typeof v === "number" && Number.isFinite(v)),
+    ).toBe(true);
   });
 });

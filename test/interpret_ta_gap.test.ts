@@ -69,10 +69,17 @@ print(json.dumps(out))
   if (codeExit !== 0) {
     throw new Error(stderr || stdout || `python exit ${codeExit}`);
   }
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
   if (actual.length !== expected.length) {
     throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
@@ -90,7 +97,10 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
   const out = new Runtime("TEST").run(src, bars);
   const series = (out.series ?? {}) as SeriesMap;
   return { error: out.error, series };
@@ -99,10 +109,23 @@ function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: str
 const bars40 = makeBars(40);
 const bars60 = makeBars(60);
 
-const cases: Array<{ id: string; body: string; bare?: string; bars?: ReturnType<typeof makeBars> }> = [
-  { id: "uo", body: `plot(ta.uo(7, 14, 28), "v")`, bare: `plot(uo(7, 14, 28), "v")` },
+const cases: Array<{
+  id: string;
+  body: string;
+  bare?: string;
+  bars?: ReturnType<typeof makeBars>;
+}> = [
+  {
+    id: "uo",
+    body: `plot(ta.uo(7, 14, 28), "v")`,
+    bare: `plot(uo(7, 14, 28), "v")`,
+  },
   { id: "dpo", body: `plot(ta.dpo(20), "v")`, bare: `plot(dpo(20), "v")` },
-  { id: "kst", body: `plot(ta.kst(10, 15, 20, 30), "v")`, bare: `plot(kst(10, 15, 20, 30), "v")` },
+  {
+    id: "kst",
+    body: `plot(ta.kst(10, 15, 20, 30), "v")`,
+    bare: `plot(kst(10, 15, 20, 30), "v")`,
+  },
   {
     id: "donchian",
     body: `dc = ta.donchian(20)
@@ -123,7 +146,11 @@ plot(s.signal, "signal")`,
 plot(s.stochrsi, "stochrsi")
 plot(s.signal, "signal")`,
   },
-  { id: "rci", body: `plot(ta.rci(close, 9), "v")`, bare: `plot(rci(close, 9), "v")` },
+  {
+    id: "rci",
+    body: `plot(ta.rci(close, 9), "v")`,
+    bare: `plot(rci(close, 9), "v")`,
+  },
   {
     id: "ichimoku",
     bars: bars60,
@@ -138,7 +165,11 @@ plot(i.kijun_sen, "kijun")
 plot(i.senkou_span_a, "a")
 plot(i.senkou_span_b, "b")`,
   },
-  { id: "bb_pct", body: `plot(ta.bb_pct(20, 2), "v")`, bare: `plot(bb_pct(20, 2), "v")` },
+  {
+    id: "bb_pct",
+    body: `plot(ta.bb_pct(20, 2), "v")`,
+    bare: `plot(bb_pct(20, 2), "v")`,
+  },
   { id: "emv", body: `plot(ta.emv(14), "v")`, bare: `plot(emv(14), "v")` },
   {
     id: "fractal",
@@ -180,41 +211,50 @@ plot(d, "d")`,
   },
 ];
 
-describe.skipIf(!pythonAvailable())("interpret ta gap vs Python Runtime.run", () => {
-  test("plotted series match", async () => {
-    const jobs = cases.map((c) => ({
-      id: c.id,
-      src: script(c.body),
-      bars: c.bars ?? bars40,
-    }));
-    const py = await pythonRuns(jobs);
-    for (const c of cases) {
-      const bars = c.bars ?? bars40;
-      const ts = tsSeries(script(c.body), bars);
-      const ref = py[c.id];
-      if (ref == null) throw new Error(`python missing ${c.id}`);
-      expect(ref.error, c.id).toBeNull();
-      expect(ts.error, c.id).toBeUndefined();
-      const keys = Object.keys(ref.series);
-      expect(keys.length, c.id).toBeGreaterThan(0);
-      for (const key of keys) {
-        expectMatch(ts.series[key], ref.series[key]!, `${c.id}.${key}`);
-      }
-      if (c.bare) {
-        const bare = tsSeries(script(c.bare), bars);
-        expect(bare.error, `${c.id} bare`).toBeUndefined();
+describe.skipIf(!pythonAvailable())(
+  "interpret ta gap vs Python Runtime.run",
+  () => {
+    test("plotted series match", async () => {
+      const jobs = cases.map((c) => ({
+        id: c.id,
+        src: script(c.body),
+        bars: c.bars ?? bars40,
+      }));
+      const py = await pythonRuns(jobs);
+      for (const c of cases) {
+        const bars = c.bars ?? bars40;
+        const ts = tsSeries(script(c.body), bars);
+        const ref = py[c.id];
+        if (ref == null) throw new Error(`python missing ${c.id}`);
+        expect(ref.error, c.id).toBeNull();
+        expect(ts.error, c.id).toBeUndefined();
+        const keys = Object.keys(ref.series);
+        expect(keys.length, c.id).toBeGreaterThan(0);
         for (const key of keys) {
-          expectMatch(bare.series[key], ref.series[key]!, `${c.id}.bare.${key}`);
+          expectMatch(ts.series[key], ref.series[key]!, `${c.id}.${key}`);
+        }
+        if (c.bare) {
+          const bare = tsSeries(script(c.bare), bars);
+          expect(bare.error, `${c.id} bare`).toBeUndefined();
+          for (const key of keys) {
+            expectMatch(
+              bare.series[key],
+              ref.series[key]!,
+              `${c.id}.bare.${key}`,
+            );
+          }
         }
       }
-    }
-  });
+    });
 
-  test("ta.rci length < 2 is a runtime error", async () => {
-    const src = script(`plot(ta.rci(close, 1), "v")`);
-    const py = await pythonRuns([{ id: "rci1", src, bars: bars40 }]);
-    const ts = tsSeries(src, bars40);
-    expect(py.rci1?.error ?? "").toContain("ta.rci length must be at least 2");
-    expect(ts.error ?? "").toContain("ta.rci length must be at least 2");
-  });
-});
+    test("ta.rci length < 2 is a runtime error", async () => {
+      const src = script(`plot(ta.rci(close, 1), "v")`);
+      const py = await pythonRuns([{ id: "rci1", src, bars: bars40 }]);
+      const ts = tsSeries(src, bars40);
+      expect(py.rci1?.error ?? "").toContain(
+        "ta.rci length must be at least 2",
+      );
+      expect(ts.error ?? "").toContain("ta.rci length must be at least 2");
+    });
+  },
+);

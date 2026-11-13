@@ -5,7 +5,11 @@
  * Direct unit tests of compile-path array / map / matrix facades (no Pine).
  */
 import { describe, expect, test } from "bun:test";
-import { compileArray, compileMap, compileMatrix } from "../src/runtime/compile/collections.ts";
+import {
+  compileArray,
+  compileMap,
+  compileMatrix,
+} from "../src/runtime/compile/collections.ts";
 import { UdtType } from "../src/runtime/udt.ts";
 
 describe("compileArray", () => {

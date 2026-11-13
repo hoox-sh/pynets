@@ -32,7 +32,15 @@ export interface BrokerSettings {
 }
 
 export interface StrategyEvent {
-  type: "entry" | "close" | "exit" | "cancel" | "close_all" | "cancel_all" | "fill" | "order";
+  type:
+    | "entry"
+    | "close"
+    | "exit"
+    | "cancel"
+    | "close_all"
+    | "cancel_all"
+    | "fill"
+    | "order";
   id: string;
   direction?: StrategyDirection;
   qty?: number | null;
@@ -139,7 +147,11 @@ export interface StrategyCashAmount {
 }
 
 export function isStrategyCashAmount(v: unknown): v is StrategyCashAmount {
-  return typeof v === "object" && v !== null && (v as StrategyCashAmount)._pine_qty_type === "cash";
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as StrategyCashAmount)._pine_qty_type === "cash"
+  );
 }
 
 export function strategyCashAmount(value: number): StrategyCashAmount {
@@ -208,7 +220,8 @@ function resolveTrailParams(
   if (ticks == null) return { activation: null, offsetPx: null };
   const tick = isFiniteNumber(mintick) && mintick > 0 ? mintick : 0.01;
   const offsetPx = ticks * tick;
-  if (!isFiniteNumber(offsetPx) || offsetPx <= 0) return { activation: null, offsetPx: null };
+  if (!isFiniteNumber(offsetPx) || offsetPx <= 0)
+    return { activation: null, offsetPx: null };
   return { activation: trailPrice, offsetPx };
 }
 
@@ -220,7 +233,8 @@ function tickOffsetPrice(
   isProfit: boolean,
 ): number | null {
   if (ticks == null || entryAvg == null) return null;
-  if (ticks <= 0 || !isFiniteNumber(ticks) || !isFiniteNumber(entryAvg)) return null;
+  if (ticks <= 0 || !isFiniteNumber(ticks) || !isFiniteNumber(entryAvg))
+    return null;
   const tick = isFiniteNumber(mintick) && mintick > 0 ? mintick : 0.01;
   const offset = ticks * tick;
   if (!isFiniteNumber(offset) || offset <= 0) return null;
@@ -250,7 +264,12 @@ function updateTrailStop(order: PendingOrder, high: number, low: number): void {
 }
 
 /** Raw trigger price (slippage applied later via recordFill). */
-function triggerPrice(order: PendingOrder, open: number, high: number, low: number): number | null {
+function triggerPrice(
+  order: PendingOrder,
+  open: number,
+  high: number,
+  low: number,
+): number | null {
   const lim = order.limit;
   const stop = order.stop;
   const d = order.direction;
@@ -284,24 +303,52 @@ function normalizePyramiding(v: unknown): number | undefined {
 }
 
 /** Soft-normalize `strategy(..., avg_price_model=)` (Python `_norm_avg_price_model`). */
-function normalizeAvgPriceModel(value: unknown, fallback: AvgPriceModel = "stock"): AvgPriceModel {
+function normalizeAvgPriceModel(
+  value: unknown,
+  fallback: AvgPriceModel = "stock",
+): AvgPriceModel {
   if (value == null) return fallback;
-  const raw = String(value).replace(/strategy\./gi, "").replace(/avg_price_/gi, "").trim().toLowerCase();
+  const raw = String(value)
+    .replace(/strategy\./gi, "")
+    .replace(/avg_price_/gi, "")
+    .trim()
+    .toLowerCase();
   if (!raw || raw === "nan" || raw === "na" || raw === "none") return fallback;
-  if (raw === "stock" || raw === "pine" || raw === "average" || raw === "avg" || raw === "lot" || raw === "fifo") {
+  if (
+    raw === "stock" ||
+    raw === "pine" ||
+    raw === "average" ||
+    raw === "avg" ||
+    raw === "lot" ||
+    raw === "fifo"
+  ) {
     return "stock";
   }
-  if (raw === "futures" || raw === "future" || raw === "perp" || raw === "perpetual" || raw === "net" || raw === "linear") {
+  if (
+    raw === "futures" ||
+    raw === "future" ||
+    raw === "perp" ||
+    raw === "perpetual" ||
+    raw === "net" ||
+    raw === "linear"
+  ) {
     return "futures";
   }
-  if (raw === "inverse" || raw === "coin" || raw === "coin_m" || raw === "harmonic") return "inverse";
+  if (
+    raw === "inverse" ||
+    raw === "coin" ||
+    raw === "coin_m" ||
+    raw === "harmonic"
+  )
+    return "inverse";
   return fallback;
 }
 
 function softFloatDecl(value: unknown, fallback: number): number {
   if (value == null) return fallback;
   if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
   if (typeof value === "string") {
     const f = Number(value);
     return Number.isFinite(f) ? f : fallback;
@@ -326,11 +373,16 @@ function pineQtyType(value: unknown): string | undefined {
 function normalizeDefaultQtyType(value: unknown): DefaultQtyType | undefined {
   if (value == null) return undefined;
   const tagged = pineQtyType(value);
-  if (tagged === "cash" || tagged === "fixed" || tagged === "percent_of_equity") return tagged;
+  if (tagged === "cash" || tagged === "fixed" || tagged === "percent_of_equity")
+    return tagged;
   if (typeof value === "number") return undefined;
-  let dqt = String(value).replace(/strategy\./gi, "").trim().toLowerCase();
+  let dqt = String(value)
+    .replace(/strategy\./gi, "")
+    .trim()
+    .toLowerCase();
   if (dqt === "percent" || dqt === "percentage") dqt = "percent_of_equity";
-  if (dqt === "fixed" || dqt === "percent_of_equity" || dqt === "cash") return dqt;
+  if (dqt === "fixed" || dqt === "percent_of_equity" || dqt === "cash")
+    return dqt;
   return undefined;
 }
 
@@ -354,9 +406,13 @@ function dayBucket(ts: number): number {
 
 /** `strategy.oca.cancel` / `oca.cancel` / `cancel` → cancel (else reduce / none). */
 function normalizeOcaType(raw: unknown): OcaType {
-  const s = String(raw ?? "none").trim().toLowerCase();
-  if (s === "cancel" || s === "oca.cancel" || s === "strategy.oca.cancel") return "cancel";
-  if (s === "reduce" || s === "oca.reduce" || s === "strategy.oca.reduce") return "reduce";
+  const s = String(raw ?? "none")
+    .trim()
+    .toLowerCase();
+  if (s === "cancel" || s === "oca.cancel" || s === "strategy.oca.cancel")
+    return "cancel";
+  if (s === "reduce" || s === "oca.reduce" || s === "strategy.oca.reduce")
+    return "reduce";
   return "none";
 }
 
@@ -450,7 +506,9 @@ export class StrategyBook {
    */
   snapshot(): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(this as unknown as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      this as unknown as Record<string, unknown>,
+    )) {
       if (typeof value === "function") continue;
       out[key] = cloneValue(value);
     }
@@ -465,7 +523,12 @@ export class StrategyBook {
       if (Array.isArray(live)) {
         live.length = 0;
         for (const item of value as unknown[]) live.push(cloneValue(item));
-      } else if (live !== null && typeof live === "object" && value !== null && typeof value === "object") {
+      } else if (
+        live !== null &&
+        typeof live === "object" &&
+        value !== null &&
+        typeof value === "object"
+      ) {
         Object.assign(live, value);
       } else {
         self[key] = cloneValue(value);
@@ -497,7 +560,9 @@ export class StrategyBook {
     const realized = isFiniteNumber(this.realizedPnl) ? this.realizedPnl : 0;
     const paid = isFiniteNumber(this.commissionPaid) ? this.commissionPaid : 0;
     const open =
-      q === 0 || !isFiniteNumber(avg) || !isFiniteNumber(mark) ? 0 : q * (mark - avg);
+      q === 0 || !isFiniteNumber(avg) || !isFiniteNumber(mark)
+        ? 0
+        : q * (mark - avg);
     const eq = this.initialCapital + realized - paid + open;
     this.trackEquityCurve(eq);
     return eq;
@@ -747,12 +812,22 @@ export class StrategyBook {
   markOpenTrades(high: number, low: number, close: number): void {
     if (this.openTrades.length === 0) return;
     for (const t of this.openTrades) {
-      const fav = t.direction === "long"
-        ? (isFiniteNumber(high) ? high : close)
-        : (isFiniteNumber(low) ? low : close);
-      const adv = t.direction === "long"
-        ? (isFiniteNumber(low) ? low : close)
-        : (isFiniteNumber(high) ? high : close);
+      const fav =
+        t.direction === "long"
+          ? isFiniteNumber(high)
+            ? high
+            : close
+          : isFiniteNumber(low)
+            ? low
+            : close;
+      const adv =
+        t.direction === "long"
+          ? isFiniteNumber(low)
+            ? low
+            : close
+          : isFiniteNumber(high)
+            ? high
+            : close;
       if (isFiniteNumber(fav)) {
         const runup = this.markProfit(t, fav);
         if (runup > 0) t.max_runup = Math.max(t.max_runup ?? 0, runup);
@@ -765,11 +840,13 @@ export class StrategyBook {
   }
 
   configure(settings: BrokerSettings): void {
-    if (isFiniteNumber(settings.commission)) this.commission = settings.commission;
+    if (isFiniteNumber(settings.commission))
+      this.commission = settings.commission;
     if (isFiniteNumber(settings.slippage)) this.slippage = settings.slippage;
     if (settings.pyramiding !== undefined) {
       const pyr = normalizePyramiding(settings.pyramiding);
-      if (pyr !== undefined || settings.pyramiding == null) this.pyramiding = pyr;
+      if (pyr !== undefined || settings.pyramiding == null)
+        this.pyramiding = pyr;
     }
     this.applyDeclSettings(settings);
   }
@@ -780,7 +857,9 @@ export class StrategyBook {
    */
   resolveDefaultQty(fillPrice: number): number {
     const dqt = this.default_qty_type || "fixed";
-    const val = isFiniteNumber(this.default_qty_value) ? this.default_qty_value : 0;
+    const val = isFiniteNumber(this.default_qty_value)
+      ? this.default_qty_value
+      : 0;
     const price = isFiniteNumber(fillPrice) && fillPrice > 0 ? fillPrice : 1;
     const lev = this.leverage && this.leverage > 0 ? this.leverage : 1;
     if (dqt === "percent_of_equity") {
@@ -841,15 +920,23 @@ export class StrategyBook {
       if (ms > 0) {
         this.margin_short = ms;
         if (!hasLev && !hasMl) this.leverage = Math.max(1, 100 / ms);
-        else if (!hasLev && hasMl) this.leverage = Math.max(1, 100 / Math.max(this.margin_long, this.margin_short));
+        else if (!hasLev && hasMl)
+          this.leverage = Math.max(
+            1,
+            100 / Math.max(this.margin_long, this.margin_short),
+          );
       }
     }
   }
 
   /** `strategy.risk.allow_entry_in(value)` — `all` | `long` | `short`. */
   riskAllowEntryIn(value: unknown = "all"): void {
-    const s = String(value ?? "all").replace(/strategy\./gi, "").trim().toLowerCase();
-    this.allow_entry_in = s === "long" || s === "short" || s === "all" ? s : "all";
+    const s = String(value ?? "all")
+      .replace(/strategy\./gi, "")
+      .trim()
+      .toLowerCase();
+    this.allow_entry_in =
+      s === "long" || s === "short" || s === "all" ? s : "all";
   }
 
   /** `strategy.risk.max_position_size(percent)` — cap entry notional vs equity. */
@@ -864,8 +951,16 @@ export class StrategyBook {
    */
   riskMaxDrawdown(value: unknown, type: unknown = "absolute"): void {
     if (value == null || !isFiniteNumber(value) || value < 0) return;
-    const rt = String(type ?? "absolute").replace(/strategy\./gi, "").trim().toLowerCase();
-    if (rt === "percent" || rt === "percentage" || rt === "percent_of_equity" || rt === "%") {
+    const rt = String(type ?? "absolute")
+      .replace(/strategy\./gi, "")
+      .trim()
+      .toLowerCase();
+    if (
+      rt === "percent" ||
+      rt === "percentage" ||
+      rt === "percent_of_equity" ||
+      rt === "%"
+    ) {
       this.max_drawdown_risk_percent = value;
     } else {
       this.max_drawdown_risk = value;
@@ -910,7 +1005,10 @@ export class StrategyBook {
       this.dayPnl = 0;
     }
     this.dayPnl += profit;
-    if (this.max_cons_loss_days != null && this.consecutive_loss_days >= this.max_cons_loss_days) {
+    if (
+      this.max_cons_loss_days != null &&
+      this.consecutive_loss_days >= this.max_cons_loss_days
+    ) {
       this.entries_blocked = true;
     }
     if (
@@ -919,7 +1017,7 @@ export class StrategyBook {
       this.initialCapital > 0 &&
       this.dayPnl < 0
     ) {
-      const lossPct = 100 * -this.dayPnl / this.initialCapital;
+      const lossPct = (100 * -this.dayPnl) / this.initialCapital;
       if (lossPct >= this.max_intraday_loss) this.entries_blocked = true;
     }
   }
@@ -965,7 +1063,9 @@ export class StrategyBook {
       const absPos = Math.abs(this.position.qty);
       const rawQty = opts?.qty;
       const q =
-        isFiniteNumber(rawQty) && rawQty >= 0 ? Math.min(Math.abs(rawQty), absPos) : absPos;
+        isFiniteNumber(rawQty) && rawQty >= 0
+          ? Math.min(Math.abs(rawQty), absPos)
+          : absPos;
       if (q > 0) {
         this.upsertPending({
           id: `${oid}:close`,
@@ -987,7 +1087,11 @@ export class StrategyBook {
    * `strategy.close_all` — queue a market flatten for the next bar open and
    * emit the placement `close_all` event (PYNE 0.6.29).
    */
-  placeCloseAll(bar: number, price?: number, opts?: { comment?: string }): void {
+  placeCloseAll(
+    bar: number,
+    price?: number,
+    opts?: { comment?: string },
+  ): void {
     const b = isFiniteNumber(bar) ? bar : 0;
     this.ensureSanePosition();
     if (this.position.qty !== 0) {
@@ -1077,10 +1181,16 @@ export class StrategyBook {
         if (!isFiniteNumber(capped) || capped <= 0) return;
         // Same-direction add gate (PYNE pyramiding cap = pyramiding + 1).
         const signed = dir === "long" ? capped : -capped;
-        if (this.position.qty !== 0 && Math.sign(this.position.qty) === Math.sign(signed)) {
-          const maxEntries = this.pyramiding !== undefined ? this.pyramiding + 1 : 1;
+        if (
+          this.position.qty !== 0 &&
+          Math.sign(this.position.qty) === Math.sign(signed)
+        ) {
+          const maxEntries =
+            this.pyramiding !== undefined ? this.pyramiding + 1 : 1;
           const allowed =
-            this.pyramiding !== undefined && this.pyramiding > 0 && this.opentrades < maxEntries;
+            this.pyramiding !== undefined &&
+            this.pyramiding > 0 &&
+            this.opentrades < maxEntries;
           if (!allowed) return;
         }
         this.upsertPending({
@@ -1095,7 +1205,13 @@ export class StrategyBook {
           deferred: true,
           comment: opts?.comment,
         });
-        this.events.push({ type: "order", id: oid, direction: dir, qty: capped, bar: b });
+        this.events.push({
+          type: "order",
+          id: oid,
+          direction: dir,
+          qty: capped,
+          bar: b,
+        });
         return;
       }
       if (isFiniteNumber(opts?.price)) {
@@ -1111,8 +1227,18 @@ export class StrategyBook {
     const absQty = isFiniteNumber(qty) ? Math.abs(qty) : Number.NaN;
     this.entry(b, oid, dir, isFiniteNumber(absQty) ? absQty : qty);
     if (!isFiniteNumber(absQty) || absQty === 0) return;
-    const pending: PendingOrder = { id: oid, direction: dir, qty: absQty, limit, stop, bar: b };
-    const ocaName = opts?.oca_name == null || opts.oca_name === "" ? undefined : String(opts.oca_name);
+    const pending: PendingOrder = {
+      id: oid,
+      direction: dir,
+      qty: absQty,
+      limit,
+      stop,
+      bar: b,
+    };
+    const ocaName =
+      opts?.oca_name == null || opts.oca_name === ""
+        ? undefined
+        : String(opts.oca_name);
     const ocaType = normalizeOcaType(opts?.oca_type);
     if (ocaName !== undefined) pending.oca_name = ocaName;
     if (ocaType !== "none") pending.oca_type = ocaType;
@@ -1143,7 +1269,11 @@ export class StrategyBook {
       rawFrom == null || rawFrom === "" ? null : String(rawFrom);
 
     const targetSize = this.entryOpenSize(fromEntry);
-    const qtyStatus = this.resolveExitQty(targetSize, opts?.qty, opts?.qty_percent);
+    const qtyStatus = this.resolveExitQty(
+      targetSize,
+      opts?.qty,
+      opts?.qty_percent,
+    );
     if (qtyStatus.status === "invalid") return;
 
     const qty = qtyStatus.qty;
@@ -1156,10 +1286,22 @@ export class StrategyBook {
     if (!isFlat) {
       const entryAvg = this.exitEntryAvg(fromEntry);
       if (limitP == null) {
-        limitP = tickOffsetPrice(profitTicks, entryAvg, this.mintick, isLong, true);
+        limitP = tickOffsetPrice(
+          profitTicks,
+          entryAvg,
+          this.mintick,
+          isLong,
+          true,
+        );
       }
       if (stopP == null) {
-        stopP = tickOffsetPrice(lossTicks, entryAvg, this.mintick, isLong, false);
+        stopP = tickOffsetPrice(
+          lossTicks,
+          entryAvg,
+          this.mintick,
+          isLong,
+          false,
+        );
       }
     }
     const trail = resolveTrailParams(
@@ -1191,7 +1333,13 @@ export class StrategyBook {
           deferred: true,
           comment: opts?.comment,
         });
-        this.events.push({ type: "order", id: oid, direction: closeDir, qty, bar: b });
+        this.events.push({
+          type: "order",
+          id: oid,
+          direction: closeDir,
+          qty,
+          bar: b,
+        });
         return;
       }
       if (!isFiniteNumber(opts?.price)) return;
@@ -1207,7 +1355,10 @@ export class StrategyBook {
       exitId: string,
       limit: number | null,
       stop: number | null,
-      trailFields?: Pick<PendingOrder, "trail_offset" | "trail_activation" | "trail_active">,
+      trailFields?: Pick<
+        PendingOrder,
+        "trail_offset" | "trail_activation" | "trail_active"
+      >,
       oca?: boolean,
     ): PendingOrder => {
       const p: PendingOrder = {
@@ -1225,28 +1376,34 @@ export class StrategyBook {
         p.oca_type = "cancel";
       }
       if (trailFields) {
-        if (trailFields.trail_offset != null) p.trail_offset = trailFields.trail_offset;
-        if (trailFields.trail_activation !== undefined) p.trail_activation = trailFields.trail_activation;
-        if (trailFields.trail_active != null) p.trail_active = trailFields.trail_active;
+        if (trailFields.trail_offset != null)
+          p.trail_offset = trailFields.trail_offset;
+        if (trailFields.trail_activation !== undefined)
+          p.trail_activation = trailFields.trail_activation;
+        if (trailFields.trail_active != null)
+          p.trail_active = trailFields.trail_active;
       }
       return p;
     };
 
-    const trailFields: Pick<PendingOrder, "trail_offset" | "trail_activation" | "trail_active"> | undefined =
-      hasTrail
-        ? {
-            trail_offset: trail.offsetPx,
-            trail_activation: trail.activation,
-            trail_active: trail.activation == null,
-          }
-        : undefined;
+    const trailFields:
+      | Pick<PendingOrder, "trail_offset" | "trail_activation" | "trail_active">
+      | undefined = hasTrail
+      ? {
+          trail_offset: trail.offsetPx,
+          trail_activation: trail.activation,
+          trail_active: trail.activation == null,
+        }
+      : undefined;
 
     if (limitP != null && stopP != null) {
       this.upsertPending(mkExit(`${oid}:limit`, limitP, null, undefined, true));
       this.upsertPending(mkExit(`${oid}:stop`, null, stopP, trailFields, true));
     } else if (limitP != null && hasTrail) {
       this.upsertPending(mkExit(`${oid}:limit`, limitP, null, undefined, true));
-      this.upsertPending(mkExit(`${oid}:trail`, null, stopP, trailFields, true));
+      this.upsertPending(
+        mkExit(`${oid}:trail`, null, stopP, trailFields, true),
+      );
     } else if (limitP != null) {
       this.upsertPending(mkExit(oid, limitP, null));
     } else if (hasTrail) {
@@ -1276,7 +1433,9 @@ export class StrategyBook {
       ? ohlc.close
       : isFiniteNumber(ohlc.open)
         ? ohlc.open
-        : (isFiniteNumber(ohlc.high) ? ohlc.high : ohlc.low as number);
+        : isFiniteNumber(ohlc.high)
+          ? ohlc.high
+          : (ohlc.low as number);
     const open = isFiniteNumber(ohlc.open) ? ohlc.open : close;
     const high = isFiniteNumber(ohlc.high) ? ohlc.high : Math.max(open, close);
     const low = isFiniteNumber(ohlc.low) ? ohlc.low : Math.min(open, close);
@@ -1286,7 +1445,8 @@ export class StrategyBook {
       // Reference Pine: an order placed during bar N becomes active for bar
       // N+1 — never fills on its own placement bar.
       if (order.bar === b) continue;
-      if (order.kind === "exit" && isTrailOrder(order)) updateTrailStop(order, high, low);
+      if (order.kind === "exit" && isTrailOrder(order))
+        updateTrailStop(order, high, low);
       let px: number | null;
       if (order.limit == null && order.stop == null) px = open;
       else px = triggerPrice(order, open, high, low);
@@ -1299,10 +1459,18 @@ export class StrategyBook {
           ? this.applyExitFill(b, order, px, barTime)
           : order.kind === "close" || order.kind === "close_all"
             ? this.applyCloseFill(b, order, px, barTime)
-            : this.applyEntryFill(b, order.id, order.direction, order.qty, px, emitEntry, {
-                comment: order.comment,
-                time: barTime,
-              });
+            : this.applyEntryFill(
+                b,
+                order.id,
+                order.direction,
+                order.qty,
+                px,
+                emitEntry,
+                {
+                  comment: order.comment,
+                  time: barTime,
+                },
+              );
       if (applied) {
         const q = Math.abs(this.fills.at(-1)?.qty ?? order.qty);
         this.ocaAfterFill(order, q, b);
@@ -1330,10 +1498,21 @@ export class StrategyBook {
     if (this.position.qty === 0 || !isFiniteNumber(price)) return false;
     const absPos = Math.abs(this.position.qty);
     const rawQty = order.qty;
-    const q = isFiniteNumber(rawQty) && rawQty > 0 ? Math.min(Math.abs(rawQty), absPos) : absPos;
+    const q =
+      isFiniteNumber(rawQty) && rawQty > 0
+        ? Math.min(Math.abs(rawQty), absPos)
+        : absPos;
     if (!(q > 0)) return false;
     if (q < absPos - 1e-12) {
-      this.reducePosition(bar, order.id, price, q, order.from_entry ?? null, time, order.comment);
+      this.reducePosition(
+        bar,
+        order.id,
+        price,
+        q,
+        order.from_entry ?? null,
+        time,
+        order.comment,
+      );
     } else {
       this.flattenAt(bar, order.id, price, time, order.comment);
     }
@@ -1386,7 +1565,8 @@ export class StrategyBook {
     opts?: Pick<PlaceEntryOpts, "comment" | "time">,
   ): boolean {
     this.ensureSanePosition();
-    if (!isFiniteNumber(qty) || qty === 0 || !isFiniteNumber(price)) return false;
+    if (!isFiniteNumber(qty) || qty === 0 || !isFiniteNumber(price))
+      return false;
     const absQty = Math.abs(qty);
     if (!isFiniteNumber(absQty) || absQty === 0) return false;
     const dir = mapDirection(direction);
@@ -1399,7 +1579,10 @@ export class StrategyBook {
     if (!isFiniteNumber(capped) || capped <= 0) return false;
     const signed = dir === "long" ? capped : -capped;
 
-    if (this.position.qty !== 0 && Math.sign(this.position.qty) !== Math.sign(signed)) {
+    if (
+      this.position.qty !== 0 &&
+      Math.sign(this.position.qty) !== Math.sign(signed)
+    ) {
       if (!this.flattenAt(b, oid, price, opts?.time)) return false;
       this.close(b, oid);
     } else if (
@@ -1440,7 +1623,8 @@ export class StrategyBook {
   private dropExitPending(exitId: string): void {
     for (let i = this.pending.length - 1; i >= 0; i--) {
       const pid = this.pending[i]!.id;
-      if (pid === exitId || pid.startsWith(`${exitId}:`)) this.pending.splice(i, 1);
+      if (pid === exitId || pid.startsWith(`${exitId}:`))
+        this.pending.splice(i, 1);
     }
   }
 
@@ -1449,7 +1633,10 @@ export class StrategyBook {
     const abs = Math.abs(this.position.qty);
     if (!fromEntry) return abs;
     if (this.openTrades.length === 0 && abs > 0) return abs;
-    return this.openTrades.reduce((s, t) => (t.id === fromEntry ? s + t.qty : s), 0);
+    return this.openTrades.reduce(
+      (s, t) => (t.id === fromEntry ? s + t.qty : s),
+      0,
+    );
   }
 
   private exitEntryAvg(fromEntry: string | null): number | null {
@@ -1482,13 +1669,26 @@ export class StrategyBook {
       return { status: "ok", qty: target * (Math.min(pct, 100) / 100) };
     }
     if (rawQty == null) return { status: "ok", qty: target };
-    if (!isFiniteNumber(rawQty) || rawQty < 0) return { status: "invalid", qty: 0 };
+    if (!isFiniteNumber(rawQty) || rawQty < 0)
+      return { status: "invalid", qty: 0 };
     return { status: "ok", qty: Math.min(rawQty, target) };
   }
 
-  private applyExitFill(bar: number, order: PendingOrder, price: number, time?: number): boolean {
+  private applyExitFill(
+    bar: number,
+    order: PendingOrder,
+    price: number,
+    time?: number,
+  ): boolean {
     const t = isFiniteNumber(bar) ? bar : 0;
-    return this.reducePosition(t, order.id, price, order.qty, order.from_entry ?? null, time);
+    return this.reducePosition(
+      t,
+      order.id,
+      price,
+      order.qty,
+      order.from_entry ?? null,
+      time,
+    );
   }
 
   private closeLeg(
@@ -1519,7 +1719,8 @@ export class StrategyBook {
       closed.entry_comment = entryCmt;
       closed.comment = entryCmt;
     }
-    if (exitComment != null && exitComment !== "") closed.exit_comment = String(exitComment);
+    if (exitComment != null && exitComment !== "")
+      closed.exit_comment = String(exitComment);
     if (ot.max_runup !== undefined) closed.max_runup = ot.max_runup;
     if (ot.max_drawdown !== undefined) closed.max_drawdown = ot.max_drawdown;
     return closed;
@@ -1539,7 +1740,12 @@ export class StrategyBook {
     exitComment?: string,
   ): boolean {
     this.ensureSanePosition();
-    if (this.position.qty === 0 || !isFiniteNumber(qty) || qty <= 0 || !isFiniteNumber(price)) {
+    if (
+      this.position.qty === 0 ||
+      !isFiniteNumber(qty) ||
+      qty <= 0 ||
+      !isFiniteNumber(price)
+    ) {
       return false;
     }
     const fe = fromEntry == null || fromEntry === "" ? null : String(fromEntry);
@@ -1555,7 +1761,8 @@ export class StrategyBook {
     }
     if (fe != null && !this.openTrades.some((t) => t.id === fe)) return false;
 
-    const eligible = fe != null ? this.openTrades.filter((t) => t.id === fe) : this.openTrades;
+    const eligible =
+      fe != null ? this.openTrades.filter((t) => t.id === fe) : this.openTrades;
     const target = eligible.reduce((s, t) => s + t.qty, 0);
     const closeQty = Math.min(qty, target);
     if (closeQty <= 0) return false;
@@ -1568,8 +1775,11 @@ export class StrategyBook {
     const px = this.recordFill(bar, fillId, side, closeQty, price);
     if (!isFiniteNumber(px)) return false;
 
-    const useSticky = this.avg_price_model === "futures" || this.avg_price_model === "inverse";
-    const stickyAvg = isFiniteNumber(this.position.avgPrice) ? this.position.avgPrice : px;
+    const useSticky =
+      this.avg_price_model === "futures" || this.avg_price_model === "inverse";
+    const stickyAvg = isFiniteNumber(this.position.avgPrice)
+      ? this.position.avgPrice
+      : px;
     const exitFeeTotal = this.fillFee(closeQty, px);
     let remaining = closeQty;
     let realized = 0;
@@ -1601,12 +1811,19 @@ export class StrategyBook {
       );
       this.closedTrades.push(closed);
       this.noteClosedProfit(profit);
-      this.noteClosedTradeDay(isFiniteNumber(exitTime) ? exitTime : bar, profit);
+      this.noteClosedTradeDay(
+        isFiniteNumber(exitTime) ? exitTime : bar,
+        profit,
+      );
       const pnl = signed * (px - basis) * cq;
       if (isFiniteNumber(pnl)) realized += pnl;
       const leftover = ot.qty - cq;
       if (leftover > 1e-12) {
-        newOpen.push({ ...ot, qty: leftover, commission: ot.commission - entryComm });
+        newOpen.push({
+          ...ot,
+          qty: leftover,
+          commission: ot.commission - entryComm,
+        });
       }
       remaining -= cq;
     }
@@ -1628,7 +1845,8 @@ export class StrategyBook {
       this.position.qty = sign * remQty;
       this.position.avgPrice = useSticky
         ? stickyAvg
-        : this.openTrades.reduce((s, t) => s + t.entryPrice * t.qty, 0) / remQty;
+        : this.openTrades.reduce((s, t) => s + t.entryPrice * t.qty, 0) /
+          remQty;
     }
     this.closedCount += 1;
     const t = isFiniteNumber(exitTime) ? exitTime : bar;
@@ -1644,7 +1862,8 @@ export class StrategyBook {
     price: number,
     opts?: Pick<PlaceEntryOpts, "comment" | "time">,
   ): void {
-    if (!isFiniteNumber(signedQty) || signedQty === 0 || !isFiniteNumber(price)) return;
+    if (!isFiniteNumber(signedQty) || signedQty === 0 || !isFiniteNumber(price))
+      return;
     const oldQty = this.position.qty;
     const oldAbs = Math.abs(oldQty);
     const addAbs = Math.abs(signedQty);
@@ -1687,11 +1906,14 @@ export class StrategyBook {
       this.openTrades.push(trade);
       return;
     }
-    const existing = this.openTrades.find((t) => t.id === id && t.direction === dir);
+    const existing = this.openTrades.find(
+      (t) => t.id === id && t.direction === dir,
+    );
     if (existing) {
       const prev = existing.qty;
       existing.qty = prev + addAbs;
-      existing.entryPrice = (existing.entryPrice * prev + px * addAbs) / existing.qty;
+      existing.entryPrice =
+        (existing.entryPrice * prev + px * addAbs) / existing.qty;
       existing.commission += fee;
       return;
     }
@@ -1715,7 +1937,13 @@ export class StrategyBook {
    * Flatten the open position at `price`. Returns false when there is nothing
    * to close or the fill cannot be recorded without corrupting state.
    */
-  private flattenAt(bar: number, id: string, price: number, exitTime?: number, exitComment?: string): boolean {
+  private flattenAt(
+    bar: number,
+    id: string,
+    price: number,
+    exitTime?: number,
+    exitComment?: string,
+  ): boolean {
     const q = this.position.qty;
     if (q === 0 || !isFiniteNumber(q) || !isFiniteNumber(price)) return false;
     const side = q > 0 ? "sell" : "buy";
@@ -1727,7 +1955,16 @@ export class StrategyBook {
     const pnl = q * (px - basis);
     if (isFiniteNumber(pnl)) this.realizedPnl += pnl;
     const t = isFiniteNumber(exitTime) ? exitTime : bar;
-    this.closeOpenTrades(bar, id, px, absQ, q > 0 ? "long" : "short", basis, t, exitComment);
+    this.closeOpenTrades(
+      bar,
+      id,
+      px,
+      absQ,
+      q > 0 ? "long" : "short",
+      basis,
+      t,
+      exitComment,
+    );
     this.position.qty = 0;
     this.position.avgPrice = null;
     this.sameDirAdds = 0;
@@ -1776,10 +2013,22 @@ export class StrategyBook {
       const exitComm = exitFeeTotal * share;
       const profit = this.markProfit(ot, exitPrice) - exitComm;
       this.closedTrades.push(
-        this.closeLeg(ot, bar, exitPrice, ot.qty, profit, ot.commission + exitComm, exitTime, exitComment),
+        this.closeLeg(
+          ot,
+          bar,
+          exitPrice,
+          ot.qty,
+          profit,
+          ot.commission + exitComm,
+          exitTime,
+          exitComment,
+        ),
       );
       this.noteClosedProfit(profit);
-      this.noteClosedTradeDay(isFiniteNumber(exitTime) ? exitTime : bar, profit);
+      this.noteClosedTradeDay(
+        isFiniteNumber(exitTime) ? exitTime : bar,
+        profit,
+      );
     }
     this.openTrades.length = 0;
     this.position_entry_name = "";
@@ -1810,16 +2059,22 @@ export class StrategyBook {
   }
 
   private pickTrade(list: Trade[], i: unknown): Trade | null {
-    if (!isFiniteNumber(i) || !Number.isInteger(i) || i < 0 || i >= list.length) return null;
+    if (!isFiniteNumber(i) || !Number.isInteger(i) || i < 0 || i >= list.length)
+      return null;
     return list[i] ?? null;
   }
 
   private riskAllowsEntry(direction: StrategyDirection, time: number): boolean {
-    const allow = (this.allow_entry_in || "all").toLowerCase().replace(/strategy\./g, "");
+    const allow = (this.allow_entry_in || "all")
+      .toLowerCase()
+      .replace(/strategy\./g, "");
     if (allow === "long" && direction !== "long") return false;
     if (allow === "short" && direction !== "short") return false;
     if (this.entries_blocked) return false;
-    if (this.max_drawdown_risk != null && this.maxDrawdownAbs >= this.max_drawdown_risk) {
+    if (
+      this.max_drawdown_risk != null &&
+      this.maxDrawdownAbs >= this.max_drawdown_risk
+    ) {
       this.entries_blocked = true;
       return false;
     }
@@ -1830,7 +2085,10 @@ export class StrategyBook {
       this.entries_blocked = true;
       return false;
     }
-    if (this.max_cons_loss_days != null && this.consecutive_loss_days >= this.max_cons_loss_days) {
+    if (
+      this.max_cons_loss_days != null &&
+      this.consecutive_loss_days >= this.max_cons_loss_days
+    ) {
       this.entries_blocked = true;
       return false;
     }
@@ -1840,7 +2098,7 @@ export class StrategyBook {
       this.initialCapital > 0 &&
       this.dayPnl < 0
     ) {
-      const lossPct = 100 * -this.dayPnl / this.initialCapital;
+      const lossPct = (100 * -this.dayPnl) / this.initialCapital;
       if (lossPct >= this.max_intraday_loss) {
         this.entries_blocked = true;
         return false;
@@ -1855,7 +2113,8 @@ export class StrategyBook {
 
   private capQtyByMaxPosition(qty: number, fillPrice: number): number {
     const pct = this.max_position_size_percent;
-    if (pct == null || pct <= 0 || !isFiniteNumber(fillPrice) || fillPrice <= 0) return qty;
+    if (pct == null || pct <= 0 || !isFiniteNumber(fillPrice) || fillPrice <= 0)
+      return qty;
     const eq = this.equity(fillPrice);
     const maxQty = (eq * (pct / 100)) / fillPrice;
     if (!isFiniteNumber(maxQty) || maxQty < 0) return 0;
@@ -1879,7 +2138,8 @@ export class StrategyBook {
     const ru = eq - this.equityTrough;
     if (ru > this.maxRunupAbs) {
       this.maxRunupAbs = ru;
-      if (this.equityTrough > 0) this.maxRuPercent = (100 * ru) / this.equityTrough;
+      if (this.equityTrough > 0)
+        this.maxRuPercent = (100 * ru) / this.equityTrough;
     }
   }
 
@@ -1895,8 +2155,10 @@ export class StrategyBook {
     const size = Math.abs(this.position.qty);
     if (!isFiniteNumber(size) || size === 0) return;
     if (size > this.maxHeldAll) this.maxHeldAll = size;
-    if (this.position.qty > 0 && size > this.maxHeldLong) this.maxHeldLong = size;
-    if (this.position.qty < 0 && size > this.maxHeldShort) this.maxHeldShort = size;
+    if (this.position.qty > 0 && size > this.maxHeldLong)
+      this.maxHeldLong = size;
+    if (this.position.qty < 0 && size > this.maxHeldShort)
+      this.maxHeldShort = size;
   }
 
   private rollFillDay(ts: number): void {
@@ -1912,7 +2174,11 @@ export class StrategyBook {
     this.dayFilledOrders += 1;
   }
 
-  private ocaAfterFill(filled: PendingOrder, fillQty: number, bar: number): void {
+  private ocaAfterFill(
+    filled: PendingOrder,
+    fillQty: number,
+    bar: number,
+  ): void {
     const name = filled.oca_name;
     const otype = filled.oca_type ?? "none";
     if (!name || otype === "none") return;
@@ -1941,7 +2207,8 @@ export class StrategyBook {
   ): number {
     const slip = isFiniteNumber(this.slippage) ? this.slippage : 0;
     const px = side === "buy" ? price + slip : price - slip;
-    if (!isFiniteNumber(px) || !isFiniteNumber(qty) || qty === 0) return Number.NaN;
+    if (!isFiniteNumber(px) || !isFiniteNumber(qty) || qty === 0)
+      return Number.NaN;
     this.fills.push({ bar, id, side, qty, price: px });
     const rate = isFiniteNumber(this.commission) ? this.commission : 0;
     const fee = Math.abs(qty) * Math.abs(px) * rate;

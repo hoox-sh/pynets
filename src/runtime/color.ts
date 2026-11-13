@@ -89,7 +89,8 @@ export function colorFromGradient(
   if (!finite(value) || !finite(bottom) || !finite(top)) return null;
   if (!isColor(c1) || !isColor(c2)) return null;
   const span = top - bottom;
-  const ratio = span === 0 ? 0 : Math.max(0, Math.min(1, (value - bottom) / span));
+  const ratio =
+    span === 0 ? 0 : Math.max(0, Math.min(1, (value - bottom) / span));
   return pack(
     c1.r + (c2.r - c1.r) * ratio,
     c1.g + (c2.g - c1.g) * ratio,

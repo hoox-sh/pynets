@@ -8,7 +8,15 @@
  * `__st_${safeFunc}_${safeLocal}`. Last Expr (and last Assign/ReAssign)
  * becomes the Pine return value.
  */
-import type { Assign, Expr, FunctionDef, Param, ReAssign, expr, stmt } from "../../ast/nodes.ts";
+import type {
+  Assign,
+  Expr,
+  FunctionDef,
+  Param,
+  ReAssign,
+  expr,
+  stmt,
+} from "../../ast/nodes.ts";
 import type { EmitCtx } from "./types.ts";
 
 /** JS / emit keywords that cannot be used as identifiers. Pine `from` included. */
@@ -108,7 +116,10 @@ function isCtrlExpr(node: stmt): boolean {
 
 function isVarMode(mode: Assign["mode"]): boolean {
   if (mode == null) return false;
-  const k = typeof mode === "object" && mode != null && "kind" in mode ? mode.kind : String(mode);
+  const k =
+    typeof mode === "object" && mode != null && "kind" in mode
+      ? mode.kind
+      : String(mode);
   return k === "Var" || k === "VarIp";
 }
 
@@ -123,7 +134,10 @@ function visitExpr(value: expr, visitStmt: (s: stmt) => string): string {
   return visited || "null";
 }
 
-function lastAssignReturn(node: Assign | ReAssign, localSt: Map<string, string>): string {
+function lastAssignReturn(
+  node: Assign | ReAssign,
+  localSt: Map<string, string>,
+): string {
   const target = node.target;
   if (target.kind === "Name") {
     const st = localSt.get(target.id);
@@ -140,14 +154,21 @@ function asReturn(code: string): string {
   return `  return ${t};`;
 }
 
-function walkFnBody(node: unknown, visit: (n: { kind?: string; [k: string]: unknown }) => void): void {
+function walkFnBody(
+  node: unknown,
+  visit: (n: { kind?: string; [k: string]: unknown }) => void,
+): void {
   if (node == null || typeof node !== "object") return;
   if (Array.isArray(node)) {
     for (const item of node) walkFnBody(item, visit);
     return;
   }
   const n = node as { kind?: string; [k: string]: unknown };
-  if (n.kind === "FunctionDef" || n.kind === "TypeDef" || n.kind === "EnumDef") {
+  if (
+    n.kind === "FunctionDef" ||
+    n.kind === "TypeDef" ||
+    n.kind === "EnumDef"
+  ) {
     visit(n);
     return;
   }
@@ -167,7 +188,12 @@ function addTargetNames(target: unknown, into: Set<string>): void {
   }
 }
 
-function rememberSt(ctx: EmitCtx, pine: string, safe: string, st: string[]): void {
+function rememberSt(
+  ctx: EmitCtx,
+  pine: string,
+  safe: string,
+  st: string[],
+): void {
   let m = funcStArrays.get(ctx);
   if (m == null) {
     m = new Map();
@@ -178,7 +204,8 @@ function rememberSt(ctx: EmitCtx, pine: string, safe: string, st: string[]): voi
 }
 
 function stForFunc(ctx: EmitCtx, pine: string, safe: string): string[] {
-  const mapped = funcStArrays.get(ctx)?.get(pine) ?? funcStArrays.get(ctx)?.get(safe);
+  const mapped =
+    funcStArrays.get(ctx)?.get(pine) ?? funcStArrays.get(ctx)?.get(safe);
   if (mapped != null) return mapped;
   const prefix = `__st_${safe}_`;
   return [...ctx.stArrays].filter((a) => a.startsWith(prefix)).sort();
@@ -194,7 +221,11 @@ function formalPineNames(node: FunctionDef): string[] {
   return names;
 }
 
-export function emitFunctionDef(ctx: EmitCtx, node: FunctionDef, visitStmt: (s: stmt) => string): void {
+export function emitFunctionDef(
+  ctx: EmitCtx,
+  node: FunctionDef,
+  visitStmt: (s: stmt) => string,
+): void {
   const pineName = node.name;
   ctx.userFuncs.add(pineName);
   const safe = safeIdent(pineName);
@@ -230,7 +261,8 @@ export function emitFunctionDef(ctx: EmitCtx, node: FunctionDef, visitStmt: (s: 
         for (const id of names) {
           if (paramSet.has(id)) continue;
           varLocals.add(id);
-          if (!varDefaults.has(id)) varDefaults.set(id, (n.value as expr | null) ?? null);
+          if (!varDefaults.has(id))
+            varDefaults.set(id, (n.value as expr | null) ?? null);
         }
       }
     }
@@ -280,7 +312,8 @@ export function emitFunctionDef(ctx: EmitCtx, node: FunctionDef, visitStmt: (s: 
 
     const visitBody = (s: stmt): string => {
       if (s.kind !== "Assign" && s.kind !== "ReAssign") return visitStmt(s);
-      if (s.target.kind !== "Name" || !localSt.has(s.target.id)) return visitStmt(s);
+      if (s.target.kind !== "Name" || !localSt.has(s.target.id))
+        return visitStmt(s);
       const st = localSt.get(s.target.id)!;
       if (s.kind === "Assign" && isVarMode(s.mode)) return "";
       const rhs = s.value != null ? visitExpr(s.value, visitStmt) : "null";
@@ -307,7 +340,9 @@ export function emitFunctionDef(ctx: EmitCtx, node: FunctionDef, visitStmt: (s: 
     if (!emittedReturn) lines.push("  return null;");
 
     const argList = ["__bar_idx", "__h", ...formals, ...stNames].join(", ");
-    ctx.functions.push(`function ${safe}(${argList}) {\n${lines.join("\n")}\n}`);
+    ctx.functions.push(
+      `function ${safe}(${argList}) {\n${lines.join("\n")}\n}`,
+    );
   } finally {
     ctx.currentFunc = prevFunc;
     ctx.currentParamNames = prevParams;
@@ -315,7 +350,11 @@ export function emitFunctionDef(ctx: EmitCtx, node: FunctionDef, visitStmt: (s: 
   }
 }
 
-export function emitUserFuncCall(ctx: EmitCtx, name: string, args: string[]): string {
+export function emitUserFuncCall(
+  ctx: EmitCtx,
+  name: string,
+  args: string[],
+): string {
   const pine = ctx.userFuncs.has(name)
     ? name
     : ([...ctx.userFuncs].find((n) => safeIdent(n) === name) ?? name);

@@ -83,7 +83,11 @@ export interface EmitCtx {
   udtMethodNames: Set<string>;
   needsHeikinashi: boolean;
   importAliases: Set<string>;
-  getLibrary?: (namespace: string, name: string, version: number) => string | null;
+  getLibrary?: (
+    namespace: string,
+    name: string,
+    version: number,
+  ) => string | null;
 }
 
 export interface EmitFns {
@@ -96,7 +100,11 @@ export type VisitFn = (node: expr | stmt | null | undefined) => string;
 
 export type EmitCallFn = (ctx: EmitCtx, node: Call, visit: VisitFn) => string;
 
-export type EmitUdfFn = (ctx: EmitCtx, node: FunctionDef, visitStmt: (s: stmt) => string) => void;
+export type EmitUdfFn = (
+  ctx: EmitCtx,
+  node: FunctionDef,
+  visitStmt: (s: stmt) => string,
+) => void;
 
 /** Generated module entry: arrays in, titled plot series out. */
 export type ExecuteCompiled = (

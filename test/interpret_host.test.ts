@@ -14,9 +14,15 @@ describe("host builtins", () => {
   });
 
   test("barstate.isfirst / islast", () => {
-    const first = interpret(`indicator("t")\nplot(barstate.isfirst ? 1 : 0)`, BARS);
+    const first = interpret(
+      `indicator("t")\nplot(barstate.isfirst ? 1 : 0)`,
+      BARS,
+    );
     expect(first.plots).toEqual([1, 0, 0]);
-    const last = interpret(`indicator("t")\nplot(barstate.islast ? 1 : 0)`, BARS);
+    const last = interpret(
+      `indicator("t")\nplot(barstate.islast ? 1 : 0)`,
+      BARS,
+    );
     expect(last.plots).toEqual([0, 0, 1]);
   });
 
@@ -83,7 +89,9 @@ plot(1)`,
       [{ close: 1 }, { close: 2 }],
     );
     expect(out.error).toBeUndefined();
-    const lines = (out.drawings ?? []).filter((d) => d.kind === "line" && !d.deleted);
+    const lines = (out.drawings ?? []).filter(
+      (d) => d.kind === "line" && !d.deleted,
+    );
     expect(lines.length).toBeLessThanOrEqual(2);
   });
 

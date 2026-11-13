@@ -23,7 +23,11 @@ export class TickerId {
   }
 }
 
-export function tickerNew(symbol: string, session?: string, adjust?: string): TickerId {
+export function tickerNew(
+  symbol: string,
+  session?: string,
+  adjust?: string,
+): TickerId {
   return new TickerId(symbol, session, adjust);
 }
 
@@ -64,7 +68,12 @@ export function tickerPointfigure(symbol: string): TickerId {
 /** Optional fields keep the previous value. `adjustment` is a Python alias for `adjust`. */
 export function tickerModify(
   ticker: TickerId | string,
-  opts?: { symbol?: string; session?: string; adjust?: string; adjustment?: string },
+  opts?: {
+    symbol?: string;
+    session?: string;
+    adjust?: string;
+    adjustment?: string;
+  },
 ): TickerId {
   const src = typeof ticker === "string" ? new TickerId(ticker) : ticker;
   const t = new TickerId(

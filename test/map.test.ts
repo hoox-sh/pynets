@@ -117,7 +117,9 @@ describe("PineMap", () => {
     expect(m.contains("__proto__")).toBe(true);
     expect(({} as { polluted?: number }).polluted).toBeUndefined();
     expect(Object.prototype.hasOwnProperty("polluted")).toBe(false);
-    expect((Object.prototype as { __proto__?: unknown })["__proto__"]).not.toBe(1);
+    expect((Object.prototype as { __proto__?: unknown })["__proto__"]).not.toBe(
+      1,
+    );
     expect(m.remove("__proto__")).toBe(1);
     expect(m.contains("__proto__")).toBe(false);
     expect(m.size()).toBe(2);

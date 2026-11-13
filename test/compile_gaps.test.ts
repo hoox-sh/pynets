@@ -59,12 +59,24 @@ label.set_text(lb, "yo")
 plot(na(lb) ? 0 : 1)
 `;
 
-function runCompile(source: string, inputs?: Record<string, number | string | boolean>) {
-  return new Runtime("T", { mode: "compile", ...(inputs != null ? { inputs } : {}) }).run(source, BARS);
+function runCompile(
+  source: string,
+  inputs?: Record<string, number | string | boolean>,
+) {
+  return new Runtime("T", {
+    mode: "compile",
+    ...(inputs != null ? { inputs } : {}),
+  }).run(source, BARS);
 }
 
-function runInterpret(source: string, inputs?: Record<string, number | string | boolean>) {
-  return new Runtime("T", inputs != null ? { inputs } : undefined).run(source, BARS);
+function runInterpret(
+  source: string,
+  inputs?: Record<string, number | string | boolean>,
+) {
+  return new Runtime("T", inputs != null ? { inputs } : undefined).run(
+    source,
+    BARS,
+  );
 }
 
 function lastPlot(plots: Array<number | null> | undefined): number | null {
@@ -115,8 +127,13 @@ describe("compile gaps vs interpret", () => {
     expect(compiled.plots).toEqual(interpreted.plots);
     expect(lastPlot(compiled.plots)).not.toBe(lastPlot(defaultCompile.plots));
 
-    const auto = new Runtime("T", { mode: "auto", inputs }).run(INPUT_SRC, BARS);
-    expect(auto.compile_fallback_reason ?? "").not.toMatch(/input\.\* overrides require interpret path/);
+    const auto = new Runtime("T", { mode: "auto", inputs }).run(
+      INPUT_SRC,
+      BARS,
+    );
+    expect(auto.compile_fallback_reason ?? "").not.toMatch(
+      /input\.\* overrides require interpret path/,
+    );
   });
 
   test("color.r of color.new(color.red, 0) is 255 (compile not all-na)", () => {
@@ -126,18 +143,22 @@ describe("compile gaps vs interpret", () => {
     expect(compiled.error).toBeUndefined();
     expect(compiled.mode).toBe("compile");
     expect(isAllNa(compiled.plots)).toBe(false);
-    const expected = interpreted.error == null && lastPlot(interpreted.plots) != null
-      ? lastPlot(interpreted.plots)
-      : 255;
+    const expected =
+      interpreted.error == null && lastPlot(interpreted.plots) != null
+        ? lastPlot(interpreted.plots)
+        : 255;
     expect(lastPlot(compiled.plots)).toBe(expected);
   });
 
-  test.skipIf(!parseOk(ENUM_SRC))("enum Side.buy == Side.buy compile last plot is 1", () => {
-    const compiled = runCompile(ENUM_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(lastPlot(compiled.plots)).toBe(1);
-  });
+  test.skipIf(!parseOk(ENUM_SRC))(
+    "enum Side.buy == Side.buy compile last plot is 1",
+    () => {
+      const compiled = runCompile(ENUM_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(lastPlot(compiled.plots)).toBe(1);
+    },
+  );
 
   test("array.every or matrix.rank compile has no error", () => {
     const compiled = runCompile(collectionSource());

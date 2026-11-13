@@ -282,7 +282,11 @@ function isRuleCtx(value: unknown): value is ParserRuleContext {
 }
 
 function setStoreCtx(node: expr): expr {
-  if (node.kind === "Name" || node.kind === "Attribute" || node.kind === "Subscript") {
+  if (
+    node.kind === "Name" ||
+    node.kind === "Attribute" ||
+    node.kind === "Subscript"
+  ) {
     node.ctx = Store;
   }
   return node;
@@ -349,7 +353,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitConditional_expression = (ctx: Conditional_expressionContext): unknown => {
+  visitConditional_expression = (
+    ctx: Conditional_expressionContext,
+  ): unknown => {
     const test = this.visit(ctx.disjunction_expression()) as expr;
     if (hasTerminal(ctx.QUESTION())) {
       const body = this.visit(ctx.expression(0)) as expr;
@@ -361,7 +367,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return test;
   };
 
-  visitDisjunction_expression = (ctx: Disjunction_expressionContext): unknown => {
+  visitDisjunction_expression = (
+    ctx: Disjunction_expressionContext,
+  ): unknown => {
     const exprs = ctx.conjunction_expression_list() ?? [];
     if (exprs.length > 1) {
       const values = exprs.map((e) => this.visit(e) as expr);
@@ -372,7 +380,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(exprs[0]);
   };
 
-  visitConjunction_expression = (ctx: Conjunction_expressionContext): unknown => {
+  visitConjunction_expression = (
+    ctx: Conjunction_expressionContext,
+  ): unknown => {
     const exprs = ctx.bitwise_or_expression_list() ?? [];
     if (exprs.length > 1) {
       const values = exprs.map((e) => this.visit(e) as expr);
@@ -396,7 +406,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(ctx.bitwise_xor_expression());
   };
 
-  visitBitwise_xor_expression = (ctx: Bitwise_xor_expressionContext): unknown => {
+  visitBitwise_xor_expression = (
+    ctx: Bitwise_xor_expressionContext,
+  ): unknown => {
     if (hasTerminal(ctx.CARET())) {
       const node = binOp(
         this.visit(ctx.bitwise_xor_expression()) as expr,
@@ -409,7 +421,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(ctx.bitwise_and_expression());
   };
 
-  visitBitwise_and_expression = (ctx: Bitwise_and_expressionContext): unknown => {
+  visitBitwise_and_expression = (
+    ctx: Bitwise_and_expressionContext,
+  ): unknown => {
     if (hasTerminal(ctx.AMP())) {
       const node = binOp(
         this.visit(ctx.bitwise_and_expression()) as expr,
@@ -460,7 +474,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return Add;
   };
 
-  visitMultiplicative_expression = (ctx: Multiplicative_expressionContext): unknown => {
+  visitMultiplicative_expression = (
+    ctx: Multiplicative_expressionContext,
+  ): unknown => {
     if (ctx.multiplicative_op()) {
       const node = binOp(
         this.visit(ctx.multiplicative_expression()) as expr,
@@ -500,7 +516,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return UAdd;
   };
 
-  visitPrimary_expression_call = (ctx: Primary_expression_callContext): unknown => {
+  visitPrimary_expression_call = (
+    ctx: Primary_expression_callContext,
+  ): unknown => {
     let func = this.visit(ctx.primary_expression()) as expr;
     const spec = ctx.template_spec_suffix();
     if (isRuleCtx(spec)) {
@@ -624,7 +642,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitTuple_expression = (ctx: Tuple_expressionContext): unknown => {
-    const elts = (ctx.expression_list() ?? []).map((e) => this.visit(e) as expr);
+    const elts = (ctx.expression_list() ?? []).map(
+      (e) => this.visit(e) as expr,
+    );
     const node = tupleExpr(elts, Load);
     loc(node, ctx);
     return node;
@@ -678,7 +698,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitType_argument_list = (ctx: Type_argument_listContext): unknown => {
-    const args = (ctx.type_specification_list() ?? []).map((a) => this.visit(a) as expr);
+    const args = (ctx.type_specification_list() ?? []).map(
+      (a) => this.visit(a) as expr,
+    );
     if (args.length === 1) return args[0];
     const node = tupleExpr(args, Load);
     loc(node, ctx);
@@ -686,7 +708,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   };
 
   visitAttributed_type_name = (ctx: Attributed_type_nameContext): unknown => {
-    const names = (ctx.name_load_list() ?? []).map((n) => this.visit(n) as Name);
+    const names = (ctx.name_load_list() ?? []).map(
+      (n) => this.visit(n) as Name,
+    );
     if (names.length === 0) return undefined;
     let ident: expr = names[0]!;
     for (let i = 1; i < names.length; i++) {
@@ -701,7 +725,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return ident;
   };
 
-  visitSimple_name_initialization = (ctx: Simple_name_initializationContext): unknown => {
+  visitSimple_name_initialization = (
+    ctx: Simple_name_initializationContext,
+  ): unknown => {
     const node = this.visit(ctx.variable_declaration()) as Assign;
     node.value = this.visit(ctx.expression()) as expr;
     if (hasTerminal(ctx.EXPORT())) node.export = 1;
@@ -709,7 +735,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitCompound_name_initialization = (ctx: Compound_name_initializationContext): unknown => {
+  visitCompound_name_initialization = (
+    ctx: Compound_name_initializationContext,
+  ): unknown => {
     const node = this.visit(ctx.variable_declaration()) as Assign;
     const valueCtx = ctx.structure_expression();
     if (isRuleCtx(valueCtx)) node.value = this.visit(valueCtx) as expr;
@@ -718,7 +746,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitCompound_tuple_initialization = (ctx: Compound_tuple_initializationContext): unknown => {
+  visitCompound_tuple_initialization = (
+    ctx: Compound_tuple_initializationContext,
+  ): unknown => {
     const target = this.visit(ctx.tuple_declaration()) as expr;
     const value = this.visit(ctx.structure_expression()) as expr;
     const node = assign(target, value);
@@ -738,7 +768,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return this.visit(ctx.value_structure());
   };
 
-  visitTrailing_structure_statements = (ctx: Trailing_structure_statementsContext): unknown => {
+  visitTrailing_structure_statements = (
+    ctx: Trailing_structure_statementsContext,
+  ): unknown => {
     const stmts: stmt[] = [];
     for (const s of ctx.simple_statement_list() ?? []) {
       const visited = unwrap(this.visit(s));
@@ -754,7 +786,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return stmts;
   };
 
-  visitSimple_tuple_initialization = (ctx: Simple_tuple_initializationContext): unknown => {
+  visitSimple_tuple_initialization = (
+    ctx: Simple_tuple_initializationContext,
+  ): unknown => {
     const target = this.visit(ctx.tuple_declaration()) as expr;
     const value = this.visit(ctx.expression()) as expr;
     const node = assign(target, value);
@@ -771,7 +805,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitCompound_augassignment = (ctx: Compound_augassignmentContext): unknown => {
+  visitCompound_augassignment = (
+    ctx: Compound_augassignmentContext,
+  ): unknown => {
     const target = setStoreCtx(this.visit(ctx.primary_expression()) as expr);
     const op = this.visit(ctx.augassign_op()) as operator;
     const value = this.visit(ctx.structure_expression()) as expr;
@@ -806,7 +842,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitAssignment_target_attribute = (ctx: Assignment_target_attributeContext): unknown => {
+  visitAssignment_target_attribute = (
+    ctx: Assignment_target_attributeContext,
+  ): unknown => {
     const value = this.visit(ctx.primary_expression()) as expr;
     const n = this.visit(ctx.name_store()) as ReturnType<typeof name>;
     const node = attribute(value, n.id, Store);
@@ -814,7 +852,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitAssignment_target_subscript = (ctx: Assignment_target_subscriptContext): unknown => {
+  visitAssignment_target_subscript = (
+    ctx: Assignment_target_subscriptContext,
+  ): unknown => {
     const value = this.visit(ctx.primary_expression()) as expr;
     const items = this.visit(ctx.subscript_slice()) as expr;
     const node = subscript(value, items, Store);
@@ -826,8 +866,12 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const target = this.visit(ctx.name_store()) as expr;
     const typeCtx = ctx.type_specification();
     const modeCtx = ctx.declaration_mode();
-    const typeSpec = isRuleCtx(typeCtx) ? ((this.visit(typeCtx) as expr | undefined) ?? null) : null;
-    const mode = isRuleCtx(modeCtx) ? ((this.visit(modeCtx) as decl_mode | undefined) ?? null) : null;
+    const typeSpec = isRuleCtx(typeCtx)
+      ? ((this.visit(typeCtx) as expr | undefined) ?? null)
+      : null;
+    const mode = isRuleCtx(modeCtx)
+      ? ((this.visit(modeCtx) as decl_mode | undefined) ?? null)
+      : null;
     const node = assign(target, null, typeSpec, mode);
     loc(node, ctx);
     return node;
@@ -853,7 +897,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const body = asStmtList(this.visit(ctx.local_block()));
     const exported = hasTerminal(ctx.EXPORT()) ? 1 : 0;
     const retCtx = ctx.type_specification();
-    const returns = isRuleCtx(retCtx) ? ((this.visit(retCtx) as expr | undefined) ?? null) : null;
+    const returns = isRuleCtx(retCtx)
+      ? ((this.visit(retCtx) as expr | undefined) ?? null)
+      : null;
     const node = functionDef(fname, args, body, 0, exported, [], returns);
     loc(node, ctx);
     return node;
@@ -870,7 +916,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const defaultValue = isRuleCtx(defaultCtx)
       ? ((this.visit(defaultCtx) as expr | undefined) ?? null)
       : null;
-    const typeSpec = isRuleCtx(typeCtx) ? ((this.visit(typeCtx) as expr | undefined) ?? null) : null;
+    const typeSpec = isRuleCtx(typeCtx)
+      ? ((this.visit(typeCtx) as expr | undefined) ?? null)
+      : null;
     const node = param(nameNode.id, defaultValue, typeSpec);
     loc(node, ctx);
     return node;
@@ -883,7 +931,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const body = asStmtList(this.visit(ctx.local_block()));
     const exported = hasTerminal(ctx.EXPORT()) ? 1 : 0;
     const retCtx = ctx.type_specification();
-    const returns = isRuleCtx(retCtx) ? ((this.visit(retCtx) as expr | undefined) ?? null) : null;
+    const returns = isRuleCtx(retCtx)
+      ? ((this.visit(retCtx) as expr | undefined) ?? null)
+      : null;
     const node = functionDef(fname, args, body, 1, exported, [], returns);
     loc(node, ctx);
     return node;
@@ -893,7 +943,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return ctx.method_parameter_definition_list().map((p) => this.visit(p));
   };
 
-  visitMethod_parameter_definition = (ctx: Method_parameter_definitionContext): unknown => {
+  visitMethod_parameter_definition = (
+    ctx: Method_parameter_definitionContext,
+  ): unknown => {
     const typeCtx = ctx.type_specification();
     const nameCtx = ctx.name_store();
     if (isRuleCtx(typeCtx) && isRuleCtx(nameCtx)) {
@@ -932,8 +984,12 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const target = this.visit(ctx.name_store()) as expr;
     const valueCtx = ctx.expression();
     const typeCtx = ctx.type_specification();
-    const value = isRuleCtx(valueCtx) ? ((this.visit(valueCtx) as expr | undefined) ?? null) : null;
-    const typeSpec = isRuleCtx(typeCtx) ? ((this.visit(typeCtx) as expr | undefined) ?? null) : null;
+    const value = isRuleCtx(valueCtx)
+      ? ((this.visit(valueCtx) as expr | undefined) ?? null)
+      : null;
+    const typeSpec = isRuleCtx(typeCtx)
+      ? ((this.visit(typeCtx) as expr | undefined) ?? null)
+      : null;
     const mode = hasTerminal(ctx.VARIP()) ? VarIp : null;
     const node = assign(target, value, typeSpec, mode);
     loc(node, ctx);
@@ -947,7 +1003,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
   visitEnum_definition = (ctx: Enum_definitionContext): unknown => {
     const target = this.visit(ctx.name_store()) as expr;
     const valueCtx = ctx.expression();
-    const value = isRuleCtx(valueCtx) ? ((this.visit(valueCtx) as expr | undefined) ?? null) : null;
+    const value = isRuleCtx(valueCtx)
+      ? ((this.visit(valueCtx) as expr | undefined) ?? null)
+      : null;
     const node = assign(target, value);
     loc(node, ctx);
     return node;
@@ -988,7 +1046,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const start = this.visit(ctx.expression(0)) as expr;
     const end = this.visit(ctx.expression(1)) as expr;
     const stepCtx = ctx.expression(2);
-    const step = isRuleCtx(stepCtx) ? ((this.visit(stepCtx) as expr | undefined) ?? null) : null;
+    const step = isRuleCtx(stepCtx)
+      ? ((this.visit(stepCtx) as expr | undefined) ?? null)
+      : null;
     const body = asStmtList(this.visit(ctx.local_block()));
     const node = forTo(target, start, end, body, step);
     loc(node, ctx);
@@ -1014,7 +1074,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
 
   visitOnce_structure = (ctx: Once_structureContext): unknown => {
     const testCtx = ctx.expression();
-    const test = isRuleCtx(testCtx) ? ((this.visit(testCtx) as expr | undefined) ?? null) : null;
+    const test = isRuleCtx(testCtx)
+      ? ((this.visit(testCtx) as expr | undefined) ?? null)
+      : null;
     const body = asStmtList(this.visit(ctx.local_block()));
     const node = onceExpr(test, body);
     loc(node, ctx);
@@ -1126,7 +1188,9 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return [Eq, this.visit(ctx.inequality_expression())];
   };
 
-  visitNot_equal_trailing_pair = (ctx: Not_equal_trailing_pairContext): unknown => {
+  visitNot_equal_trailing_pair = (
+    ctx: Not_equal_trailing_pairContext,
+  ): unknown => {
     return [NotEq, this.visit(ctx.inequality_expression())];
   };
 
@@ -1146,19 +1210,27 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     return node;
   };
 
-  visitLess_than_equal_trailing_pair = (ctx: Less_than_equal_trailing_pairContext): unknown => {
+  visitLess_than_equal_trailing_pair = (
+    ctx: Less_than_equal_trailing_pairContext,
+  ): unknown => {
     return [LtE, this.visit(ctx.shift_expression())];
   };
 
-  visitLess_than_trailing_pair = (ctx: Less_than_trailing_pairContext): unknown => {
+  visitLess_than_trailing_pair = (
+    ctx: Less_than_trailing_pairContext,
+  ): unknown => {
     return [Lt, this.visit(ctx.shift_expression())];
   };
 
-  visitGreater_than_equal_trailing_pair = (ctx: Greater_than_equal_trailing_pairContext): unknown => {
+  visitGreater_than_equal_trailing_pair = (
+    ctx: Greater_than_equal_trailing_pairContext,
+  ): unknown => {
     return [GtE, this.visit(ctx.shift_expression())];
   };
 
-  visitGreater_than_trailing_pair = (ctx: Greater_than_trailing_pairContext): unknown => {
+  visitGreater_than_trailing_pair = (
+    ctx: Greater_than_trailing_pairContext,
+  ): unknown => {
     return [Gt, this.visit(ctx.shift_expression())];
   };
 
@@ -1178,7 +1250,10 @@ export class PinescriptASTBuilder extends PinescriptParserVisitor<unknown> {
     const namespace = String(this.visit(ctx.name(0)) ?? "");
     const libName = String(this.visit(ctx.name(1)) ?? "");
     const versionRaw = this.visit(ctx.literal_number());
-    const version = typeof versionRaw === "number" && Number.isFinite(versionRaw) ? Math.trunc(versionRaw) : 1;
+    const version =
+      typeof versionRaw === "number" && Number.isFinite(versionRaw)
+        ? Math.trunc(versionRaw)
+        : 1;
     const aliasCtx = ctx.AS() ? ctx.name(2) : undefined;
     const alias = aliasCtx ? String(this.visit(aliasCtx) ?? "") : null;
     const node = importStmt(namespace, libName, version, alias || null);

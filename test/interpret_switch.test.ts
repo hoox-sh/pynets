@@ -58,10 +58,13 @@ function switchReady(src: string): boolean {
 }
 
 describe("interpret switch", () => {
-  test.skipIf(!switchReady(SUBJECT_SRC))("switch close with cases 1/2/3/default", () => {
-    const out = interpret(SUBJECT_SRC, BARS);
-    expect(out.plots).toEqual(EXPECTED);
-  });
+  test.skipIf(!switchReady(SUBJECT_SRC))(
+    "switch close with cases 1/2/3/default",
+    () => {
+      const out = interpret(SUBJECT_SRC, BARS);
+      expect(out.plots).toEqual(EXPECTED);
+    },
+  );
 
   test.skipIf(!switchReady(BOOL_SRC))("boolean switch close == n cases", () => {
     const out = interpret(BOOL_SRC, BARS);

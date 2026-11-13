@@ -391,10 +391,12 @@ describe("PineMatrix pow / kron / rank / diff / swap", () => {
     expect(inv!.get(0, 1)).toBeCloseTo(-1);
     expect(inv!.get(1, 1)).toBeCloseTo(1);
     expect(new PineMatrix(2, 3, 1).pow(2)).toBeNull();
-    expect(fill([
-      [1, 2],
-      [2, 4],
-    ]).pow(-1)).toBeNull();
+    expect(
+      fill([
+        [1, 2],
+        [2, 4],
+      ]).pow(-1),
+    ).toBeNull();
   });
 
   test("kronecker product", () => {
@@ -427,14 +429,18 @@ describe("PineMatrix pow / kron / rank / diff / swap", () => {
   });
 
   test("rank: full / deficient / empty / na", () => {
-    expect(fill([
-      [1, 0],
-      [0, 1],
-    ]).rank()).toBe(2);
-    expect(fill([
-      [1, 2],
-      [2, 4],
-    ]).rank()).toBe(1);
+    expect(
+      fill([
+        [1, 0],
+        [0, 1],
+      ]).rank(),
+    ).toBe(2);
+    expect(
+      fill([
+        [1, 2],
+        [2, 4],
+      ]).rank(),
+    ).toBe(1);
     expect(new PineMatrix(2, 2, 0).rank()).toBe(0);
     expect(new PineMatrix(0, 0).rank()).toBe(0);
     const na = fill([
@@ -676,8 +682,12 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
     m.set(2, 0, T.newInstance({ x: 2, y: 20 }));
     expect(m.sortIndices(0, "asc", 0)).toEqual([1, 2, 0]);
     m.sort(0, "asc", "x");
-    expect((m.get(0, 0) as unknown as { get: (n: string) => unknown }).get("x")).toBe(1);
-    expect((m.get(2, 0) as unknown as { get: (n: string) => unknown }).get("x")).toBe(3);
+    expect(
+      (m.get(0, 0) as unknown as { get: (n: string) => unknown }).get("x"),
+    ).toBe(1);
+    expect(
+      (m.get(2, 0) as unknown as { get: (n: string) => unknown }).get("x"),
+    ).toBe(3);
   });
 
   test("reverse flips element order (rows then each row)", () => {
@@ -709,14 +719,18 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
   });
 
   test("isBinary / isStochastic / isAntidiagonal", () => {
-    expect(fill([
-      [0, 1],
-      [1, 0],
-    ]).isBinary()).toBe(true);
-    expect(fill([
-      [0, 2],
-      [1, 0],
-    ]).isBinary()).toBe(false);
+    expect(
+      fill([
+        [0, 1],
+        [1, 0],
+      ]).isBinary(),
+    ).toBe(true);
+    expect(
+      fill([
+        [0, 2],
+        [1, 0],
+      ]).isBinary(),
+    ).toBe(false);
     expect(new PineMatrix(0, 0).isBinary()).toBe(true);
     const binNa = fill([
       [0, 1],
@@ -724,23 +738,31 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
     ]);
     binNa.set(1, 1, null);
     expect(binNa.isBinary()).toBe(false);
-    expect(fill([
-      [0.5, 0.5],
-      [1, 0],
-    ]).isStochastic()).toBe(true);
-    expect(fill([
-      [0.5, 0.4],
-      [1, 0],
-    ]).isStochastic()).toBe(false);
+    expect(
+      fill([
+        [0.5, 0.5],
+        [1, 0],
+      ]).isStochastic(),
+    ).toBe(true);
+    expect(
+      fill([
+        [0.5, 0.4],
+        [1, 0],
+      ]).isStochastic(),
+    ).toBe(false);
     expect(new PineMatrix(0, 0).isStochastic()).toBe(true);
-    expect(fill([
-      [0, 1],
-      [1, 0],
-    ]).isAntidiagonal()).toBe(true);
-    expect(fill([
-      [1, 0],
-      [0, 1],
-    ]).isAntidiagonal()).toBe(false);
+    expect(
+      fill([
+        [0, 1],
+        [1, 0],
+      ]).isAntidiagonal(),
+    ).toBe(true);
+    expect(
+      fill([
+        [1, 0],
+        [0, 1],
+      ]).isAntidiagonal(),
+    ).toBe(false);
     expect(new PineMatrix(0, 0).isAntidiagonal()).toBe(true);
     expect(new PineMatrix(2, 3, 0).isAntidiagonal()).toBe(false);
   });

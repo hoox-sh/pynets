@@ -57,7 +57,9 @@ export function formatLogParts(parts: unknown[]): string {
   if (parts.length === 0) return "";
   const first = parts[0];
   if (typeof first === "string" && parts.length > 1 && /\{[0-9]/.test(first)) {
-    return first.replace(/\{(\d+)\}/g, (_, i) => pineLogArg(parts[Number(i) + 1]));
+    return first.replace(/\{(\d+)\}/g, (_, i) =>
+      pineLogArg(parts[Number(i) + 1]),
+    );
   }
   return parts.map(pineLogArg).join(" ");
 }

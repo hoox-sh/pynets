@@ -5,7 +5,11 @@
  * Compile-path drawings. Wraps DrawingBook; extras go on `__drawings`.
  */
 import { PineArray } from "../array.ts";
-import { DrawingBook, type DrawingEvent, type DrawingKind } from "../drawings.ts";
+import {
+  DrawingBook,
+  type DrawingEvent,
+  type DrawingKind,
+} from "../drawings.ts";
 import { naNum } from "./helpers.ts";
 
 function n(v: unknown, fallback = 0): number {
@@ -45,10 +49,18 @@ type ChartPoint = {
 };
 
 function isPoint(v: unknown): v is ChartPoint {
-  return typeof v === "object" && v !== null && (v as ChartPoint).__chartPoint === true;
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as ChartPoint).__chartPoint === true
+  );
 }
 
-function makePoint(index: number | null, time: number | null, price: number | null): ChartPoint {
+function makePoint(
+  index: number | null,
+  time: number | null,
+  price: number | null,
+): ChartPoint {
   return { __chartPoint: true, index, time, x: index ?? time, y: price, price };
 }
 
@@ -71,7 +83,14 @@ function alertText(v: unknown, fallback: string): string {
   return fallback;
 }
 
-const DRAW_KINDS = new Set<DrawingKind>(["line", "label", "box", "table", "polyline", "linefill"]);
+const DRAW_KINDS = new Set<DrawingKind>([
+  "line",
+  "label",
+  "box",
+  "table",
+  "polyline",
+  "linefill",
+]);
 
 export class CompileDraw {
   readonly book = new DrawingBook();
@@ -82,25 +101,47 @@ export class CompileDraw {
     putNum(extra, "x", x);
     putNum(extra, "y", y);
     const t = text == null ? "" : String(text);
-    return this.book.labelNew(n(bar, 0), t, Object.keys(extra).length ? extra : undefined);
+    return this.book.labelNew(
+      n(bar, 0),
+      t,
+      Object.keys(extra).length ? extra : undefined,
+    );
   }
 
-  line_new(bar: unknown, x1?: unknown, y1?: unknown, x2?: unknown, y2?: unknown): number {
+  line_new(
+    bar: unknown,
+    x1?: unknown,
+    y1?: unknown,
+    x2?: unknown,
+    y2?: unknown,
+  ): number {
     const extra: Record<string, unknown> = {};
     putNum(extra, "x1", x1);
     putNum(extra, "y1", y1);
     putNum(extra, "x2", x2);
     putNum(extra, "y2", y2);
-    return this.book.lineNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
+    return this.book.lineNew(
+      n(bar, 0),
+      Object.keys(extra).length ? extra : undefined,
+    );
   }
 
-  box_new(bar: unknown, left?: unknown, top?: unknown, right?: unknown, bottom?: unknown): number {
+  box_new(
+    bar: unknown,
+    left?: unknown,
+    top?: unknown,
+    right?: unknown,
+    bottom?: unknown,
+  ): number {
     const extra: Record<string, unknown> = {};
     putNum(extra, "left", left);
     putNum(extra, "top", top);
     putNum(extra, "right", right);
     putNum(extra, "bottom", bottom);
-    return this.book.boxNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
+    return this.book.boxNew(
+      n(bar, 0),
+      Object.keys(extra).length ? extra : undefined,
+    );
   }
 
   table_new(
@@ -128,22 +169,36 @@ export class CompileDraw {
     if (borderColor != null) extra.border_color = borderColor;
     putNum(extra, "border_width", borderWidth);
     if (forceOverlay != null) extra.force_overlay = forceOverlay;
-    return this.book.tableNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
+    return this.book.tableNew(
+      n(bar, 0),
+      Object.keys(extra).length ? extra : undefined,
+    );
   }
 
   polyline_new(bar: unknown, points?: unknown): number {
     const pts = pointsOf(points);
-    return this.book.polylineNew(n(bar, 0), pts.length ? { points: pts } : undefined);
+    return this.book.polylineNew(
+      n(bar, 0),
+      pts.length ? { points: pts } : undefined,
+    );
   }
 
-  linefill_new(bar: unknown, id1?: unknown, id2?: unknown, color?: unknown): number {
+  linefill_new(
+    bar: unknown,
+    id1?: unknown,
+    id2?: unknown,
+    color?: unknown,
+  ): number {
     const extra: Record<string, unknown> = {};
     const a = idNum(id1);
     const b = idNum(id2);
     if (a != null) extra.id1 = a;
     if (b != null) extra.id2 = b;
     if (color != null) extra.color = color;
-    return this.book.linefillNew(n(bar, 0), Object.keys(extra).length ? extra : undefined);
+    return this.book.linefillNew(
+      n(bar, 0),
+      Object.keys(extra).length ? extra : undefined,
+    );
   }
 
   all(kind: unknown): PineArray {
@@ -172,7 +227,13 @@ export class CompileDraw {
     this.book.labelDelete(idOf(id));
   }
 
-  line_set_xy(id: unknown, x1?: unknown, y1?: unknown, x2?: unknown, y2?: unknown): void {
+  line_set_xy(
+    id: unknown,
+    x1?: unknown,
+    y1?: unknown,
+    x2?: unknown,
+    y2?: unknown,
+  ): void {
     this.book.lineSetXy(idOf(id), n(x1, 0), n(y1, 0), n(x2, 0), n(y2, 0));
   }
 
@@ -274,8 +335,20 @@ export class CompileDraw {
     this.book.boxSet(idOf(id), extra as Record<string, unknown> | undefined);
   }
 
-  box_set_corners(id: unknown, left?: unknown, top?: unknown, right?: unknown, bottom?: unknown): void {
-    this.book.boxSetCorners(idOf(id), n(left, 0), n(top, 0), n(right, 0), n(bottom, 0));
+  box_set_corners(
+    id: unknown,
+    left?: unknown,
+    top?: unknown,
+    right?: unknown,
+    bottom?: unknown,
+  ): void {
+    this.book.boxSetCorners(
+      idOf(id),
+      n(left, 0),
+      n(top, 0),
+      n(right, 0),
+      n(bottom, 0),
+    );
   }
 
   box_set_bgcolor(id: unknown, bgcolor?: unknown): void {
@@ -294,14 +367,29 @@ export class CompileDraw {
     this.book.boxSetExtend(idOf(id), extend);
   }
 
-  table_cell(id: unknown, column?: unknown, row?: unknown, text?: unknown): void {
+  table_cell(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    text?: unknown,
+  ): void {
     this.book.tableCell(idOf(id), column, row, text);
   }
 
-  table_cell_set_text(id: unknown, row?: unknown, column?: unknown, text?: unknown): null {
+  table_cell_set_text(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    text?: unknown,
+  ): null {
     const i = idNum(id);
     if (i == null) return null;
-    this.book.tableCellSetText(i, column, row, text == null ? "" : String(text));
+    this.book.tableCellSetText(
+      i,
+      column,
+      row,
+      text == null ? "" : String(text),
+    );
     return null;
   }
 
@@ -324,7 +412,12 @@ export class CompileDraw {
   }
 
   /** Interpret `fireAlertCondition`: truthy condition, once per bar, source tag. */
-  alertcondition(bar: unknown, condition: unknown, title?: unknown, message?: unknown): null {
+  alertcondition(
+    bar: unknown,
+    condition: unknown,
+    title?: unknown,
+    message?: unknown,
+  ): null {
     if (!truthy(condition)) return null;
     const t = alertText(title, "Alert");
     const m = alertText(message, "Alert");
@@ -334,7 +427,8 @@ export class CompileDraw {
     this.alertKeys.set(key, b);
     this.book.alert(b, m);
     const ev = this.book.items[this.book.items.length - 1];
-    if (ev != null) ev.extra = { source: "alertcondition", title: t, freq: "once_per_bar" };
+    if (ev != null)
+      ev.extra = { source: "alertcondition", title: t, freq: "once_per_bar" };
     return null;
   }
 
@@ -509,7 +603,12 @@ export class CompileDraw {
     return this.kindAny("boxSetTextWrap", id, wrap);
   }
 
-  box_set_xloc(id: unknown, left?: unknown, right?: unknown, xloc?: unknown): null {
+  box_set_xloc(
+    id: unknown,
+    left?: unknown,
+    right?: unknown,
+    xloc?: unknown,
+  ): null {
     const i = idNum(id);
     if (i == null) return null;
     this.book.boxSetLeft(i, left);
@@ -558,7 +657,13 @@ export class CompileDraw {
     return this.kindAny("tableSetFrameWidth", id, width);
   }
 
-  table_clear(id: unknown, startRow?: unknown, startCol?: unknown, endRow?: unknown, endCol?: unknown): null {
+  table_clear(
+    id: unknown,
+    startRow?: unknown,
+    startCol?: unknown,
+    endRow?: unknown,
+    endCol?: unknown,
+  ): null {
     const i = idNum(id);
     if (i == null) return null;
     if (arguments.length < 2) this.book.tableClear(i);
@@ -566,57 +671,124 @@ export class CompileDraw {
     return null;
   }
 
-  table_merge_cells(id: unknown, startRow?: unknown, startCol?: unknown, endRow?: unknown, endCol?: unknown): null {
+  table_merge_cells(
+    id: unknown,
+    startRow?: unknown,
+    startCol?: unknown,
+    endRow?: unknown,
+    endCol?: unknown,
+  ): null {
     const i = idNum(id);
-    if (i != null) this.book.tableMergeCells(i, startRow, startCol, endRow, endCol);
+    if (i != null)
+      this.book.tableMergeCells(i, startRow, startCol, endRow, endCol);
     return null;
   }
 
-  table_cell_set_text_color(id: unknown, row?: unknown, column?: unknown, value?: unknown): null {
+  table_cell_set_text_color(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_color", value);
   }
 
-  table_cell_set_bgcolor(id: unknown, row?: unknown, column?: unknown, value?: unknown): null {
+  table_cell_set_bgcolor(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "bgcolor", value);
   }
 
-  table_cell_set_border_color(id: unknown, row?: unknown, column?: unknown, value?: unknown): null {
+  table_cell_set_border_color(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "border_color", value);
   }
 
-  table_cell_set_border_width(id: unknown, row?: unknown, column?: unknown, value?: unknown): null {
+  table_cell_set_border_width(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "border_width", value);
   }
 
-  table_cell_set_tooltip(id: unknown, row?: unknown, column?: unknown, value?: unknown): null {
+  table_cell_set_tooltip(
+    id: unknown,
+    row?: unknown,
+    column?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "tooltip", value);
   }
 
-  table_cell_set_width(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_width(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "width", value);
   }
 
-  table_cell_set_height(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_height(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "height", value);
   }
 
-  table_cell_set_text_halign(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_text_halign(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_halign", value);
   }
 
-  table_cell_set_text_valign(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_text_valign(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_valign", value);
   }
 
-  table_cell_set_text_size(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_text_size(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_size", value);
   }
 
-  table_cell_set_text_font_family(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_text_font_family(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_font_family", value);
   }
 
-  table_cell_set_text_formatting(id: unknown, column?: unknown, row?: unknown, value?: unknown): null {
+  table_cell_set_text_formatting(
+    id: unknown,
+    column?: unknown,
+    row?: unknown,
+    value?: unknown,
+  ): null {
     return this.cellField(id, column, row, "text_formatting", value);
   }
 
@@ -713,7 +885,11 @@ export class CompileDraw {
     return makePoint(null, null, 0);
   }
 
-  private kindNum(method: "lineSetX1" | "lineSetY1" | "lineSetX2" | "lineSetY2", id: unknown, value: unknown): null {
+  private kindNum(
+    method: "lineSetX1" | "lineSetY1" | "lineSetX2" | "lineSetY2",
+    id: unknown,
+    value: unknown,
+  ): null {
     const i = idNum(id);
     if (i != null) this.book[method](i, value);
     return null;
@@ -779,7 +955,13 @@ export class CompileDraw {
     return this.book[method](i) ?? 0;
   }
 
-  private cellField(id: unknown, column: unknown, row: unknown, field: string, value: unknown): null {
+  private cellField(
+    id: unknown,
+    column: unknown,
+    row: unknown,
+    field: string,
+    value: unknown,
+  ): null {
     const i = idNum(id);
     if (i != null) this.book.tableCellSetField(i, column, row, field, value);
     return null;

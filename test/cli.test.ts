@@ -6,7 +6,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clampBars, MAX_BARS, parseArgs, resolveUserFile, UsageError } from "../src/cli.ts";
+import {
+  clampBars,
+  MAX_BARS,
+  parseArgs,
+  resolveUserFile,
+  UsageError,
+} from "../src/cli.ts";
 
 const PYNETS = join(import.meta.dir, "..");
 
@@ -39,7 +45,11 @@ function runCli(
   };
 }
 
-function cli(...args: string[]): { code: number; stdout: string; stderr: string } {
+function cli(...args: string[]): {
+  code: number;
+  stdout: string;
+  stderr: string;
+} {
   return runCli(["--plain", ...args]);
 }
 
@@ -107,7 +117,10 @@ describe("pynets CLI", () => {
 
   test("forced rich check is not the bare ok line", () => {
     const file = writePine(GOOD);
-    const r = runCli(["check", file, "--rich"], { FORCE_COLOR: "1", NO_COLOR: "" });
+    const r = runCli(["check", file, "--rich"], {
+      FORCE_COLOR: "1",
+      NO_COLOR: "",
+    });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("check");
     expect(r.stdout).not.toBe("ok\n");
@@ -126,7 +139,10 @@ describe("pynets CLI hardening", () => {
 
   test("--rich after the command is not eaten", () => {
     const file = writePine(GOOD);
-    const r = runCli(["dump", file, "--rich"], { FORCE_COLOR: "", NO_COLOR: "" });
+    const r = runCli(["dump", file, "--rich"], {
+      FORCE_COLOR: "",
+      NO_COLOR: "",
+    });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("dump");
     expect(r.stdout).not.toMatch(/^Script\(/);
@@ -201,7 +217,16 @@ describe("pynets CLI hardening", () => {
     expect(r.code).toBe(0);
     const payload = JSON.parse(r.stdout) as Record<string, unknown>;
     expect(Object.keys(payload).sort()).toEqual(
-      ["bun", "docs", "mode", "name", "package", "rich", "runtime", "version"].sort(),
+      [
+        "bun",
+        "docs",
+        "mode",
+        "name",
+        "package",
+        "rich",
+        "runtime",
+        "version",
+      ].sort(),
     );
     const blob = JSON.stringify(payload);
     expect(blob).not.toContain("wJalrXUtnFEMI");
@@ -228,34 +253,67 @@ describe("cli parse helpers", () => {
   });
 
   test("parseArgs clamps --bars and parses broker numbers", () => {
-    const got = parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "200000", "--commission", "0.001"]);
+    const got = parseArgs([
+      "bun",
+      "cli.ts",
+      "run",
+      "x.pine",
+      "--bars",
+      "200000",
+      "--commission",
+      "0.001",
+    ]);
     expect(got.bars).toBe(MAX_BARS);
     expect(got.commission).toBe(0.001);
     expect(got.mode).toBe("interpret");
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "NaN"])).toThrow(UsageError);
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--slippage", "Infinity"])).toThrow(
-      UsageError,
-    );
+    expect(() =>
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--bars", "NaN"]),
+    ).toThrow(UsageError);
+    expect(() =>
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--slippage", "Infinity"]),
+    ).toThrow(UsageError);
   });
 
   test("parseArgs --mode interpret|compile|auto", () => {
-    expect(parseArgs(["bun", "cli.ts", "run", "x.pine"]).mode).toBe("interpret");
-    expect(parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "compile"]).mode).toBe("compile");
-    expect(parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=auto"]).mode).toBe("auto");
+    expect(parseArgs(["bun", "cli.ts", "run", "x.pine"]).mode).toBe(
+      "interpret",
+    );
+    expect(
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "compile"]).mode,
+    ).toBe("compile");
+    expect(
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=auto"]).mode,
+    ).toBe("auto");
   });
 
   test("parseArgs rejects invalid --mode and unknown flags", () => {
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "numba"])).toThrow(UsageError);
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=jit"])).toThrow(UsageError);
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode"])).toThrow(UsageError);
-    expect(() => parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "compile", "--nope"])).toThrow(
-      UsageError,
-    );
+    expect(() =>
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode", "numba"]),
+    ).toThrow(UsageError);
+    expect(() =>
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode=jit"]),
+    ).toThrow(UsageError);
+    expect(() =>
+      parseArgs(["bun", "cli.ts", "run", "x.pine", "--mode"]),
+    ).toThrow(UsageError);
+    expect(() =>
+      parseArgs([
+        "bun",
+        "cli.ts",
+        "run",
+        "x.pine",
+        "--mode",
+        "compile",
+        "--nope",
+      ]),
+    ).toThrow(UsageError);
   });
 
   test("resolveUserFile keeps absolute paths and joins relative to cwd", () => {
     expect(resolveUserFile("/tmp/script.pine")).toBe("/tmp/script.pine");
-    expect(resolveUserFile("script.pine")).toBe(join(process.cwd(), "script.pine"));
+    expect(resolveUserFile("script.pine")).toBe(
+      join(process.cwd(), "script.pine"),
+    );
     expect(() => resolveUserFile("")).toThrow(UsageError);
   });
 });

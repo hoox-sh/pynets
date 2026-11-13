@@ -57,7 +57,9 @@ export function stripFlags(argv: string[]): string[] {
   return out;
 }
 
-export function termColumns(stream: { columns?: number } = process.stdout): number {
+export function termColumns(
+  stream: { columns?: number } = process.stdout,
+): number {
   const c = stream.columns;
   if (typeof c !== "number" || !Number.isFinite(c) || c < 1) return 80;
   return Math.trunc(c);
@@ -66,7 +68,10 @@ export function termColumns(stream: { columns?: number } = process.stdout): numb
 export class Rich {
   constructor(readonly enabled: boolean) {}
 
-  paint(kind: "accent" | "ok" | "fail" | "warn" | "muted" | "fg", text: string): string {
+  paint(
+    kind: "accent" | "ok" | "fail" | "warn" | "muted" | "fg",
+    text: string,
+  ): string {
     if (!this.enabled) return text;
     const map: Record<string, Rgb> = {
       accent: ACCENT,
@@ -77,7 +82,9 @@ export class Rich {
       fg: FG,
     };
     const painted = fg(map[kind] ?? FG, text);
-    return kind === "accent" || kind === "ok" || kind === "fail" ? bold(painted) : painted;
+    return kind === "accent" || kind === "ok" || kind === "fail"
+      ? bold(painted)
+      : painted;
   }
 
   write(text: string, err = false): void {
@@ -85,18 +92,22 @@ export class Rich {
     stream.write(text.endsWith("\n") ? text : `${text}\n`);
   }
 
-  status(kind: "ok" | "fail" | "warn" | "info", msg: string, err = false): void {
+  status(
+    kind: "ok" | "fail" | "warn" | "info",
+    msg: string,
+    err = false,
+  ): void {
     if (!this.enabled) {
-      const prefix = { ok: "OK", fail: "FAIL", warn: "WARN", info: "INFO" }[kind];
+      const prefix = { ok: "OK", fail: "FAIL", warn: "WARN", info: "INFO" }[
+        kind
+      ];
       this.write(`${prefix}: ${msg}`, err);
       return;
     }
     const mark = { ok: "✔", fail: "✘", warn: "!", info: "◆" }[kind];
-    const style = { ok: "ok", fail: "fail", warn: "warn", info: "accent" }[kind] as
-      | "ok"
-      | "fail"
-      | "warn"
-      | "accent";
+    const style = { ok: "ok", fail: "fail", warn: "warn", info: "accent" }[
+      kind
+    ] as "ok" | "fail" | "warn" | "accent";
     this.write(`${this.paint(style, mark)} ${this.paint("fg", msg)}`, err);
   }
 
@@ -109,7 +120,9 @@ export class Rich {
     this.write(
       `${this.paint("accent", "◆ PYNE")} ${this.paint("fg", "pynets")} ${this.paint("muted", `v${VERSION}`)}`,
     );
-    this.write(this.paint("muted", "TypeScript Pine toolchain — parse · format · run"));
+    this.write(
+      this.paint("muted", "TypeScript Pine toolchain — parse · format · run"),
+    );
   }
 
   help(): void {
@@ -117,7 +130,9 @@ export class Rich {
     this.write("");
     if (this.enabled) {
       this.write(this.paint("accent", "USAGE"));
-      this.write(`  ${this.paint("fg", "pynets")} ${this.paint("muted", "<command> [file] [options]")}`);
+      this.write(
+        `  ${this.paint("fg", "pynets")} ${this.paint("muted", "<command> [file] [options]")}`,
+      );
       this.write("");
       this.write(this.paint("accent", "COMMANDS"));
     } else {
@@ -136,7 +151,9 @@ export class Rich {
     ];
     for (const [name, desc] of cmds) {
       if (this.enabled) {
-        this.write(`  ${this.paint("ok", name.padEnd(10))} ${this.paint("muted", desc)}`);
+        this.write(
+          `  ${this.paint("ok", name.padEnd(10))} ${this.paint("muted", desc)}`,
+        );
       } else {
         this.write(`  ${name.padEnd(10)} ${desc}`);
       }
@@ -146,7 +163,10 @@ export class Rich {
     else this.write("options:");
     const opts: Array<[string, string]> = [
       ["--bars N", "Synthetic bar count for run (default 20, max 100000)"],
-      ["--mode MODE", "run engine: interpret | compile | auto (JS emit; default interpret)"],
+      [
+        "--mode MODE",
+        "run engine: interpret | compile | auto (JS emit; default interpret)",
+      ],
       ["--commission N", "Broker commission fraction for run (e.g. 0.001)"],
       ["--slippage N", "Broker slippage in price units for run"],
       ["--pyramiding N", "Broker max same-direction adds for run"],
@@ -160,21 +180,39 @@ export class Rich {
     const optPad = 16;
     for (const [name, desc] of opts) {
       if (this.enabled) {
-        this.write(`  ${this.paint("fg", name.padEnd(optPad))} ${this.paint("muted", desc)}`);
+        this.write(
+          `  ${this.paint("fg", name.padEnd(optPad))} ${this.paint("muted", desc)}`,
+        );
       } else {
         this.write(`  ${name.padEnd(optPad)} ${desc}`);
       }
     }
     this.write("");
-    this.write(this.enabled ? this.paint("muted", "exit 0 ok · 1 syntax/runtime · 2 usage") : "exit: 0 ok, 1 syntax/runtime, 2 usage");
+    this.write(
+      this.enabled
+        ? this.paint("muted", "exit 0 ok · 1 syntax/runtime · 2 usage")
+        : "exit: 0 ok, 1 syntax/runtime, 2 usage",
+    );
     this.write("");
     if (this.enabled) this.write(this.paint("accent", "EXAMPLES"));
     else this.write("examples:");
     const examples: Array<[string, string]> = [
-      ["pynets run keltner.pine --bars 40", "3 plots (mid / up / lo) + spark/last"],
-      ["pynets run strategy_entry.pine", "strategy events table (bar, type, id)"],
-      ["pynets run strat.pine --commission 0.001 --slippage 1 --pyramiding 0", "broker flags on Runtime"],
-      ["pynets dump script.pine --rich --full", "--rich after the command (bun will not eat it)"],
+      [
+        "pynets run keltner.pine --bars 40",
+        "3 plots (mid / up / lo) + spark/last",
+      ],
+      [
+        "pynets run strategy_entry.pine",
+        "strategy events table (bar, type, id)",
+      ],
+      [
+        "pynets run strat.pine --commission 0.001 --slippage 1 --pyramiding 0",
+        "broker flags on Runtime",
+      ],
+      [
+        "pynets dump script.pine --rich --full",
+        "--rich after the command (bun will not eat it)",
+      ],
     ];
     for (const [cmd, desc] of examples) {
       if (this.enabled) {
@@ -207,7 +245,9 @@ export class Rich {
     this.write(top);
     for (const line of safeLines) {
       const pad = " ".repeat(Math.max(0, inner - visibleWidth(line ?? "")));
-      this.write(`${this.paint("muted", "│")} ${line ?? ""}${pad}${this.paint("muted", "│")}`);
+      this.write(
+        `${this.paint("muted", "│")} ${line ?? ""}${pad}${this.paint("muted", "│")}`,
+      );
     }
     this.write(this.paint("muted", `└${"─".repeat(inner + 2)}┘`));
   }
@@ -216,12 +256,21 @@ export class Rich {
     const heads = Array.isArray(headers) ? headers : [];
     const body = Array.isArray(rows) ? rows : [];
     const widths = heads.map((h, i) =>
-      Math.max(visibleWidth(h ?? ""), ...body.map((r) => visibleWidth((r && r[i]) || ""))),
+      Math.max(
+        visibleWidth(h ?? ""),
+        ...body.map((r) => visibleWidth((r && r[i]) || "")),
+      ),
     );
     if (!this.enabled) {
-      this.write(heads.map((h, i) => (h ?? "").padEnd(widths[i] ?? 0)).join("  "));
+      this.write(
+        heads.map((h, i) => (h ?? "").padEnd(widths[i] ?? 0)).join("  "),
+      );
       for (const row of body) {
-        this.write((row ?? []).map((c, i) => padVisible(c ?? "", widths[i] ?? 0)).join("  "));
+        this.write(
+          (row ?? [])
+            .map((c, i) => padVisible(c ?? "", widths[i] ?? 0))
+            .join("  "),
+        );
       }
       return;
     }
@@ -230,9 +279,15 @@ export class Rich {
         .map((h, i) => this.paint("accent", (h ?? "").padEnd(widths[i] ?? 0)))
         .join(this.paint("muted", "  ")),
     );
-    this.write(this.paint("muted", widths.map((w) => "─".repeat(w)).join("──")));
+    this.write(
+      this.paint("muted", widths.map((w) => "─".repeat(w)).join("──")),
+    );
     for (const row of body) {
-      this.write((row ?? []).map((c, i) => padVisible(c ?? "", widths[i] ?? 0)).join("  "));
+      this.write(
+        (row ?? [])
+          .map((c, i) => padVisible(c ?? "", widths[i] ?? 0))
+          .join("  "),
+      );
     }
   }
 }
@@ -246,7 +301,9 @@ export function sparkline(values: Array<number | null>, width = 16): string {
   const w = saneSparkWidth(width);
   if (w === 0) return "";
   const series = Array.isArray(values) ? values : [];
-  const nums = series.filter((v): v is number => v != null && Number.isFinite(v));
+  const nums = series.filter(
+    (v): v is number => v != null && Number.isFinite(v),
+  );
   if (nums.length === 0) {
     const n = series.length;
     return "·".repeat(n === 0 ? Math.min(w, 8) : Math.min(w, n));
@@ -265,7 +322,10 @@ export function sparkline(values: Array<number | null>, width = 16): string {
       out += "·";
       continue;
     }
-    const idx = Math.min(blocks.length - 1, Math.floor(((v - lo) / span) * (blocks.length - 1)));
+    const idx = Math.min(
+      blocks.length - 1,
+      Math.floor(((v - lo) / span) * (blocks.length - 1)),
+    );
     out += blocks[idx];
   }
   return out;
@@ -320,7 +380,8 @@ function highlightLine(line: string, rich: Rich): string {
       }
       const word = line.slice(i, j);
       if (PINE_KW.test(word)) out += rich.paint("accent", word);
-      else if (PINE_BI.test(word) || PINE_BI.test(word.split(".").pop() ?? "")) out += rich.paint("ok", word);
+      else if (PINE_BI.test(word) || PINE_BI.test(word.split(".").pop() ?? ""))
+        out += rich.paint("ok", word);
       else out += rich.paint("fg", word);
       i = j;
       continue;

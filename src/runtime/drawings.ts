@@ -9,13 +9,7 @@
  */
 
 export type DrawingKind =
-  | "line"
-  | "label"
-  | "box"
-  | "alert"
-  | "table"
-  | "polyline"
-  | "linefill";
+  "line" | "label" | "box" | "alert" | "table" | "polyline" | "linefill";
 
 export interface DrawingEvent {
   kind: DrawingKind;
@@ -52,15 +46,24 @@ function safeBar(bar: unknown): number {
 }
 
 function asExtra(extra: unknown): Record<string, unknown> | undefined {
-  if (extra == null || typeof extra !== "object" || Array.isArray(extra)) return undefined;
+  if (extra == null || typeof extra !== "object" || Array.isArray(extra))
+    return undefined;
   return { ...(extra as Record<string, unknown>) };
 }
 
-function setNum(extra: Record<string, unknown>, key: string, value: unknown): void {
+function setNum(
+  extra: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
   if (isFiniteNumber(value)) extra[key] = value;
 }
 
-function setAny(extra: Record<string, unknown>, key: string, value: unknown): void {
+function setAny(
+  extra: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
   extra[key] = value;
 }
 
@@ -83,18 +86,31 @@ function parseCellKey(key: string): { col: number; row: number } | undefined {
   return { col, row };
 }
 
-function cloneExtra(extra?: Record<string, unknown>): Record<string, unknown> | undefined {
+function cloneExtra(
+  extra?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   if (extra == null) return undefined;
   const out: Record<string, unknown> = { ...extra };
-  if (out.cells != null && typeof out.cells === "object" && !Array.isArray(out.cells)) {
+  if (
+    out.cells != null &&
+    typeof out.cells === "object" &&
+    !Array.isArray(out.cells)
+  ) {
     const cells: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(out.cells as Record<string, unknown>)) {
-      cells[k] = v != null && typeof v === "object" && !Array.isArray(v) ? { ...(v as Record<string, unknown>) } : v;
+      cells[k] =
+        v != null && typeof v === "object" && !Array.isArray(v)
+          ? { ...(v as Record<string, unknown>) }
+          : v;
     }
     out.cells = cells;
   }
   if (Array.isArray(out.points)) {
-    out.points = out.points.map((p) => (p != null && typeof p === "object" ? { ...(p as Record<string, unknown>) } : p));
+    out.points = out.points.map((p) =>
+      p != null && typeof p === "object"
+        ? { ...(p as Record<string, unknown>) }
+        : p,
+    );
   }
   if (Array.isArray(out.merged)) out.merged = out.merged.slice();
   return out;
@@ -116,16 +132,32 @@ export class DrawingBook {
   configure(limits: DrawingLimits): void {
     if (limits == null || typeof limits !== "object") return;
     if (limits.max_lines_count !== undefined) {
-      this.maxLines = clampLimit(limits.max_lines_count, this.maxLines, HARD_CAP_LINES_LABELS_BOXES);
+      this.maxLines = clampLimit(
+        limits.max_lines_count,
+        this.maxLines,
+        HARD_CAP_LINES_LABELS_BOXES,
+      );
     }
     if (limits.max_labels_count !== undefined) {
-      this.maxLabels = clampLimit(limits.max_labels_count, this.maxLabels, HARD_CAP_LINES_LABELS_BOXES);
+      this.maxLabels = clampLimit(
+        limits.max_labels_count,
+        this.maxLabels,
+        HARD_CAP_LINES_LABELS_BOXES,
+      );
     }
     if (limits.max_boxes_count !== undefined) {
-      this.maxBoxes = clampLimit(limits.max_boxes_count, this.maxBoxes, HARD_CAP_LINES_LABELS_BOXES);
+      this.maxBoxes = clampLimit(
+        limits.max_boxes_count,
+        this.maxBoxes,
+        HARD_CAP_LINES_LABELS_BOXES,
+      );
     }
     if (limits.max_polylines_count !== undefined) {
-      this.maxPolylines = clampLimit(limits.max_polylines_count, this.maxPolylines, HARD_CAP_POLYLINES);
+      this.maxPolylines = clampLimit(
+        limits.max_polylines_count,
+        this.maxPolylines,
+        HARD_CAP_POLYLINES,
+      );
     }
     this.gc("line", this.maxLines);
     this.gc("label", this.maxLabels);
@@ -154,7 +186,11 @@ export class DrawingBook {
     return this.push("line", bar, { extra, cap: this.maxLines });
   }
 
-  labelNew(bar: number, text?: string, extra?: Record<string, unknown>): number {
+  labelNew(
+    bar: number,
+    text?: string,
+    extra?: Record<string, unknown>,
+  ): number {
     return this.push("label", bar, { text, extra, cap: this.maxLabels });
   }
 
@@ -170,7 +206,11 @@ export class DrawingBook {
     return this.push("polyline", bar, { extra, cap: this.maxPolylines });
   }
 
-  linefillNew(bar: number, extraOrId1?: Record<string, unknown> | number, id2?: number): number {
+  linefillNew(
+    bar: number,
+    extraOrId1?: Record<string, unknown> | number,
+    id2?: number,
+  ): number {
     const extra: Record<string, unknown> = {};
     const patch = asExtra(extraOrId1);
     if (patch != null) {
@@ -179,7 +219,9 @@ export class DrawingBook {
       if (isFiniteNumber(extraOrId1)) extra.id1 = extraOrId1;
       if (isFiniteNumber(id2)) extra.id2 = id2;
     }
-    return this.push("linefill", bar, { extra: Object.keys(extra).length ? extra : undefined });
+    return this.push("linefill", bar, {
+      extra: Object.keys(extra).length ? extra : undefined,
+    });
   }
 
   alert(bar: number, message: string): void {
@@ -233,7 +275,13 @@ export class DrawingBook {
     ev.extra = { ...(ev.extra ?? {}), ...patch };
   }
 
-  boxSetCorners(id: number, left: number, top: number, right: number, bottom: number): void {
+  boxSetCorners(
+    id: number,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+  ): void {
     const extra = this.extraOf(id, "box");
     if (!extra) return;
     setNum(extra, "left", left);
@@ -388,7 +436,12 @@ export class DrawingBook {
     this.upsertCell(id, column, row, text, text !== undefined);
   }
 
-  tableCellSetText(id: number, column: unknown, row: unknown, text: unknown): void {
+  tableCellSetText(
+    id: number,
+    column: unknown,
+    row: unknown,
+    text: unknown,
+  ): void {
     this.upsertCell(id, column, row, text, true);
   }
 
@@ -573,7 +626,13 @@ export class DrawingBook {
     return rec.text == null ? "" : String(rec.text);
   }
 
-  tableCellSetField(id: number, column: unknown, row: unknown, field: string, value: unknown): void {
+  tableCellSetField(
+    id: number,
+    column: unknown,
+    row: unknown,
+    field: string,
+    value: unknown,
+  ): void {
     this.upsertCell(id, column, row, undefined, false);
     const rec = this.cellRec(id, column, row);
     if (!rec) return;
@@ -624,7 +683,12 @@ export class DrawingBook {
     for (const key of Object.keys(cells)) {
       const parsed = parseCellKey(key);
       if (parsed == null) continue;
-      if (r0 <= parsed.row && parsed.row <= r1 && c0 <= parsed.col && parsed.col <= c1) {
+      if (
+        r0 <= parsed.row &&
+        parsed.row <= r1 &&
+        c0 <= parsed.col &&
+        parsed.col <= c1
+      ) {
         delete cells[key];
       }
     }
@@ -721,7 +785,11 @@ export class DrawingBook {
     const ev = this.byId.get(id);
     if (!ev) return null;
     const extra = cloneExtra(ev.extra);
-    return this.push(ev.kind, ev.bar, { text: ev.text, extra, cap: this.capFor(ev.kind) });
+    return this.push(ev.kind, ev.bar, {
+      text: ev.text,
+      extra,
+      cap: this.capFor(ev.kind),
+    });
   }
 
   /** Compact non-deleted items for RuntimeResult.drawings. */
@@ -771,7 +839,8 @@ export class DrawingBook {
   ): number {
     const id = this.nextId++;
     const ev: DrawingEvent = { kind, bar: safeBar(bar) };
-    if (opts?.text !== undefined && opts.text !== null) ev.text = String(opts.text);
+    if (opts?.text !== undefined && opts.text !== null)
+      ev.text = String(opts.text);
     const extra = asExtra(opts?.extra);
     if (extra !== undefined) ev.extra = extra;
     this.items.push(ev);
@@ -788,13 +857,23 @@ export class DrawingBook {
     return undefined;
   }
 
-  private setKindNum(id: number, kind: DrawingKind, key: string, value: unknown): void {
+  private setKindNum(
+    id: number,
+    kind: DrawingKind,
+    key: string,
+    value: unknown,
+  ): void {
     const extra = this.extraOf(id, kind);
     if (!extra) return;
     setNum(extra, key, value);
   }
 
-  private setKindAny(id: number, kind: DrawingKind, key: string, value: unknown): void {
+  private setKindAny(
+    id: number,
+    kind: DrawingKind,
+    key: string,
+    value: unknown,
+  ): void {
     const extra = this.extraOf(id, kind);
     if (!extra) return;
     setAny(extra, key, value);
@@ -806,18 +885,27 @@ export class DrawingBook {
     return this.extraNum(id, key);
   }
 
-  private cellRec(id: number, column: unknown, row: unknown): Record<string, unknown> | undefined {
+  private cellRec(
+    id: number,
+    column: unknown,
+    row: unknown,
+  ): Record<string, unknown> | undefined {
     const extra = this.extraOf(id, "table");
     const key = cellKey(column, row);
     if (!extra || key == null) return undefined;
     const prev = extra.cells;
-    if (prev == null || typeof prev !== "object" || Array.isArray(prev)) return undefined;
+    if (prev == null || typeof prev !== "object" || Array.isArray(prev))
+      return undefined;
     const cur = (prev as Record<string, unknown>)[key];
-    if (cur == null || typeof cur !== "object" || Array.isArray(cur)) return undefined;
+    if (cur == null || typeof cur !== "object" || Array.isArray(cur))
+      return undefined;
     return cur as Record<string, unknown>;
   }
 
-  private extraOf(id: number, kind?: DrawingKind): Record<string, unknown> | undefined {
+  private extraOf(
+    id: number,
+    kind?: DrawingKind,
+  ): Record<string, unknown> | undefined {
     const ev = this.byId.get(id);
     if (!ev) return undefined;
     if (kind != null && ev.kind !== kind) return undefined;
@@ -825,7 +913,10 @@ export class DrawingBook {
     return ev.extra;
   }
 
-  private lineGetNum(id: number, key: "x1" | "y1" | "x2" | "y2"): number | null {
+  private lineGetNum(
+    id: number,
+    key: "x1" | "y1" | "x2" | "y2",
+  ): number | null {
     const ev = this.byId.get(id);
     if (!ev || ev.kind !== "line") return null;
     const v = ev.extra?.[key];
@@ -883,7 +974,7 @@ export class DrawingBook {
     }
     let excess = n - limit;
     if (excess <= 0) return;
-    for (let i = 0; i < this.items.length && excess > 0; ) {
+    for (let i = 0; i < this.items.length && excess > 0;) {
       const ev = this.items[i]!;
       if (ev.kind === kind && !ev.deleted) {
         ev.deleted = true;

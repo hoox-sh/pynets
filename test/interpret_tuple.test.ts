@@ -39,36 +39,40 @@ describe("interpret tuple", () => {
     },
   );
 
-  test.skipIf(!KELTNER_SRC || !keltnerParses)("run keltner 40 bars: mid/up/lo", () => {
-    const out = new Runtime("TEST").run(KELTNER_SRC, bars(40));
-    expect(out.error).toBeUndefined();
-    expect(out.series.mid).toBeDefined();
-    expect(out.series.up).toBeDefined();
-    expect(out.series.lo).toBeDefined();
-    const mid = out.series.mid!;
-    const up = out.series.up!;
-    const lo = out.series.lo!;
-    expect(mid).toHaveLength(40);
-    expect(up).toHaveLength(40);
-    expect(lo).toHaveLength(40);
+  test.skipIf(!KELTNER_SRC || !keltnerParses)(
+    "run keltner 40 bars: mid/up/lo",
+    () => {
+      const out = new Runtime("TEST").run(KELTNER_SRC, bars(40));
+      expect(out.error).toBeUndefined();
+      expect(out.series.mid).toBeDefined();
+      expect(out.series.up).toBeDefined();
+      expect(out.series.lo).toBeDefined();
+      const mid = out.series.mid!;
+      const up = out.series.up!;
+      const lo = out.series.lo!;
+      expect(mid).toHaveLength(40);
+      expect(up).toHaveLength(40);
+      expect(lo).toHaveLength(40);
 
-    for (let i = 25; i < 40; i++) {
-      expect(typeof mid[i]).toBe("number");
-      expect(Number.isFinite(mid[i]!)).toBe(true);
-      expect(typeof up[i]).toBe("number");
-      expect(Number.isFinite(up[i]!)).toBe(true);
-      expect(typeof lo[i]).toBe("number");
-      expect(Number.isFinite(lo[i]!)).toBe(true);
-    }
+      for (let i = 25; i < 40; i++) {
+        expect(typeof mid[i]).toBe("number");
+        expect(Number.isFinite(mid[i]!)).toBe(true);
+        expect(typeof up[i]).toBe("number");
+        expect(Number.isFinite(up[i]!)).toBe(true);
+        expect(typeof lo[i]).toBe("number");
+        expect(Number.isFinite(lo[i]!)).toBe(true);
+      }
 
-    for (let i = 0; i < 40; i++) {
-      const u = up[i];
-      const m = mid[i];
-      const l = lo[i];
-      if (u == null || m == null || l == null) continue;
-      if (!Number.isFinite(u) || !Number.isFinite(m) || !Number.isFinite(l)) continue;
-      expect(u + 1e-9).toBeGreaterThanOrEqual(m);
-      expect(m + 1e-9).toBeGreaterThanOrEqual(l);
-    }
-  });
+      for (let i = 0; i < 40; i++) {
+        const u = up[i];
+        const m = mid[i];
+        const l = lo[i];
+        if (u == null || m == null || l == null) continue;
+        if (!Number.isFinite(u) || !Number.isFinite(m) || !Number.isFinite(l))
+          continue;
+        expect(u + 1e-9).toBeGreaterThanOrEqual(m);
+        expect(m + 1e-9).toBeGreaterThanOrEqual(l);
+      }
+    },
+  );
 });

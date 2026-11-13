@@ -10,7 +10,10 @@ import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
 const PY = pythonBin();
 
-type PyOut = { plots: Array<number | null>; series: Record<string, Array<number | null>> };
+type PyOut = {
+  plots: Array<number | null>;
+  series: Record<string, Array<number | null>>;
+};
 
 function pythonRun(src: string, bars: OHLCVBar[], symbol = "TEST"): PyOut {
   const payload = JSON.stringify({ src, bars, symbol });
@@ -45,16 +48,38 @@ function matchPython(src: string, bars: OHLCVBar[], symbol = "TEST"): PyOut {
   expect(out.error).toBeUndefined();
   expect(nums(out.plots)).toEqual(nums(py.plots));
   for (const [key, series] of Object.entries(py.series)) {
-    if (key.endsWith(".open") || key.endsWith(".high") || key.endsWith(".low")) continue;
+    if (key.endsWith(".open") || key.endsWith(".high") || key.endsWith(".low"))
+      continue;
     expect(nums(out.series[key])).toEqual(nums(series));
   }
   return py;
 }
 
 const BARS: OHLCVBar[] = [
-  { open: 100, high: 100, low: 100, close: 100, volume: 1, time: 1_700_000_000_000 },
-  { open: 110, high: 110, low: 110, close: 110, volume: 1, time: 1_700_000_060_000 },
-  { open: 120, high: 120, low: 120, close: 120, volume: 1, time: 1_700_000_120_000 },
+  {
+    open: 100,
+    high: 100,
+    low: 100,
+    close: 100,
+    volume: 1,
+    time: 1_700_000_000_000,
+  },
+  {
+    open: 110,
+    high: 110,
+    low: 110,
+    close: 110,
+    volume: 1,
+    time: 1_700_000_060_000,
+  },
+  {
+    open: 120,
+    high: 120,
+    low: 120,
+    close: 120,
+    volume: 1,
+    time: 1_700_000_120_000,
+  },
 ];
 
 describe.skipIf(!pythonAvailable())("interpret strategy gaps", () => {
@@ -103,7 +128,14 @@ plot(strategy.position_entry_name == "L" ? 1 : 0, "ename")`,
   test("closedtrades.entry_time / profit after close", () => {
     const bars4: OHLCVBar[] = [
       ...BARS,
-      { open: 130, high: 130, low: 130, close: 130, volume: 1, time: 1_700_000_180_000 },
+      {
+        open: 130,
+        high: 130,
+        low: 130,
+        close: 130,
+        volume: 1,
+        time: 1_700_000_180_000,
+      },
     ];
     const py = matchPython(
       `strategy("t", initial_capital=100000)

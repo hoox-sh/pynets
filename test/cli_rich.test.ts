@@ -24,7 +24,9 @@ describe("useRich / stripFlags", () => {
     process.env.FORCE_COLOR = "1";
     delete process.env.NO_COLOR;
     try {
-      expect(useRich(["bun", "cli.ts", "check", "a.pine", "--plain"])).toBe(false);
+      expect(useRich(["bun", "cli.ts", "check", "a.pine", "--plain"])).toBe(
+        false,
+      );
       expect(useRich(["bun", "cli.ts", "--plain", "info"])).toBe(false);
     } finally {
       if (prevForce == null) delete process.env.FORCE_COLOR;
@@ -50,13 +52,9 @@ describe("useRich / stripFlags", () => {
   });
 
   test("stripFlags keeps the command and file, drops color flags only", () => {
-    expect(stripFlags(["bun", "cli.ts", "dump", "a.pine", "--rich", "--full"])).toEqual([
-      "bun",
-      "cli.ts",
-      "dump",
-      "a.pine",
-      "--full",
-    ]);
+    expect(
+      stripFlags(["bun", "cli.ts", "dump", "a.pine", "--rich", "--full"]),
+    ).toEqual(["bun", "cli.ts", "dump", "a.pine", "--full"]);
   });
 
   test("FORCE_COLOR=0 does not force rich", () => {
@@ -65,7 +63,9 @@ describe("useRich / stripFlags", () => {
     process.env.FORCE_COLOR = "0";
     delete process.env.NO_COLOR;
     try {
-      expect(useRich(["bun", "cli.ts", "info"])).toBe(Boolean(process.stdout.isTTY));
+      expect(useRich(["bun", "cli.ts", "info"])).toBe(
+        Boolean(process.stdout.isTTY),
+      );
     } finally {
       if (prevForce == null) delete process.env.FORCE_COLOR;
       else process.env.FORCE_COLOR = prevForce;
@@ -115,7 +115,9 @@ describe("sparkline / width / empty plots", () => {
 
   test("empty / all-na plots are placeholders", () => {
     expect(sparkline([])).toMatch(/^·+$/);
-    expect(sparkline([null, Number.NaN, Number.POSITIVE_INFINITY])).toMatch(/^·+$/);
+    expect(sparkline([null, Number.NaN, Number.POSITIVE_INFINITY])).toMatch(
+      /^·+$/,
+    );
   });
 
   test("finite series uses block chars", () => {

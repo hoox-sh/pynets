@@ -315,7 +315,9 @@ function emitForIn(node: ForIn): string {
 
 function emitIndentedBody(body: stmt[]): string {
   if (!body.length) return "";
-  return body.map((st) => `\n    ${emitStmt(st).replaceAll("\n", "\n    ")}`).join("");
+  return body
+    .map((st) => `\n    ${emitStmt(st).replaceAll("\n", "\n    ")}`)
+    .join("");
 }
 
 function emitWhile(node: While): string {
@@ -345,7 +347,12 @@ function emitCase(node: Case): string {
 function emitSwitch(node: Switch): string {
   const head = node.subject ? `switch ${emitExpr(node.subject)}` : "switch";
   if (!node.cases.length) return head;
-  return head + node.cases.map((c) => `\n    ${emitCase(c).replaceAll("\n", "\n    ")}`).join("");
+  return (
+    head +
+    node.cases
+      .map((c) => `\n    ${emitCase(c).replaceAll("\n", "\n    ")}`)
+      .join("")
+  );
 }
 
 function emitBoolOp(node: BoolOp): string {
@@ -444,7 +451,9 @@ function emitFunctionDef(node: FunctionDef): string {
   if (node.export) chunks.push("export");
   if (node.method) chunks.push("method");
   if (node.returns) chunks.push(emitExpr(node.returns));
-  chunks.push(`${node.name}(${asParams(node.args).map(emitParam).join(", ")}) =>`);
+  chunks.push(
+    `${node.name}(${asParams(node.args).map(emitParam).join(", ")}) =>`,
+  );
   const head = chunks.join(" ");
   const body = node.body;
   let line: string;

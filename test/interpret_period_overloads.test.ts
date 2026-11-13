@@ -66,17 +66,23 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
     // Python: _cci(series, series, series, period) → tp = series. Distinct
     // from the context-hlc3 period form; the previous context blend into the
     // 2-arg source matched no Python dispatch arm (SoT correction).
-    expect(plotsOf(`plot(ta.cci(close, 7))`)).not.toEqual(plotsOf(`plot(ta.cci(hlc3, 7))`));
+    expect(plotsOf(`plot(ta.cci(close, 7))`)).not.toEqual(
+      plotsOf(`plot(ta.cci(hlc3, 7))`),
+    );
   });
 
   test("ta.cci(high, low, close, len) ≡ ta.cci(hlc3, len) — legacy 4-arg form", () => {
-    expectEquivalent(`plot(ta.cci(high, low, close, 7))\nplot(ta.cci(hlc3, 7))`);
+    expectEquivalent(
+      `plot(ta.cci(high, low, close, 7))\nplot(ta.cci(hlc3, 7))`,
+    );
   });
 
   test("ta.cci warmup: na until the window fills, finite afterwards", () => {
     const p = plotsOf(`plot(ta.cci(5))`);
     expect(p.slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(p.slice(5).some((v) => typeof v === "number" && Number.isFinite(v))).toBe(true);
+    expect(
+      p.slice(5).some((v) => typeof v === "number" && Number.isFinite(v)),
+    ).toBe(true);
   });
 
   test("ta.cci(7.5) gate → na like ta.cci(na); ta.cci(7.0) ≡ ta.cci(7)", () => {
@@ -91,7 +97,9 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
 
   test("ta.vwma(source, volume, len) 3-arg form consumes the explicit volume series", () => {
     // Explicit chart volume equals the context volume → ≡ the 2-arg form…
-    expectEquivalent(`plot(ta.vwma(close, volume, 7))\nplot(ta.vwma(close, 7))`);
+    expectEquivalent(
+      `plot(ta.vwma(close, volume, 7))\nplot(ta.vwma(close, 7))`,
+    );
     // …while a scaled volume series is actually used (2-arg form differs).
     expect(plotsOf(`plot(ta.vwma(close, volume * 1.5, 7))`)).not.toEqual(
       plotsOf(`plot(ta.vwma(close, 7))`),
@@ -101,7 +109,9 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   test("ta.vwma warmup and gate", () => {
     const p = plotsOf(`plot(ta.vwma(5))`);
     expect(p.slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(p.slice(5).some((v) => typeof v === "number" && Number.isFinite(v))).toBe(true);
+    expect(
+      p.slice(5).some((v) => typeof v === "number" && Number.isFinite(v)),
+    ).toBe(true);
     expect(plotsOf(`plot(ta.vwma(7.5))`)).toEqual(plotsOf(`plot(ta.vwma(na))`));
     expect(plotsOf(`plot(ta.vwma(7.0))`)).toEqual(plotsOf(`plot(ta.vwma(7))`));
   });
@@ -113,16 +123,34 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   });
 
   test("ta.highest/lowest default source is high/low, not close", () => {
-    expect(plotsOf(`plot(ta.highest(5))`)).not.toEqual(plotsOf(`plot(ta.highest(close, 5))`));
-    expect(plotsOf(`plot(ta.lowest(5))`)).not.toEqual(plotsOf(`plot(ta.lowest(close, 5))`));
+    expect(plotsOf(`plot(ta.highest(5))`)).not.toEqual(
+      plotsOf(`plot(ta.highest(close, 5))`),
+    );
+    expect(plotsOf(`plot(ta.lowest(5))`)).not.toEqual(
+      plotsOf(`plot(ta.lowest(close, 5))`),
+    );
   });
 
   test("ta.highest/lowest warmup and gate", () => {
-    expect(plotsOf(`plot(ta.highest(5))`).slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(plotsOf(`plot(ta.lowest(5))`).slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(plotsOf(`plot(ta.highest(7.5))`)).toEqual(plotsOf(`plot(ta.highest(na))`));
-    expect(plotsOf(`plot(ta.lowest(7.5))`)).toEqual(plotsOf(`plot(ta.lowest(na))`));
-    expect(plotsOf(`plot(ta.highest(7.0))`)).toEqual(plotsOf(`plot(ta.highest(7))`));
+    expect(
+      plotsOf(`plot(ta.highest(5))`)
+        .slice(0, 4)
+        .every((v) => v == null),
+    ).toBe(true);
+    expect(
+      plotsOf(`plot(ta.lowest(5))`)
+        .slice(0, 4)
+        .every((v) => v == null),
+    ).toBe(true);
+    expect(plotsOf(`plot(ta.highest(7.5))`)).toEqual(
+      plotsOf(`plot(ta.highest(na))`),
+    );
+    expect(plotsOf(`plot(ta.lowest(7.5))`)).toEqual(
+      plotsOf(`plot(ta.lowest(na))`),
+    );
+    expect(plotsOf(`plot(ta.highest(7.0))`)).toEqual(
+      plotsOf(`plot(ta.highest(7))`),
+    );
   });
 
   // ---- ta.highestbars / ta.lowestbars --------------------------------------
@@ -132,15 +160,27 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   });
 
   test("ta.highestbars/lowestbars warmup, offsets and gate", () => {
-    expect(plotsOf(`plot(ta.highestbars(5))`).slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(plotsOf(`plot(ta.lowestbars(5))`).slice(0, 4).every((v) => v == null)).toBe(true);
+    expect(
+      plotsOf(`plot(ta.highestbars(5))`)
+        .slice(0, 4)
+        .every((v) => v == null),
+    ).toBe(true);
+    expect(
+      plotsOf(`plot(ta.lowestbars(5))`)
+        .slice(0, 4)
+        .every((v) => v == null),
+    ).toBe(true);
     // Offsets are negative TV-style, within [-(n-1), 0] once the window fills.
     const hb = plotsOf(`plot(ta.highestbars(5))`, 6)[4];
     expect(typeof hb).toBe("number");
     expect(hb!).toBeGreaterThanOrEqual(-4);
     expect(hb!).toBeLessThanOrEqual(0);
-    expect(plotsOf(`plot(ta.highestbars(7.5))`)).toEqual(plotsOf(`plot(ta.highestbars(na))`));
-    expect(plotsOf(`plot(ta.lowestbars(7.5))`)).toEqual(plotsOf(`plot(ta.lowestbars(na))`));
+    expect(plotsOf(`plot(ta.highestbars(7.5))`)).toEqual(
+      plotsOf(`plot(ta.highestbars(na))`),
+    );
+    expect(plotsOf(`plot(ta.lowestbars(7.5))`)).toEqual(
+      plotsOf(`plot(ta.lowestbars(na))`),
+    );
   });
 
   // ---- ta.bb ---------------------------------------------------------------
@@ -151,8 +191,15 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   });
 
   test("ta.bb(len, mult) period-first bands: u - l is a positive spread after warmup", () => {
-    const out = interpret(`indicator("t")\n[m, u, l] = ta.bb(7, 2)\nplot(u - l)`, bars(60));
-    expect(out.plots.slice(7).every((v) => typeof v === "number" && (v as number) > 0)).toBe(true);
+    const out = interpret(
+      `indicator("t")\n[m, u, l] = ta.bb(7, 2)\nplot(u - l)`,
+      bars(60),
+    );
+    expect(
+      out.plots
+        .slice(7)
+        .every((v) => typeof v === "number" && (v as number) > 0),
+    ).toBe(true);
   });
 
   test("ta.bb warmup and period-slot gate", () => {
@@ -174,18 +221,32 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
 
   // ---- ta.pivothigh / ta.pivotlow -------------------------------------------
   test("ta.pivothigh(l, r) ≡ ta.pivothigh(high, l, r); ta.pivotlow(l, r) ≡ ta.pivotlow(low, l, r)", () => {
-    expectEquivalent(`plot(ta.pivothigh(2, 2))\nplot(ta.pivothigh(high, 2, 2))`);
+    expectEquivalent(
+      `plot(ta.pivothigh(2, 2))\nplot(ta.pivothigh(high, 2, 2))`,
+    );
     expectEquivalent(`plot(ta.pivotlow(2, 2))\nplot(ta.pivotlow(low, 2, 2))`);
   });
 
   test("ta.pivothigh/pivotlow confirmation lag and gate", () => {
     // right=2 → a pivot needs L+R later bars, so the first bars are always na.
-    expect(plotsOf(`plot(ta.pivothigh(2, 2))`).slice(0, 2).every((v) => v == null)).toBe(true);
-    expect(plotsOf(`plot(ta.pivotlow(2, 2))`).slice(0, 2).every((v) => v == null)).toBe(true);
+    expect(
+      plotsOf(`plot(ta.pivothigh(2, 2))`)
+        .slice(0, 2)
+        .every((v) => v == null),
+    ).toBe(true);
+    expect(
+      plotsOf(`plot(ta.pivotlow(2, 2))`)
+        .slice(0, 2)
+        .every((v) => v == null),
+    ).toBe(true);
     // A non-period-like slot blocks the period-first dispatch (Python
     // raises); the pivot never confirms on the scalar fallthrough → all na.
-    expect(plotsOf(`plot(ta.pivothigh(2.5, 2))`).every((v) => v == null)).toBe(true);
-    expect(plotsOf(`plot(ta.pivotlow(2, na))`).every((v) => v == null)).toBe(true);
+    expect(plotsOf(`plot(ta.pivothigh(2.5, 2))`).every((v) => v == null)).toBe(
+      true,
+    );
+    expect(plotsOf(`plot(ta.pivotlow(2, na))`).every((v) => v == null)).toBe(
+      true,
+    );
   });
 
   // ---- ta.stoch -------------------------------------------------------------
@@ -196,26 +257,34 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   test("ta.stoch(kLen, dPeriod) 2-arg form returns %K over kLen (dPeriod ignored)", () => {
     expectEquivalent(`plot(ta.stoch(7, 3))\nplot(ta.stoch(7))`);
     // The FIRST slot is the effective kLength, so slot order matters.
-    expect(plotsOf(`plot(ta.stoch(7, 3))`)).not.toEqual(plotsOf(`plot(ta.stoch(3, 7))`));
+    expect(plotsOf(`plot(ta.stoch(7, 3))`)).not.toEqual(
+      plotsOf(`plot(ta.stoch(3, 7))`),
+    );
   });
 
   test("ta.stoch range, warmup and gate", () => {
     const p = plotsOf(`plot(ta.stoch(5))`);
     expect(p.slice(0, 4).every((v) => v == null)).toBe(true);
-    const finite = p.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const finite = p.filter(
+      (v): v is number => typeof v === "number" && Number.isFinite(v),
+    );
     expect(finite.length).toBeGreaterThan(0);
     for (const v of finite) {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(100);
     }
-    expect(plotsOf(`plot(ta.stoch(7.5))`)).toEqual(plotsOf(`plot(ta.stoch(na))`));
+    expect(plotsOf(`plot(ta.stoch(7.5))`)).toEqual(
+      plotsOf(`plot(ta.stoch(na))`),
+    );
   });
 
   // ---- ta.adx ---------------------------------------------------------------
   test("ta.adx(diLen, adxLen) uses the SECOND slot as the ADX period", () => {
     // diLength is accepted but unused (common.py:709-717) → ta.adx(5, 7) ≡ ta.adx(7).
     expectEquivalent(`plot(ta.adx(5, 7))\nplot(ta.adx(7))`);
-    expect(plotsOf(`plot(ta.adx(5, 7))`)).not.toEqual(plotsOf(`plot(ta.adx(5))`));
+    expect(plotsOf(`plot(ta.adx(5, 7))`)).not.toEqual(
+      plotsOf(`plot(ta.adx(5))`),
+    );
   });
 
   test("ta.adx(high, low, close, len) legacy 4-arg ≡ ta.adx(len)", () => {
@@ -225,6 +294,8 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
   test("ta.adx 2-arg gate: non-period-like slot → as-if-absent default 14", () => {
     expect(plotsOf(`plot(ta.adx(7.5, 3))`)).toEqual(plotsOf(`plot(ta.adx())`));
     expect(plotsOf(`plot(ta.adx(5, 3.5))`)).toEqual(plotsOf(`plot(ta.adx())`));
-    expect(plotsOf(`plot(ta.adx(5.0, 7.0))`)).toEqual(plotsOf(`plot(ta.adx(5, 7))`));
+    expect(plotsOf(`plot(ta.adx(5.0, 7.0))`)).toEqual(
+      plotsOf(`plot(ta.adx(5, 7))`),
+    );
   });
 });

@@ -16,7 +16,14 @@ function bars(n: number) {
   }));
 }
 
-type Bar = { open: number; high: number; low: number; close: number; volume: number; time?: number };
+type Bar = {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  time?: number;
+};
 
 function both(source: string, ohlcv: Bar[] = bars(40)) {
   return {
@@ -53,7 +60,10 @@ describe("compile vs interpret ta.ao", () => {
       close: c,
       volume: 1,
     }));
-    const { compiled, interpreted } = both(`indicator("t")\nplot(ta.ao(2, 3))`, ohlcv);
+    const { compiled, interpreted } = both(
+      `indicator("t")\nplot(ta.ao(2, 3))`,
+      ohlcv,
+    );
     expect(compiled.error).toBeUndefined();
     expect(compiled.plots).toEqual([null, null, 0.5, 0.5, 0.5]);
     expect(compiled.plots).toEqual(interpreted.plots);
@@ -85,7 +95,9 @@ plot(adown, "adown")`,
     );
     expect(compiled.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
-    const series = (compiled as { series?: Record<string, Array<number | null>> }).series;
+    const series = (
+      compiled as { series?: Record<string, Array<number | null>> }
+    ).series;
     expect(series?.aup?.at(-1)).toBe(100);
     expect(series?.adown?.at(-1)).toBe(0);
   });

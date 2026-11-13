@@ -9,7 +9,10 @@ const BARS_1_TO_5 = [1, 2, 3, 4, 5].map((close) => ({ close }));
 
 describe("interpret ta.sma / ta.rsi", () => {
   test("ta.sma(close, 3) on 1..5", () => {
-    const out = interpret(`indicator("t")\nplot(ta.sma(close, 3))`, BARS_1_TO_5);
+    const out = interpret(
+      `indicator("t")\nplot(ta.sma(close, 3))`,
+      BARS_1_TO_5,
+    );
     expect(out.plots).toEqual([null, null, 2, 3, 4]);
   });
 
@@ -27,7 +30,10 @@ describe("interpret ta.sma / ta.rsi", () => {
   });
 
   test("ta.rsi(close, 2) warms up then is finite", () => {
-    const out = interpret(`indicator("t")\nplot(ta.rsi(close, 2))`, BARS_1_TO_5);
+    const out = interpret(
+      `indicator("t")\nplot(ta.rsi(close, 2))`,
+      BARS_1_TO_5,
+    );
     expect(out.plots[0]).toBeNull();
     expect(out.plots[1]).toBeNull();
     for (let i = 2; i < out.plots.length; i++) {

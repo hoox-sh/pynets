@@ -21,7 +21,8 @@ export type LibraryModuleInit = {
 };
 
 function isPlainObject(value: unknown): value is StubKwargs {
-  if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value == null || typeof value !== "object" || Array.isArray(value))
+    return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
 }
@@ -50,7 +51,11 @@ function coerceStubInt(value: unknown): number | null {
 }
 
 /** Merge positional + keyword args into a dense list using `order` names. */
-function mergeStubArgs(args: unknown[], kwargs: StubKwargs, order: string[]): unknown[] {
+function mergeStubArgs(
+  args: unknown[],
+  kwargs: StubKwargs,
+  order: string[],
+): unknown[] {
   const merged: unknown[] = args.slice();
   for (const [key, val] of Object.entries(kwargs)) {
     const idx = order.indexOf(key);
@@ -104,7 +109,10 @@ function stubIndex2dTo1d(args: unknown[], kwargs: StubKwargs): number | null {
   return ix * dy + iy;
 }
 
-function stubIndex1dTo2d(args: unknown[], kwargs: StubKwargs): [number, number] | null {
+function stubIndex1dTo2d(
+  args: unknown[],
+  kwargs: StubKwargs,
+): [number, number] | null {
   const order = ["dimension_x", "dimension_y", "index"];
   const alias: Record<string, string> = {
     dim_x: "dimension_x",
@@ -154,7 +162,9 @@ export function applyStubExport(
   return fn(args, kwargs);
 }
 
-function toExportMap(exports?: Map<string, unknown> | Record<string, unknown>): Map<string, unknown> {
+function toExportMap(
+  exports?: Map<string, unknown> | Record<string, unknown>,
+): Map<string, unknown> {
   if (exports == null) return new Map();
   if (exports instanceof Map) return exports;
   return new Map(Object.entries(exports));
@@ -171,7 +181,10 @@ export class LibraryModule {
   kinds: Map<string, LibraryExportKind>;
   private readonly resolveStubs: boolean;
 
-  constructor(title: string, init?: LibraryModuleInit & { resolveStubs?: boolean }) {
+  constructor(
+    title: string,
+    init?: LibraryModuleInit & { resolveStubs?: boolean },
+  ) {
     this.title = title;
     this.namespace = init?.namespace ?? null;
     this.version = init?.version ?? null;
@@ -213,7 +226,8 @@ export class LibraryModule {
   kindOf(name: string): string | undefined {
     const tagged = this.kinds.get(name);
     if (tagged !== undefined) return tagged;
-    if (this.resolveStubs && Object.hasOwn(STUB_KNOWN_EXPORTS, name)) return "fn";
+    if (this.resolveStubs && Object.hasOwn(STUB_KNOWN_EXPORTS, name))
+      return "fn";
     return undefined;
   }
 
@@ -224,7 +238,11 @@ export class LibraryModule {
     return out;
   }
 
-  private putExport(name: string, value: unknown, kind: LibraryExportKind): void {
+  private putExport(
+    name: string,
+    value: unknown,
+    kind: LibraryExportKind,
+  ): void {
     this.exports.set(name, value);
     this.kinds.set(name, kind);
   }
@@ -249,18 +267,28 @@ export class LibraryRegistry {
   register(module: LibraryModule): void {
     this.byTitle.set(module.title, module);
     if (module.namespace != null && module.version != null) {
-      this.byPath.set(pathKey(module.namespace, module.title, module.version), module);
+      this.byPath.set(
+        pathKey(module.namespace, module.title, module.version),
+        module,
+      );
     }
   }
 
   /** Store Pine source for lazy load on `import namespace/name/version`. */
-  registerSource(namespace: string, name: string, version: number, source: string): void {
+  registerSource(
+    namespace: string,
+    name: string,
+    version: number,
+    source: string,
+  ): void {
     this.sources.set(pathKey(namespace, name, Math.trunc(version)), source);
   }
 
   /** Return registered source text, or `null` if unknown. */
   getSource(namespace: string, name: string, version: number): string | null {
-    return this.sources.get(pathKey(namespace, name, Math.trunc(version))) ?? null;
+    return (
+      this.sources.get(pathKey(namespace, name, Math.trunc(version))) ?? null
+    );
   }
 
   /** Resolve by `(namespace, name, version)` path first, then by title. */

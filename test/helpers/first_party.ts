@@ -22,7 +22,8 @@ export function firstPartyDir(): string | null {
 }
 
 export function readFirstParty(name: string): string | null {
-  if (name !== basename(name) || name === "" || name === "." || name === "..") return null;
+  if (name !== basename(name) || name === "" || name === "." || name === "..")
+    return null;
   const dir = firstPartyDir();
   if (dir == null) return null;
   const path = join(dir, name);

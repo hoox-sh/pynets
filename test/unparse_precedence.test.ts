@@ -159,7 +159,9 @@ describe("unparse conditional precedence", () => {
   });
 
   test("(a ? b : c) ? d : e keeps parens on the test", () => {
-    expect(unparse(evalTree("(a ? b : c) ? d : e"))).toBe("(a ? b : c) ? d : e");
+    expect(unparse(evalTree("(a ? b : c) ? d : e"))).toBe(
+      "(a ? b : c) ? d : e",
+    );
     expect(roundTrips("(a ? b : c) ? d : e")).toBe(true);
   });
 

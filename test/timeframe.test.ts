@@ -247,9 +247,15 @@ describe("Runtime timeframe.* default state (no configured timeframe)", () => {
   const zeros = [0, 0, 0, 0];
 
   test("period / main_period default to 'D' (not '')", () => {
-    expect(defaultTfPlots(`plot(timeframe.period == "D" ? 1 : 0)`)).toEqual(ones);
-    expect(defaultTfPlots(`plot(timeframe.period == "" ? 1 : 0)`)).toEqual(zeros);
-    expect(defaultTfPlots(`plot(timeframe.main_period == "D" ? 1 : 0)`)).toEqual(ones);
+    expect(defaultTfPlots(`plot(timeframe.period == "D" ? 1 : 0)`)).toEqual(
+      ones,
+    );
+    expect(defaultTfPlots(`plot(timeframe.period == "" ? 1 : 0)`)).toEqual(
+      zeros,
+    );
+    expect(
+      defaultTfPlots(`plot(timeframe.main_period == "D" ? 1 : 0)`),
+    ).toEqual(ones);
   });
 
   test("multiplier defaults to 1", () => {
@@ -266,7 +272,9 @@ describe("Runtime timeframe.* default state (no configured timeframe)", () => {
     expect(defaultTfPlots(`plot(timeframe.isweekly ? 1 : 0)`)).toEqual(zeros);
     expect(defaultTfPlots(`plot(timeframe.ismonthly ? 1 : 0)`)).toEqual(zeros);
     expect(defaultTfPlots(`plot(timeframe.isseconds ? 1 : 0)`)).toEqual(zeros);
-    expect(defaultTfPlots(`plot(timeframe.isinseconds ? 1 : 0)`)).toEqual(zeros);
+    expect(defaultTfPlots(`plot(timeframe.isinseconds ? 1 : 0)`)).toEqual(
+      zeros,
+    );
     expect(defaultTfPlots(`plot(timeframe.isminutes ? 1 : 0)`)).toEqual(zeros);
     expect(defaultTfPlots(`plot(timeframe.ishours ? 1 : 0)`)).toEqual(zeros);
   });

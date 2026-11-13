@@ -11,7 +11,11 @@ import type {
   CompiledScript,
   CompilePlotMeta,
 } from "./types.ts";
-import { CompileEmitError, CompileIneligibleError, CompileLoadError } from "./types.ts";
+import {
+  CompileEmitError,
+  CompileIneligibleError,
+  CompileLoadError,
+} from "./types.ts";
 import { transpileSource } from "./emit.ts";
 import { defaultTime, defaultVolume, naNum, toFloatArr } from "./helpers.ts";
 import { createCompileHelpers } from "./runtime.ts";
@@ -72,10 +76,17 @@ export function compileEligible(source: string): CompileEligibility {
 }
 
 export type CompileScriptExtras = {
-  getLibrary?: (namespace: string, name: string, version: number) => string | null;
+  getLibrary?: (
+    namespace: string,
+    name: string,
+    version: number,
+  ) => string | null;
 };
 
-export function transpile(source: string, extras?: CompileScriptExtras): string {
+export function transpile(
+  source: string,
+  extras?: CompileScriptExtras,
+): string {
   return transpileSource(source, extras).code;
 }
 
@@ -94,13 +105,16 @@ function sha256(s: string): string {
 function loadExecute(code: string): CompiledExecuteFn {
   let factory: () => CompiledExecuteFn;
   try {
-    factory = new Function(`${code}\nreturn execute_script_compiled;`) as typeof factory;
+    factory = new Function(
+      `${code}\nreturn execute_script_compiled;`,
+    ) as typeof factory;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CompileLoadError(msg);
   }
   const fn = factory();
-  if (typeof fn !== "function") throw new CompileLoadError("execute_script_compiled missing");
+  if (typeof fn !== "function")
+    throw new CompileLoadError("execute_script_compiled missing");
   return fn;
 }
 
@@ -134,7 +148,15 @@ function extractOhlcv(bars: Array<OhlcvBar>): {
     volume[i] = b.volume ?? 1;
     time[i] = b.time ?? i * 60_000;
   }
-  assertSameLength(n, open.length, high.length, low.length, close.length, volume.length, time.length);
+  assertSameLength(
+    n,
+    open.length,
+    high.length,
+    low.length,
+    close.length,
+    volume.length,
+    time.length,
+  );
   return { open, high, low, close, volume, time };
 }
 
@@ -170,10 +192,15 @@ class JsCompiledScript implements CompiledScript {
       if (v[i] == null) v[i] = 1;
       if (t[i] == null) t[i] = i * 60_000;
     }
-    return this.fn(o, h, l, c, v, t, createCompileHelpers({ inputs: extras?.inputs })) as Record<
-      string,
-      Array<number | null>
-    >;
+    return this.fn(
+      o,
+      h,
+      l,
+      c,
+      v,
+      t,
+      createCompileHelpers({ inputs: extras?.inputs }),
+    ) as Record<string, Array<number | null>>;
   }
 }
 
@@ -189,7 +216,10 @@ function libraryCacheTail(
   return `\0${parts.join("\0")}`;
 }
 
-export function compileScript(source: string, extras?: CompileScriptExtras): CompiledScript {
+export function compileScript(
+  source: string,
+  extras?: CompileScriptExtras,
+): CompiledScript {
   const elig = compileEligible(source);
   if (!elig.ok) throw new CompileIneligibleError(elig.reason ?? "ineligible");
   const key = sha256(source + libraryCacheTail(source, extras?.getLibrary));
@@ -226,7 +256,14 @@ export function runScript(
   ohlcvBars: Array<OhlcvBar>,
 ): Record<string, Array<number | null>> {
   const cols = extractOhlcv(ohlcvBars);
-  return compileScript(source).run(cols.open, cols.high, cols.low, cols.close, cols.volume, cols.time);
+  return compileScript(source).run(
+    cols.open,
+    cols.high,
+    cols.low,
+    cols.close,
+    cols.volume,
+    cols.time,
+  );
 }
 
 export function compileToResult(
@@ -236,7 +273,15 @@ export function compileToResult(
 ): CompileHostResult {
   const compiled = compileScript(source);
   const cols = extractOhlcv(ohlcvBars);
-  const raw = compiled.run(cols.open, cols.high, cols.low, cols.close, cols.volume, cols.time, extras);
+  const raw = compiled.run(
+    cols.open,
+    cols.high,
+    cols.low,
+    cols.close,
+    cols.volume,
+    cols.time,
+    extras,
+  );
   const series: Record<string, Array<number | null>> = {};
   const blob: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
@@ -256,7 +301,8 @@ export function compileToResult(
   };
   if ("__events" in blob) result.events = blob.__events as StrategyEvent[];
   if ("__fills" in blob) result.fills = blob.__fills as Fill[];
-  if ("__strategy" in blob) result.strategy = blob.__strategy as StrategySummary;
+  if ("__strategy" in blob)
+    result.strategy = blob.__strategy as StrategySummary;
   if ("__drawings" in blob) result.drawings = blob.__drawings as DrawingEvent[];
   if ("__logs" in blob) result.logs = blob.__logs as LogRecord[];
   return result;

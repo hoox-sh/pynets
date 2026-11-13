@@ -121,9 +121,14 @@ plot(strategy.position_size)`,
 
   test("runProvider JsonBarProvider injected fetch", async () => {
     const provider = new JsonBarProvider({
-      fetchBars: () => [{ open: 1, high: 2, low: 0, close: 1.5, volume: 3, time: 1 }],
+      fetchBars: () => [
+        { open: 1, high: 2, low: 0, close: 1.5, volume: 3, time: 1 },
+      ],
     });
-    const out = await new Runtime("TEST").runProvider(`indicator("t")\nplot(close)`, provider);
+    const out = await new Runtime("TEST").runProvider(
+      `indicator("t")\nplot(close)`,
+      provider,
+    );
     expect(out.error).toBeUndefined();
     expect(out.plots[0]).toBe(1.5);
   });

@@ -136,7 +136,9 @@ describe("ta.pvi incremental", () => {
     const ta = new TaEngine();
     expect(ta.pvi("pvi:0", 100, 1000)).toBe(1000);
     expect(ta.pvi("pvi:0", 101, 900)).toBe(1000);
-    expect(ta.pvi("pvi:0", 100.5, 1100)).toBeCloseTo(1000 * (1 + (100.5 - 101) / 101));
+    expect(ta.pvi("pvi:0", 100.5, 1100)).toBeCloseTo(
+      1000 * (1 + (100.5 - 101) / 101),
+    );
   });
 
   test("equal volume does not update; sites stay isolated", () => {

@@ -6,7 +6,9 @@ import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 
 /** One bar. Values locked against Python `Runtime.run(..., mode="interpret")`. */
-const BARS = [{ open: 1, high: 2, low: 0, close: 1, volume: 10, time: 1_700_000_000_000 }];
+const BARS = [
+  { open: 1, high: 2, low: 0, close: 1, volume: 10, time: 1_700_000_000_000 },
+];
 
 const SRC = `indicator("t")
 m = matrix.new<float>(3, 3, 0)

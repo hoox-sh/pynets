@@ -31,7 +31,10 @@ describe("na compare (Python / Pine)", () => {
     expect(eq.plots).toEqual([1, 1, 1, 1, 1]);
     const mixed = interpret(`indicator("t")\nplot(close == na ? 1 : 0)`, BARS);
     expect(mixed.plots).toEqual([0, 0, 0, 0, 0]);
-    const look = interpret(`indicator("t")\nplot(close[1] == na ? 1 : 0)`, BARS);
+    const look = interpret(
+      `indicator("t")\nplot(close[1] == na ? 1 : 0)`,
+      BARS,
+    );
     expect(look.plots[0]).toBe(1);
     expect(look.plots[1]).toBe(0);
   });
@@ -117,7 +120,9 @@ if bar_index == 3
 plot(close)`,
       BARS,
     );
-    expect(out.events?.some((e) => e.type === "close" || e.type === "close_all")).toBe(true);
+    expect(
+      out.events?.some((e) => e.type === "close" || e.type === "close_all"),
+    ).toBe(true);
     expect(out.events?.some((e) => e.type === "cancel")).toBe(true);
   });
 });

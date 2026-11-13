@@ -83,8 +83,14 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
 
   test("ta.cci(source, len) is CCI over the source alone (2-arg arm, no h/l blend)", () => {
     expectParity(`plot(ta.cci(close, 7))`);
-    const a = compiledSeries(0, `plot(ta.cci(close, 7))\nplot(ta.cci(hlc3, 7))`);
-    const b = compiledSeries(1, `plot(ta.cci(close, 7))\nplot(ta.cci(hlc3, 7))`);
+    const a = compiledSeries(
+      0,
+      `plot(ta.cci(close, 7))\nplot(ta.cci(hlc3, 7))`,
+    );
+    const b = compiledSeries(
+      1,
+      `plot(ta.cci(close, 7))\nplot(ta.cci(hlc3, 7))`,
+    );
     expect(a).not.toEqual(b);
   });
 
@@ -97,7 +103,9 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   test("ta.cci warmup and gate: 7.5 → na like cci(na); 7.0 ≡ 7", () => {
     const [p] = seriesOf(both(`plot(ta.cci(5))`).compiled);
     expect(p!.slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(p!.slice(5).some((v) => typeof v === "number" && Number.isFinite(v))).toBe(true);
+    expect(
+      p!.slice(5).some((v) => typeof v === "number" && Number.isFinite(v)),
+    ).toBe(true);
     const gate = `plot(ta.cci(7.5))\nplot(ta.cci(na))`;
     expectCompiledEquivalent(gate);
     expectParity(gate);
@@ -126,7 +134,9 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   test("ta.vwma warmup and gate", () => {
     const [p] = seriesOf(both(`plot(ta.vwma(5))`).compiled);
     expect(p!.slice(0, 4).every((v) => v == null)).toBe(true);
-    expect(p!.slice(5).some((v) => typeof v === "number" && Number.isFinite(v))).toBe(true);
+    expect(
+      p!.slice(5).some((v) => typeof v === "number" && Number.isFinite(v)),
+    ).toBe(true);
     const gate = `plot(ta.vwma(7.5))\nplot(ta.vwma(na))`;
     expectCompiledEquivalent(gate);
     expectParity(gate);
@@ -155,10 +165,15 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   });
 
   test("ta.highest/lowest warmup and gate", () => {
-    const [hi, lo] = seriesOf(both(`plot(ta.highest(5))\nplot(ta.lowest(5))`).compiled);
+    const [hi, lo] = seriesOf(
+      both(`plot(ta.highest(5))\nplot(ta.lowest(5))`).compiled,
+    );
     expect(hi!.slice(0, 4).every((v) => v == null)).toBe(true);
     expect(lo!.slice(0, 4).every((v) => v == null)).toBe(true);
-    for (const [fn, def] of [["highest", "highest"], ["lowest", "lowest"]] as const) {
+    for (const [fn, def] of [
+      ["highest", "highest"],
+      ["lowest", "lowest"],
+    ] as const) {
       const gate = `plot(ta.${fn}(7.5))\nplot(ta.${def}(na))`;
       expectCompiledEquivalent(gate);
       expectParity(gate);
@@ -179,7 +194,9 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   });
 
   test("ta.highestbars/lowestbars warmup, offsets and gate", () => {
-    const [hb, lb] = seriesOf(both(`plot(ta.highestbars(5))\nplot(ta.lowestbars(5))`, 6).compiled);
+    const [hb, lb] = seriesOf(
+      both(`plot(ta.highestbars(5))\nplot(ta.lowestbars(5))`, 6).compiled,
+    );
     expect(hb!.slice(0, 4).every((v) => v == null)).toBe(true);
     expect(lb!.slice(0, 4).every((v) => v == null)).toBe(true);
     // Offsets are negative TV-style, within [-(n-1), 0] once the window fills.
@@ -202,7 +219,9 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
 
   test("ta.bb(len, mult) period-first bands: u - l is a positive spread after warmup", () => {
     const [p] = seriesOf(both(`[m, u, l] = ta.bb(7, 2)\nplot(u - l)`).compiled);
-    expect(p!.slice(7).every((v) => typeof v === "number" && (v as number) > 0)).toBe(true);
+    expect(
+      p!.slice(7).every((v) => typeof v === "number" && (v as number) > 0),
+    ).toBe(true);
   });
 
   test("ta.bb warmup and period-slot gate", () => {
@@ -230,12 +249,17 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   });
 
   test("ta.pivothigh/pivotlow confirmation lag and gate", () => {
-    const [ph, pl] = seriesOf(both(`plot(ta.pivothigh(2, 2))\nplot(ta.pivotlow(2, 2))`).compiled);
+    const [ph, pl] = seriesOf(
+      both(`plot(ta.pivothigh(2, 2))\nplot(ta.pivotlow(2, 2))`).compiled,
+    );
     expect(ph!.slice(0, 2).every((v) => v == null)).toBe(true);
     expect(pl!.slice(0, 2).every((v) => v == null)).toBe(true);
     // A non-period-like slot blocks the period-first dispatch; the pivot
     // never confirms on the scalar fallthrough → all na.
-    for (const body of [`plot(ta.pivothigh(2.5, 2))`, `plot(ta.pivotlow(2, na))`]) {
+    for (const body of [
+      `plot(ta.pivothigh(2.5, 2))`,
+      `plot(ta.pivotlow(2, na))`,
+    ]) {
       expectParity(body);
       const [p] = seriesOf(both(body).compiled);
       expect(p!.every((v) => v == null)).toBe(true);
@@ -262,7 +286,9 @@ describe("compile period-only TA overloads (parity with interpret _is_period_lik
   test("ta.stoch range, warmup and gate", () => {
     const [p] = seriesOf(both(`plot(ta.stoch(5))`).compiled);
     expect(p!.slice(0, 4).every((v) => v == null)).toBe(true);
-    const finite = p!.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const finite = p!.filter(
+      (v): v is number => typeof v === "number" && Number.isFinite(v),
+    );
     expect(finite.length).toBeGreaterThan(0);
     for (const v of finite) {
       expect(v).toBeGreaterThanOrEqual(0);

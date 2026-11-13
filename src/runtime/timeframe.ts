@@ -29,7 +29,9 @@ export function timeframeFromSeconds(seconds: number): string | null {
   if (seconds <= SECONDS_PER_MINUTE) return "1";
   if (seconds <= SECONDS_PER_DAY) {
     const minutes = Math.ceil(seconds / SECONDS_PER_MINUTE);
-    return minutes >= SECONDS_PER_DAY / SECONDS_PER_MINUTE ? "D" : String(minutes);
+    return minutes >= SECONDS_PER_DAY / SECONDS_PER_MINUTE
+      ? "D"
+      : String(minutes);
   }
   if (seconds <= SECONDS_PER_WEEK) {
     const days = Math.ceil(seconds / SECONDS_PER_DAY);
@@ -47,7 +49,11 @@ export function timeframeFromSeconds(seconds: number): string | null {
 
 /** Seconds / minutes / hours — not D/W/M. Unknown / empty / na → false. */
 export function timeframeIsIntraday(period: string | null): boolean {
-  if (timeframeIsDaily(period) || timeframeIsWeekly(period) || timeframeIsMonthly(period)) {
+  if (
+    timeframeIsDaily(period) ||
+    timeframeIsWeekly(period) ||
+    timeframeIsMonthly(period)
+  ) {
     return false;
   }
   return timeframeMinutes(period) != null;
@@ -69,7 +75,14 @@ export function timeframeIsWeekly(period: string | null): boolean {
 export function timeframeIsMonthly(period: string | null): boolean {
   const p = norm(period);
   if (p == null || /^\d+$/.test(p)) return false;
-  return p === "M" || p === "1M" || p === "MO" || p === "MONTH" || p === "MONTHS" || /^\d+MO$/.test(p);
+  return (
+    p === "M" ||
+    p === "1M" ||
+    p === "MO" ||
+    p === "MONTH" ||
+    p === "MONTHS" ||
+    /^\d+MO$/.test(p)
+  );
 }
 
 /** Pine `timeframe.isseconds` / `isinseconds` — `"1S"` / `"15S"`. */
@@ -84,7 +97,12 @@ export function timeframeIsSeconds(period: string | null): boolean {
  * `"15M"` minutes, not monthly `"1M"` / `"M"`.
  */
 export function timeframeIsMinutes(period: string | null): boolean {
-  if (timeframeIsHours(period) || timeframeIsDwm(period) || timeframeIsSeconds(period)) return false;
+  if (
+    timeframeIsHours(period) ||
+    timeframeIsDwm(period) ||
+    timeframeIsSeconds(period)
+  )
+    return false;
   const p = norm(period);
   if (p == null) return false;
   if (/^\d+$/.test(p)) return true;
@@ -93,7 +111,12 @@ export function timeframeIsMinutes(period: string | null): boolean {
 
 /** Pine `timeframe.ishours` — `"1H"` / numeric minutes ≥ 60. */
 export function timeframeIsHours(period: string | null): boolean {
-  if (timeframeIsDaily(period) || timeframeIsWeekly(period) || timeframeIsMonthly(period)) return false;
+  if (
+    timeframeIsDaily(period) ||
+    timeframeIsWeekly(period) ||
+    timeframeIsMonthly(period)
+  )
+    return false;
   const p = norm(period);
   if (p == null) return false;
   if (p.endsWith("H")) return true;
@@ -102,7 +125,11 @@ export function timeframeIsHours(period: string | null): boolean {
 
 /** Pine `timeframe.isdwm` — daily / weekly / monthly. */
 export function timeframeIsDwm(period: string | null): boolean {
-  return timeframeIsDaily(period) || timeframeIsWeekly(period) || timeframeIsMonthly(period);
+  return (
+    timeframeIsDaily(period) ||
+    timeframeIsWeekly(period) ||
+    timeframeIsMonthly(period)
+  );
 }
 
 /** Leading integer, or 1 when missing / empty / na. */
@@ -142,8 +169,16 @@ const PERIOD_SUFFIXES: Array<[string, number]> = [
   ["MO", SECONDS_PER_MONTH],
 ];
 
-const UTC_ZONE_NAMES = new Set(["UTC", "utc", "Etc/UTC", "GMT", "gmt", "syminfo.timezone"]);
-const OFFSET_RE = /^(?:(?:UTC|GMT)\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|(\d{2}))?$/i;
+const UTC_ZONE_NAMES = new Set([
+  "UTC",
+  "utc",
+  "Etc/UTC",
+  "GMT",
+  "gmt",
+  "syminfo.timezone",
+]);
+const OFFSET_RE =
+  /^(?:(?:UTC|GMT)\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|(\d{2}))?$/i;
 
 type ChangeZone = { off: number } | { iana: string };
 
@@ -175,7 +210,11 @@ export function timeframePeriodChanged(
   return currId !== prevId;
 }
 
-function periodId(ts: unknown, timeframeStr: string | null | undefined, tz: unknown): number | null {
+function periodId(
+  ts: unknown,
+  timeframeStr: string | null | undefined,
+  tz: unknown,
+): number | null {
   if (timeframeStr == null) return null;
   const raw = String(timeframeStr).trim();
   if (raw === "") return null;
@@ -216,7 +255,8 @@ function calendarId(ms: number, raw: string, tz: unknown): number | null {
 
 function normalizeTimeMs(ts: unknown): number | null {
   if (ts == null) return null;
-  const t = typeof ts === "number" ? ts : typeof ts === "string" ? Number(ts) : NaN;
+  const t =
+    typeof ts === "number" ? ts : typeof ts === "string" ? Number(ts) : NaN;
   if (!Number.isFinite(t)) return null;
   return t < 1e11 ? t * 1000 : t;
 }
@@ -237,7 +277,10 @@ function resolveZone(tz: unknown): ChangeZone {
   return { iana: s };
 }
 
-function civilInZone(ms: number, zone: ChangeZone): { year: number; month: number; day: number } | null {
+function civilInZone(
+  ms: number,
+  zone: ChangeZone,
+): { year: number; month: number; day: number } | null {
   if (!Number.isFinite(ms)) return null;
   if ("off" in zone) return utcCivil(ms + zone.off);
   let fmt = zoneFmt.get(zone.iana);
@@ -263,13 +306,22 @@ function civilInZone(ms: number, zone: ChangeZone): { year: number; month: numbe
     else if (p.type === "month") month = Number(p.value);
     else if (p.type === "day") day = Number(p.value);
   }
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return utcCivil(ms);
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  )
+    return utcCivil(ms);
   return { year, month, day };
 }
 
 function utcCivil(ms: number): { year: number; month: number; day: number } {
   const d = new Date(ms);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+  };
 }
 
 /** ISO year*100+week of a civil date (Monday start), matching `datetime.isocalendar`. */
@@ -278,7 +330,9 @@ function isoWeekId(year: number, month: number, day: number): number {
   const dayNr = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - dayNr);
   const isoYear = date.getUTCFullYear();
-  const diffDays = Math.round((date.getTime() - Date.UTC(isoYear, 0, 1)) / 86_400_000);
+  const diffDays = Math.round(
+    (date.getTime() - Date.UTC(isoYear, 0, 1)) / 86_400_000,
+  );
   const week = Math.ceil((diffDays + 1) / 7);
   return isoYear * 100 + week;
 }

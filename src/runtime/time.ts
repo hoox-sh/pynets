@@ -49,14 +49,20 @@ export function utcPartsFromMs(ms: number): UtcParts {
   const second = rem % 60;
 
   // Epoch day 0 (1970-01-01) Thursday. Python weekday Mon=0.
-  const weekday = ((days + 3) % 7 + 7) % 7; // 0=Mon … 6=Sun
+  const weekday = (((days + 3) % 7) + 7) % 7; // 0=Mon … 6=Sun
   const dayofweek = ((weekday + 1) % 7) + 1; // Pine 1=Sun … 7=Sat
 
   // Civil date from days since Unix epoch (Howard Hinnant).
   const z = days + 719_468;
   const era = Math.trunc((z >= 0 ? z : z - 146_096) / 146_097);
   const doe = z - era * 146_097;
-  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
+  const yoe = Math.trunc(
+    (doe -
+      Math.trunc(doe / 1460) +
+      Math.trunc(doe / 36_524) -
+      Math.trunc(doe / 146_096)) /
+      365,
+  );
   const y = yoe + era * 400;
   const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
   const mp = Math.trunc((5 * doy + 2) / 153);
@@ -131,8 +137,21 @@ function daysInMonth(year: number, month: number): number {
   return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
 }
 
-function utcMsFromYmdHms(year: number, month: number, day: number, hour: number, minute: number, second: number): number {
-  return (daysFromCivil(year, month, day) * SEC_PER_DAY + hour * 3600 + minute * 60 + second) * 1000;
+function utcMsFromYmdHms(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+): number {
+  return (
+    (daysFromCivil(year, month, day) * SEC_PER_DAY +
+      hour * 3600 +
+      minute * 60 +
+      second) *
+    1000
+  );
 }
 
 /**
@@ -156,7 +175,8 @@ function normalizeYearMonth(year: number, month: number): [number, number] {
 
 function requiredTrunc(value: unknown): number | null {
   if (value == null) return null;
-  if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : null;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? Math.trunc(value) : null;
   if (typeof value === "string") {
     const s = value.trim();
     if (!s) return null;
@@ -168,7 +188,8 @@ function requiredTrunc(value: unknown): number | null {
 
 function optionalTrunc(value: unknown, fallback = 0): number {
   if (value == null) return fallback;
-  if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : fallback;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? Math.trunc(value) : fallback;
   if (typeof value === "string") {
     const s = value.trim();
     if (!s) return fallback;
@@ -187,14 +208,20 @@ function offsetFromDigits(sign: string, digits: string): number | null {
   if (!digits || digits.length > 4 || !/^\d+$/.test(digits)) return null;
   if (digits.length <= 2) return offsetFromHm(sign, Number(digits), 0);
   const padded = digits.padStart(4, "0");
-  return offsetFromHm(sign, Number(padded.slice(0, 2)), Number(padded.slice(2)));
+  return offsetFromHm(
+    sign,
+    Number(padded.slice(0, 2)),
+    Number(padded.slice(2)),
+  );
 }
 
 /** Pine `UTC` / `GMT` / `UTC-5` / `GMT+10` / `UTC+5:30`. Unknown → 0 (UTC). */
 function parseTimezoneOffsetMinutes(tzSpec: string): number {
   const z = tzSpec.trim();
-  if (!z || /^(?:syminfo\.timezone|UTC|utc|Etc\/UTC|GMT|gmt)$/.test(z)) return 0;
-  const m = /^(?:(?:UTC|GMT)\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|(\d{2}))?$/i.exec(z);
+  if (!z || /^(?:syminfo\.timezone|UTC|utc|Etc\/UTC|GMT|gmt)$/.test(z))
+    return 0;
+  const m =
+    /^(?:(?:UTC|GMT)\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|(\d{2}))?$/i.exec(z);
   if (!m) return 0;
   return offsetFromHm(m[1]!, Number(m[2]), Number(m[3] || m[4] || 0));
 }
@@ -234,7 +261,8 @@ function stripTimezone(s: string): { date: string; offsetMin: number } {
   m = /\s+([+-])(\d{1,4})\s*$/.exec(s);
   if (m && m.index !== undefined) {
     const off = offsetFromDigits(m[1]!, m[2]!);
-    if (off != null) return { date: s.slice(0, m.index).trim(), offsetMin: off };
+    if (off != null)
+      return { date: s.slice(0, m.index).trim(), offsetMin: off };
   }
 
   m = /(?<=\d)([+-])(\d{2}):(\d{2})\s*$/.exec(s);
@@ -246,7 +274,8 @@ function stripTimezone(s: string): { date: string; offsetMin: number } {
   m = /(?<=\d)([+-])(\d{4})\s*$/.exec(s);
   if (m && m.index !== undefined) {
     const off = offsetFromDigits(m[1]!, m[2]!);
-    if (off != null) return { date: s.slice(0, m.index).trim(), offsetMin: off };
+    if (off != null)
+      return { date: s.slice(0, m.index).trim(), offsetMin: off };
   }
 
   m = /(?<=\d)([+-])(\d{2})\s*$/.exec(s);
@@ -272,26 +301,56 @@ function civilMsStrict(
   if (year < 1 || year > 9999) return null;
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > daysInMonth(year, month)) return null;
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+  if (
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59
+  )
+    return null;
   return utcMsFromYmdHms(year, month, day, hour, minute, second);
 }
 
 function parseNaiveDateTime(s: string): number | null {
-  let m = /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+  let m =
+    /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+      s,
+    );
   if (m) {
     const month = MONTH_INDEX[m[1]!.toLowerCase()];
     if (month == null) return null;
-    return civilMsStrict(Number(m[3]), month, Number(m[2]), Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0));
+    return civilMsStrict(
+      Number(m[3]),
+      month,
+      Number(m[2]),
+      Number(m[4] ?? 0),
+      Number(m[5] ?? 0),
+      Number(m[6] ?? 0),
+    );
   }
 
-  m = /^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+  m =
+    /^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+      s,
+    );
   if (m) {
     const month = MONTH_INDEX[m[2]!.toLowerCase()];
     if (month == null) return null;
-    return civilMsStrict(Number(m[3]), month, Number(m[1]), Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0));
+    return civilMsStrict(
+      Number(m[3]),
+      month,
+      Number(m[1]),
+      Number(m[4] ?? 0),
+      Number(m[5] ?? 0),
+      Number(m[6] ?? 0),
+    );
   }
 
-  m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+  m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+    s,
+  );
   if (m) {
     return civilMsStrict(
       Number(m[1]),
@@ -303,7 +362,10 @@ function parseNaiveDateTime(s: string): number | null {
     );
   }
 
-  m = /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+  m =
+    /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+      s,
+    );
   if (m) {
     return civilMsStrict(
       Number(m[1]),
@@ -409,7 +471,8 @@ export function timestamp(...args: unknown[]): number | null {
 
   if (typeof args[0] === "string") {
     const stripped = args[0].trim();
-    const isNumericStr = stripped !== "" && /^[+-]?\d+(?:\.\d+)?$/.test(stripped);
+    const isNumericStr =
+      stripped !== "" && /^[+-]?\d+(?:\.\d+)?$/.test(stripped);
     if (n >= 4 && !isNumericStr) {
       return timestampFromComponents(
         args[1] as number,

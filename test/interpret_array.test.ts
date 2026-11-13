@@ -40,7 +40,10 @@ function runPlots(src: string): Array<number | null> | null {
   }
 }
 
-function plotsEq(plots: Array<number | null> | null, expected: Array<number | null>): boolean {
+function plotsEq(
+  plots: Array<number | null> | null,
+  expected: Array<number | null>,
+): boolean {
   return plots != null && JSON.stringify(plots) === JSON.stringify(expected);
 }
 
@@ -61,7 +64,9 @@ function arrayWired(): boolean {
   const pick = pickSrc();
   if (pick != null) return true;
   const candidates = [PUSH_GET, SIZED, LITERAL];
-  return candidates.some((src) => parseOk(src) && (runPlots(src)?.some((v) => v != null) ?? false));
+  return candidates.some(
+    (src) => parseOk(src) && (runPlots(src)?.some((v) => v != null) ?? false),
+  );
 }
 
 const PICK = pickSrc();
@@ -108,7 +113,7 @@ plot(array.binary_search(a, 3, 0))`,
     expect(out.plots).toEqual([1, 1, 1, 1, 1]);
   });
 
-  test("named plots: default sort_field 0 and string name \"x\"", () => {
+  test('named plots: default sort_field 0 and string name "x"', () => {
     const out = new Runtime("TEST").run(UDT_SRC, BARS);
     expect(out.error).toBeUndefined();
     expect(out.series.plot?.[0]).toBe(1);

@@ -44,13 +44,19 @@ function boolReady(src: string): boolean {
 }
 
 describe("interpret and / or", () => {
-  test.skipIf(!boolReady(AND_SRC))("plot(close > 2 and close < 5) on 1..5", () => {
-    const out = interpret(AND_SRC, BARS);
-    expect(out.plots).toEqual([0, 0, 1, 1, 0]);
-  });
+  test.skipIf(!boolReady(AND_SRC))(
+    "plot(close > 2 and close < 5) on 1..5",
+    () => {
+      const out = interpret(AND_SRC, BARS);
+      expect(out.plots).toEqual([0, 0, 1, 1, 0]);
+    },
+  );
 
-  test.skipIf(!boolReady(OR_SRC))("plot(close < 2 or close > 4) on 1..5", () => {
-    const out = interpret(OR_SRC, BARS);
-    expect(out.plots).toEqual([1, 0, 0, 0, 1]);
-  });
+  test.skipIf(!boolReady(OR_SRC))(
+    "plot(close < 2 or close > 4) on 1..5",
+    () => {
+      const out = interpret(OR_SRC, BARS);
+      expect(out.plots).toEqual([1, 0, 0, 0, 1]);
+    },
+  );
 });

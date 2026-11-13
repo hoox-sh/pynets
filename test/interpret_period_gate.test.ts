@@ -38,7 +38,10 @@ function wigglyBars(n: number) {
   });
 }
 
-function plotsOf(body: string, ohlcv: ReturnType<typeof wigglyBars>): Array<number | null> {
+function plotsOf(
+  body: string,
+  ohlcv: ReturnType<typeof wigglyBars>,
+): Array<number | null> {
   const out = new Runtime("TEST").run(`indicator("t")\n${body}`, ohlcv);
   expect(out.error).toBeUndefined();
   return out.plots;
@@ -48,63 +51,109 @@ describe("interpret period-like length gate (Python _is_period_like)", () => {
   // na-period forms: gated fractional → treated as absent → na output
   test("ta.atr(7.5) ignored → na like ta.atr(na); ta.atr(7.0) ≡ ta.atr(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.atr(7.5))", b)).toEqual(plotsOf("plot(ta.atr(na))", b));
-    expect(plotsOf("plot(ta.atr(7.5))", b)).not.toEqual(plotsOf("plot(ta.atr(7))", b));
-    expect(plotsOf("plot(ta.atr(7.0))", b)).toEqual(plotsOf("plot(ta.atr(7))", b));
+    expect(plotsOf("plot(ta.atr(7.5))", b)).toEqual(
+      plotsOf("plot(ta.atr(na))", b),
+    );
+    expect(plotsOf("plot(ta.atr(7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.atr(7))", b),
+    );
+    expect(plotsOf("plot(ta.atr(7.0))", b)).toEqual(
+      plotsOf("plot(ta.atr(7))", b),
+    );
   });
 
   test("ta.wpr(7.5) ignored → na like ta.wpr(na); ta.wpr(7.0) ≡ ta.wpr(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.wpr(7.5))", b)).toEqual(plotsOf("plot(ta.wpr(na))", b));
-    expect(plotsOf("plot(ta.wpr(7.5))", b)).not.toEqual(plotsOf("plot(ta.wpr(7))", b));
-    expect(plotsOf("plot(ta.wpr(7.0))", b)).toEqual(plotsOf("plot(ta.wpr(7))", b));
+    expect(plotsOf("plot(ta.wpr(7.5))", b)).toEqual(
+      plotsOf("plot(ta.wpr(na))", b),
+    );
+    expect(plotsOf("plot(ta.wpr(7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.wpr(7))", b),
+    );
+    expect(plotsOf("plot(ta.wpr(7.0))", b)).toEqual(
+      plotsOf("plot(ta.wpr(7))", b),
+    );
   });
 
   test("ta.stoch(7.5) ignored → na like ta.stoch(na); ta.stoch(7.0) ≡ ta.stoch(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.stoch(7.5))", b)).toEqual(plotsOf("plot(ta.stoch(na))", b));
-    expect(plotsOf("plot(ta.stoch(7.0))", b)).toEqual(plotsOf("plot(ta.stoch(7))", b));
+    expect(plotsOf("plot(ta.stoch(7.5))", b)).toEqual(
+      plotsOf("plot(ta.stoch(na))", b),
+    );
+    expect(plotsOf("plot(ta.stoch(7.0))", b)).toEqual(
+      plotsOf("plot(ta.stoch(7))", b),
+    );
   });
 
   test("ta.mfi(7.5) ignored → na like ta.mfi(na); ta.mfi(7.0) ≡ ta.mfi(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.mfi(7.5))", b)).toEqual(plotsOf("plot(ta.mfi(na))", b));
-    expect(plotsOf("plot(ta.mfi(7.0))", b)).toEqual(plotsOf("plot(ta.mfi(7))", b));
+    expect(plotsOf("plot(ta.mfi(7.5))", b)).toEqual(
+      plotsOf("plot(ta.mfi(na))", b),
+    );
+    expect(plotsOf("plot(ta.mfi(7.0))", b)).toEqual(
+      plotsOf("plot(ta.mfi(7))", b),
+    );
   });
 
   // default-fallback forms: gated fractional → treated as absent → default
   test("ta.wvad(7.5) ignored → default 20 like ta.wvad(); ta.wvad(7.0) ≡ ta.wvad(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.wvad(7.5))", b)).toEqual(plotsOf("plot(ta.wvad())", b));
-    expect(plotsOf("plot(ta.wvad(7.5))", b)).not.toEqual(plotsOf("plot(ta.wvad(7))", b));
-    expect(plotsOf("plot(ta.wvad(7.0))", b)).toEqual(plotsOf("plot(ta.wvad(7))", b));
+    expect(plotsOf("plot(ta.wvad(7.5))", b)).toEqual(
+      plotsOf("plot(ta.wvad())", b),
+    );
+    expect(plotsOf("plot(ta.wvad(7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.wvad(7))", b),
+    );
+    expect(plotsOf("plot(ta.wvad(7.0))", b)).toEqual(
+      plotsOf("plot(ta.wvad(7))", b),
+    );
   });
 
   test("ta.cmf(7.5) ignored → default 20 like ta.cmf(); ta.cmf(7.0) ≡ ta.cmf(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.cmf(7.5))", b)).toEqual(plotsOf("plot(ta.cmf())", b));
-    expect(plotsOf("plot(ta.cmf(7.5))", b)).not.toEqual(plotsOf("plot(ta.cmf(7))", b));
-    expect(plotsOf("plot(ta.cmf(7.0))", b)).toEqual(plotsOf("plot(ta.cmf(7))", b));
+    expect(plotsOf("plot(ta.cmf(7.5))", b)).toEqual(
+      plotsOf("plot(ta.cmf())", b),
+    );
+    expect(plotsOf("plot(ta.cmf(7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.cmf(7))", b),
+    );
+    expect(plotsOf("plot(ta.cmf(7.0))", b)).toEqual(
+      plotsOf("plot(ta.cmf(7))", b),
+    );
   });
 
   test("ta.adx(7.5) ignored → default 14 like ta.adx(); ta.adx(7.0) ≡ ta.adx(7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.adx(7.5))", b)).toEqual(plotsOf("plot(ta.adx())", b));
-    expect(plotsOf("plot(ta.adx(7.5))", b)).not.toEqual(plotsOf("plot(ta.adx(7))", b));
-    expect(plotsOf("plot(ta.adx(7.0))", b)).toEqual(plotsOf("plot(ta.adx(7))", b));
+    expect(plotsOf("plot(ta.adx(7.5))", b)).toEqual(
+      plotsOf("plot(ta.adx())", b),
+    );
+    expect(plotsOf("plot(ta.adx(7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.adx(7))", b),
+    );
+    expect(plotsOf("plot(ta.adx(7.0))", b)).toEqual(
+      plotsOf("plot(ta.adx(7))", b),
+    );
   });
 
   test("ta.tsi(7.5, 3) ignores short slot → default 13; whole floats pass", () => {
     const b = wigglyBars(60);
-    expect(plotsOf("plot(ta.tsi(7.5, 3))", b)).toEqual(plotsOf("plot(ta.tsi(13, 3))", b));
-    expect(plotsOf("plot(ta.tsi(7.5, 3))", b)).not.toEqual(plotsOf("plot(ta.tsi(7, 3))", b));
-    expect(plotsOf("plot(ta.tsi(7.0, 34.0))", b)).toEqual(plotsOf("plot(ta.tsi(7, 34))", b));
+    expect(plotsOf("plot(ta.tsi(7.5, 3))", b)).toEqual(
+      plotsOf("plot(ta.tsi(13, 3))", b),
+    );
+    expect(plotsOf("plot(ta.tsi(7.5, 3))", b)).not.toEqual(
+      plotsOf("plot(ta.tsi(7, 3))", b),
+    );
+    expect(plotsOf("plot(ta.tsi(7.0, 34.0))", b)).toEqual(
+      plotsOf("plot(ta.tsi(7, 34))", b),
+    );
   });
 
   test("ta.kc(close, 7.5, 2) ignores length → na like ta.kc(close, na, 2)", () => {
     const b = wigglyBars(40);
     const frac = plotsOf("[m, u, l] = ta.kc(close, 7.5, 2)\nplot(m)", b);
-    expect(frac).toEqual(plotsOf("[m, u, l] = ta.kc(close, na, 2)\nplot(m)", b));
+    expect(frac).toEqual(
+      plotsOf("[m, u, l] = ta.kc(close, na, 2)\nplot(m)", b),
+    );
     expect(frac.every((v) => v == null)).toBe(true);
     expect(plotsOf("[m, u, l] = ta.kc(close, 7.0, 2)\nplot(m)", b)).toEqual(
       plotsOf("[m, u, l] = ta.kc(close, 7, 2)\nplot(m)", b),
@@ -118,13 +167,19 @@ describe("interpret non-gated length args keep Python floor coercion (negative c
   // through `_is_period_like`. Fractional lengths must remain accepted.
   test("ta.sma(close, 7.5) floors to ta.sma(close, 7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.sma(close, 7.5))", b)).toEqual(plotsOf("plot(ta.sma(close, 7))", b));
-    expect(plotsOf("plot(ta.sma(close, 7.5))", b)).not.toEqual(plotsOf("plot(ta.sma(close, 8))", b));
+    expect(plotsOf("plot(ta.sma(close, 7.5))", b)).toEqual(
+      plotsOf("plot(ta.sma(close, 7))", b),
+    );
+    expect(plotsOf("plot(ta.sma(close, 7.5))", b)).not.toEqual(
+      plotsOf("plot(ta.sma(close, 8))", b),
+    );
   });
 
   test("ta.ema(close, 7.5) floors to ta.ema(close, 7)", () => {
     const b = wigglyBars(40);
-    expect(plotsOf("plot(ta.ema(close, 7.5))", b)).toEqual(plotsOf("plot(ta.ema(close, 7))", b));
+    expect(plotsOf("plot(ta.ema(close, 7.5))", b)).toEqual(
+      plotsOf("plot(ta.ema(close, 7))", b),
+    );
   });
 
   test("ta.supertrend(2, 7.5) floors atrPeriod to 7", () => {

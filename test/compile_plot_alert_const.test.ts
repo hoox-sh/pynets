@@ -7,7 +7,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
-import { PYNE_ROOT, pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
+import {
+  PYNE_ROOT,
+  pythonAvailable,
+  pythonBin,
+} from "./helpers/python_runtime.ts";
 
 const BARS = [1, 2, 3].map((close) => ({ close }));
 const ONES = [1, 1, 1];
@@ -76,17 +80,19 @@ plot(na(alert.nope) ? 1 : 0, "a")`;
   });
 });
 
-describe.skipIf(!pythonAvailable())("compile plot.style_* / alert.freq_* vs Python", () => {
-  const TOKENS = [...PLOT_STYLES, ...ALERT_FREQS];
+describe.skipIf(!pythonAvailable())(
+  "compile plot.style_* / alert.freq_* vs Python",
+  () => {
+    const TOKENS = [...PLOT_STYLES, ...ALERT_FREQS];
 
-  function pythonPlotsBatch(): Array<Array<number | null>> | null {
-    const jobs = TOKENS.map(([name, lit]) => eqSrc(name, lit));
-    try {
-      const proc = Bun.spawnSync(
-        [
-          pythonBin(),
-          "-c",
-          `from pynescript.runtime import Runtime
+    function pythonPlotsBatch(): Array<Array<number | null>> | null {
+      const jobs = TOKENS.map(([name, lit]) => eqSrc(name, lit));
+      try {
+        const proc = Bun.spawnSync(
+          [
+            pythonBin(),
+            "-c",
+            `from pynescript.runtime import Runtime
 import json
 jobs = ${JSON.stringify(jobs)}
 bars = ${JSON.stringify(BARS)}
@@ -99,25 +105,26 @@ for src in jobs:
         raise SystemExit(str(err))
     out.append(r.get("plots") if isinstance(r, dict) else list(r.plots))
 print(json.dumps(out))`,
-        ],
-        { cwd: PYNE_ROOT, stdout: "pipe", stderr: "pipe" },
-      );
-      if (proc.exitCode !== 0) return null;
-      const parsed = JSON.parse(proc.stdout.toString().trim());
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
+          ],
+          { cwd: PYNE_ROOT, stdout: "pipe", stderr: "pipe" },
+        );
+        if (proc.exitCode !== 0) return null;
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
     }
-  }
 
-  test("compile plots match Python for each plot.style_* / alert.freq_* token", () => {
-    const pyAll = pythonPlotsBatch();
-    expect(pyAll).not.toBeNull();
-    expect(pyAll!.length).toBe(TOKENS.length);
-    for (let i = 0; i < TOKENS.length; i++) {
-      const [name, lit] = TOKENS[i]!;
-      expect(pyAll![i]).toEqual(ONES);
-      expect(compileEq(name, lit)).toEqual(pyAll![i]!);
-    }
-  });
-});
+    test("compile plots match Python for each plot.style_* / alert.freq_* token", () => {
+      const pyAll = pythonPlotsBatch();
+      expect(pyAll).not.toBeNull();
+      expect(pyAll!.length).toBe(TOKENS.length);
+      for (let i = 0; i < TOKENS.length; i++) {
+        const [name, lit] = TOKENS[i]!;
+        expect(pyAll![i]).toEqual(ONES);
+        expect(compileEq(name, lit)).toEqual(pyAll![i]!);
+      }
+    });
+  },
+);

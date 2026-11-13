@@ -46,12 +46,18 @@ function runPlots(src: string): Array<number | null> | null {
   }
 }
 
-function plotsEq(plots: Array<number | null> | null, expected: Array<number | null>): boolean {
+function plotsEq(
+  plots: Array<number | null> | null,
+  expected: Array<number | null>,
+): boolean {
   return plots != null && JSON.stringify(plots) === JSON.stringify(expected);
 }
 
 function hasFinite(plots: Array<number | null> | null): boolean {
-  return plots != null && plots.some((v) => typeof v === "number" && Number.isFinite(v));
+  return (
+    plots != null &&
+    plots.some((v) => typeof v === "number" && Number.isFinite(v))
+  );
 }
 
 function pickSrc(): { src: string; expected: Array<number | null> } | null {

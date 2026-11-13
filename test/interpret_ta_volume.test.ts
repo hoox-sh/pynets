@@ -17,13 +17,15 @@ const VOL1 = [
   { open: 103, high: 102, low: 92, close: 94, volume: 1 },
 ];
 
-const KLINGER_BARS = [100, 101, 102, 101, 103, 104, 102, 105].map((close, i) => ({
-  open: close,
-  high: close + 2,
-  low: close - 2,
-  close,
-  volume: 10 * (i + 1),
-}));
+const KLINGER_BARS = [100, 101, 102, 101, 103, 104, 102, 105].map(
+  (close, i) => ({
+    open: close,
+    high: close + 2,
+    low: close - 2,
+    close,
+    volume: 10 * (i + 1),
+  }),
+);
 
 describe("interpret ta.wad", () => {
   test("bar0 is 0; bar1 up is vol*(close-low)=16", () => {
@@ -40,7 +42,10 @@ describe("interpret ta.wad", () => {
   });
 
   test("4-arg form uses explicit H/L/C/V", () => {
-    const out = interpret(`indicator("t")\nplot(ta.wad(high, low, close, volume))`, BARS);
+    const out = interpret(
+      `indicator("t")\nplot(ta.wad(high, low, close, volume))`,
+      BARS,
+    );
     expect(out.plots).toEqual([0, 16, -8]);
   });
 });
@@ -74,7 +79,10 @@ describe("interpret ta.wvad", () => {
 
   test("bare wvad alias and 5-arg form", () => {
     const bare = interpret(`indicator("t")\nplot(wvad(20))`, BARS);
-    const five = interpret(`indicator("t")\nplot(ta.wvad(high, low, close, volume, 20))`, BARS);
+    const five = interpret(
+      `indicator("t")\nplot(ta.wvad(high, low, close, volume, 20))`,
+      BARS,
+    );
     expect(bare.plots[1]).toBeCloseTo(16 / 12);
     expect(five.plots).toEqual(bare.plots);
   });
@@ -101,7 +109,10 @@ describe("interpret ta.cmf", () => {
 
   test("bare cmf and 5-arg (close, high, low, volume, period)", () => {
     const bare = interpret(`indicator("t")\nplot(cmf(2))`, BARS);
-    const five = interpret(`indicator("t")\nplot(ta.cmf(close, high, low, volume, 2))`, BARS);
+    const five = interpret(
+      `indicator("t")\nplot(ta.cmf(close, high, low, volume, 2))`,
+      BARS,
+    );
     expect(bare.plots[1]).toBeCloseTo(0.1);
     expect(bare.plots[2]).toBeCloseTo(-0.12);
     expect(five.plots).toEqual(bare.plots);

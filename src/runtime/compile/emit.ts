@@ -196,7 +196,12 @@ function collectMissedArrays(ctx: EmitCtx, body: string[]): void {
 
 function assemble(ctx: EmitCtx, body: string[]): string {
   if (ctx.needsHeikinashi) {
-    for (const arr of ["ha_open_arr", "ha_high_arr", "ha_low_arr", "ha_close_arr"] as const) {
+    for (const arr of [
+      "ha_open_arr",
+      "ha_high_arr",
+      "ha_low_arr",
+      "ha_close_arr",
+    ] as const) {
       ctx.arrays.add(arr);
     }
   }
@@ -222,7 +227,9 @@ function assemble(ctx: EmitCtx, body: string[]): string {
     if (fn) lines.push(indentBlock(fn, 2));
   }
   for (const [name, spec] of ctx.udtTypes) {
-    lines.push(`  __h.udtRegister(${JSON.stringify(name)}, ${JSON.stringify(spec.fields)});`);
+    lines.push(
+      `  __h.udtRegister(${JSON.stringify(name)}, ${JSON.stringify(spec.fields)});`,
+    );
   }
   lines.push("  for (let __bar_idx = 0; __bar_idx < n_bars; __bar_idx++) {");
   lines.push("    const open = open_arr[__bar_idx];");
@@ -236,20 +243,32 @@ function assemble(ctx: EmitCtx, body: string[]): string {
   lines.push("    const last_bar_index = n_bars - 1;");
   lines.push("    const na = null;");
   lines.push("    const hl2 = __h.div(__h.add(high, low), 2);");
-  lines.push("    const hlc3 = __h.div(__h.add(__h.add(high, low), close), 3);");
-  lines.push("    const ohlc4 = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);");
+  lines.push(
+    "    const hlc3 = __h.div(__h.add(__h.add(high, low), close), 3);",
+  );
+  lines.push(
+    "    const ohlc4 = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);",
+  );
   if (ctx.usesStrategy) {
-    lines.push("    __h.strategy.beginBar(__bar_idx, open, high, low, close, time);");
+    lines.push(
+      "    __h.strategy.beginBar(__bar_idx, open, high, low, close, time);",
+    );
   }
   if (ctx.needsHeikinashi) {
-    lines.push("    const _ha_c = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);");
+    lines.push(
+      "    const _ha_c = __h.div(__h.add(__h.add(__h.add(open, high), low), close), 4);",
+    );
     lines.push(
       "    const _ha_o = (__bar_idx === 0 || __h.isNa(ha_open_arr[__bar_idx - 1])) ? __h.div(__h.add(open, close), 2) : __h.div(__h.add(ha_open_arr[__bar_idx - 1], ha_close_arr[__bar_idx - 1]), 2);",
     );
     lines.push("    ha_open_arr[__bar_idx] = _ha_o;");
     lines.push("    ha_close_arr[__bar_idx] = _ha_c;");
-    lines.push("    ha_high_arr[__bar_idx] = __h.max(high, __h.max(_ha_o, _ha_c));");
-    lines.push("    ha_low_arr[__bar_idx] = __h.min(low, __h.min(_ha_o, _ha_c));");
+    lines.push(
+      "    ha_high_arr[__bar_idx] = __h.max(high, __h.max(_ha_o, _ha_c));",
+    );
+    lines.push(
+      "    ha_low_arr[__bar_idx] = __h.min(low, __h.min(_ha_o, _ha_c));",
+    );
   }
   for (const line of body) {
     lines.push(indentBlock(line, 4));
@@ -302,7 +321,9 @@ function emitStmt(state: State, node: stmt | expr): string {
     case "AugAssign":
       return emitAugAssign(state, node);
     case "FunctionDef":
-      emitFunctionDef(state.ctx, node as FunctionDef, (s) => emitStmt(state, s));
+      emitFunctionDef(state.ctx, node as FunctionDef, (s) =>
+        emitStmt(state, s),
+      );
       if (state.ctx.currentFunc != null) state.ctx.currentFunc = null;
       return "";
     case "TypeDef":
@@ -411,7 +432,8 @@ function emitName(state: State, node: Name): string {
   if (id === "barstate") return "null";
   if (id === "true" || id === "True") return "true";
   if (id === "false" || id === "False") return "false";
-  if (state.ctx.currentSeriesParams.has(id)) return `${safeIdent(id)}[__bar_idx]`;
+  if (state.ctx.currentSeriesParams.has(id))
+    return `${safeIdent(id)}[__bar_idx]`;
   const st = stArrayFor(state.ctx, id);
   if (st != null) return `${st}[__bar_idx]`;
   const arr = seriesArrName(id);
@@ -428,7 +450,11 @@ function emitConstant(node: Constant): string {
   const v = node.value;
   if (v == null) return "null";
   if (typeof v === "number" && !Number.isFinite(v)) return "null";
-  if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") {
+  if (
+    typeof v === "number" ||
+    typeof v === "boolean" ||
+    typeof v === "string"
+  ) {
     return JSON.stringify(v);
   }
   return "null";
@@ -463,7 +489,11 @@ function emitBinOp(state: State, node: BinOp): string {
   }
 }
 
-function emitBitOp(left: string, right: string, op: "&" | "|" | "^" | "<<" | ">>"): string {
+function emitBitOp(
+  left: string,
+  right: string,
+  op: "&" | "|" | "^" | "<<" | ">>",
+): string {
   return `((__l, __r) => { if (__h.isNa(__l) || __h.isNa(__r)) return null; return (__h.nz(__l) | 0) ${op} (__h.nz(__r) | 0); })(${left}, ${right})`;
 }
 
@@ -887,7 +917,10 @@ function emitSyminfo(attr: string): string {
 
 function emitAttribute(state: State, node: Attribute): string {
   // Import alias.member is not a JS object — calls go through emit_call; loads are na.
-  if (node.value.kind === "Name" && state.ctx.importAliases.has(node.value.id)) {
+  if (
+    node.value.kind === "Name" &&
+    state.ctx.importAliases.has(node.value.id)
+  ) {
     return "null";
   }
   if (node.value.kind === "Name" && node.value.id === "barstate") {
@@ -912,7 +945,11 @@ function emitAttribute(state: State, node: Attribute): string {
     // Bare `ta.<attr>` auto-calls only for the whitelist interpret's
     // evalTaAttr supports; everything else is na on both backends.
     if (!TA_BARE_ATTRS.has(node.attr)) return "null";
-    return emitCall(state.ctx, { kind: "Call", func: node, args: [] }, visitOf(state));
+    return emitCall(
+      state.ctx,
+      { kind: "Call", func: node, args: [] },
+      visitOf(state),
+    );
   }
   if (node.value.kind === "Name" && node.value.id === "strategy") {
     const attr = node.attr;
@@ -983,7 +1020,10 @@ function emitSubscript(state: State, node: Subscript): string {
   const arr = histArray(state, node.value);
   // Array-valued names index the current PineArray (Python list subscript:
   // newest-first, `value[-(offset + 1)]`), not series history.
-  if (node.value.kind === "Name" && state.ctx.arrayNames.has((node.value as Name).id)) {
+  if (
+    node.value.kind === "Name" &&
+    state.ctx.arrayNames.has((node.value as Name).id)
+  ) {
     return `__h.array.sub(${arr}[__bar_idx], ${slice})`;
   }
   return `__h.hist(${arr}, __bar_idx, ${slice})`;
@@ -1098,9 +1138,17 @@ function emitReAssign(state: State, node: ReAssign): string {
 }
 
 /** Names bound to PineArray results get list-subscript lowering (`g[0]`). */
-function trackArrayName(state: State, target: expr, value: expr | null | undefined): void {
+function trackArrayName(
+  state: State,
+  target: expr,
+  value: expr | null | undefined,
+): void {
   if (target.kind !== "Name") return;
-  if (value != null && value.kind === "Call" && isArrayReturningCall((value as Call).func)) {
+  if (
+    value != null &&
+    value.kind === "Call" &&
+    isArrayReturningCall((value as Call).func)
+  ) {
     state.ctx.arrayNames.add(target.id);
   } else {
     state.ctx.arrayNames.delete(target.id);
@@ -1122,7 +1170,12 @@ function emitAugAssign(state: State, node: AugAssign): string {
   return emitStore(state, node.target, rhs, false);
 }
 
-function emitStore(state: State, target: expr, rhs: string, isVar: boolean): string {
+function emitStore(
+  state: State,
+  target: expr,
+  rhs: string,
+  isVar: boolean,
+): string {
   if (target.kind === "Name") {
     return storeName(state, target.id, rhs, isVar);
   }
@@ -1146,7 +1199,12 @@ function emitStore(state: State, target: expr, rhs: string, isVar: boolean): str
   return `${emitExpr(state, target)} = __h.naNum(${rhs});`;
 }
 
-function storeName(state: State, id: string, rhs: string, isVar: boolean): string {
+function storeName(
+  state: State,
+  id: string,
+  rhs: string,
+  isVar: boolean,
+): string {
   const arr = trackSeries(state, id);
   const wrapped = `__h.hold(${rhs})`;
   if (isVar) {
@@ -1167,7 +1225,9 @@ function storeName(state: State, id: string, rhs: string, isVar: boolean): strin
 function emitIfExpr(state: State, node: If): string {
   const thenE = singlePureExpr(state, node.body);
   const elseE =
-    node.orelse && node.orelse.length ? singlePureExpr(state, node.orelse) : "null";
+    node.orelse && node.orelse.length
+      ? singlePureExpr(state, node.orelse)
+      : "null";
   if (thenE != null && elseE != null) {
     return `(__h.nz(${emitExpr(state, node.test)}) ? ${thenE} : ${elseE})`;
   }
@@ -1195,9 +1255,12 @@ function emitIfStmt(state: State, node: If, asExpr = false): string {
 function emitOnce(state: State, node: Once): string {
   const flag = `__once_${state.ctx.onceFlags.length}`;
   state.ctx.onceFlags.push(flag);
-  const test = node.test == null ? "true" : `__h.nz(${emitExpr(state, node.test)})`;
+  const test =
+    node.test == null ? "true" : `__h.nz(${emitExpr(state, node.test)})`;
   const body = emitBranch(state, node.body, false);
-  const inner = body ? `${indentBlock(body, 4)}\n    ${flag} = true;` : `    ${flag} = true;`;
+  const inner = body
+    ? `${indentBlock(body, 4)}\n    ${flag} = true;`
+    : `    ${flag} = true;`;
   return `if (!${flag}) {\n  if (${test}) {\n${inner}\n  }\n}`;
 }
 
@@ -1245,7 +1308,9 @@ function singlePureExpr(state: State, stmts: stmt[]): string | null {
   if (inner.kind === "If") {
     const thenE = singlePureExpr(state, inner.body);
     const elseE =
-      inner.orelse && inner.orelse.length ? singlePureExpr(state, inner.orelse) : "null";
+      inner.orelse && inner.orelse.length
+        ? singlePureExpr(state, inner.orelse)
+        : "null";
     if (thenE == null || elseE == null) return null;
     return `(__h.nz(${emitExpr(state, inner.test)}) ? ${thenE} : ${elseE})`;
   }
@@ -1325,10 +1390,13 @@ function emitForIn(state: State, node: ForIn): string {
       bind = `const ${names[1]} = ${itemsN}[${idxN}];`;
     } else {
       header = "";
-      bind = names.map((n, i) => `const ${n} = ${itemsN}[${idxN}][${i}];`).join("\n");
+      bind = names
+        .map((n, i) => `const ${n} = ${itemsN}[${idxN}][${i}];`)
+        .join("\n");
     }
   } else {
-    const pid = node.target.kind === "Name" ? node.target.id : `__v${state.tmp++}`;
+    const pid =
+      node.target.kind === "Name" ? node.target.id : `__v${state.tmp++}`;
     const js = node.target.kind === "Name" ? safeIdent(pid) : pid;
     added.push({ id: pid, prev: state.loopVars.get(pid) });
     state.loopVars.set(pid, js);
@@ -1403,15 +1471,25 @@ function emitSwitch(state: State, node: Switch, asExpr: boolean): string {
 }
 
 /** Python `_switch_case_matches`: a comma arm (`1, 2 =>`) matches any element. */
-function emitSwitchCond(state: State, pattern: expr, subjN: string | null): string {
+function emitSwitchCond(
+  state: State,
+  pattern: expr,
+  subjN: string | null,
+): string {
   if (pattern.kind === "Tuple") {
-    const parts = (pattern.elts ?? []).map((e) => emitSwitchLeaf(state, e, subjN));
+    const parts = (pattern.elts ?? []).map((e) =>
+      emitSwitchLeaf(state, e, subjN),
+    );
     return parts.length ? `(${parts.join(" || ")})` : "false";
   }
   return emitSwitchLeaf(state, pattern, subjN);
 }
 
-function emitSwitchLeaf(state: State, pattern: expr, subjN: string | null): string {
+function emitSwitchLeaf(
+  state: State,
+  pattern: expr,
+  subjN: string | null,
+): string {
   return subjN != null
     ? `__h.eq(${subjN}, ${emitExpr(state, pattern)})`
     : `__h.nz(${emitExpr(state, pattern)})`;
@@ -1464,7 +1542,8 @@ function prefetch(state: State, node: unknown): void {
     return;
   }
   const n = node as { kind?: string; name?: string; target?: expr };
-  if (n.kind === "TypeDef" || n.kind === "EnumDef" || n.kind === "Import") return;
+  if (n.kind === "TypeDef" || n.kind === "EnumDef" || n.kind === "Import")
+    return;
   if (n.kind === "FunctionDef" && typeof n.name === "string") {
     state.ctx.userFuncs.add(n.name);
     return;
@@ -1531,6 +1610,8 @@ function indentBlock(s: string, n: number): string {
 }
 
 function iife(body: string, fallback: string): string {
-  const inner = body.trim() ? `${body}\nreturn ${fallback};` : `return ${fallback};`;
+  const inner = body.trim()
+    ? `${body}\nreturn ${fallback};`
+    : `return ${fallback};`;
   return `(() => {\n${indentBlock(inner, 2)}\n})()`;
 }

@@ -31,7 +31,10 @@ function parseOk(src: string): boolean {
 }
 
 function taHas(method: string): boolean {
-  return typeof (new TaEngine() as unknown as Record<string, unknown>)[method] === "function";
+  return (
+    typeof (new TaEngine() as unknown as Record<string, unknown>)[method] ===
+    "function"
+  );
 }
 
 function interpretHasFinite(src: string): boolean {
@@ -57,7 +60,9 @@ function stochReady(src: string | null): boolean {
   if (src == null || !parseOk(src)) return false;
   try {
     const out = interpret(src, BARS);
-    const finite = out.plots.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const finite = out.plots.filter(
+      (v): v is number => typeof v === "number" && Number.isFinite(v),
+    );
     return finite.length > 0 && finite.every((v) => v >= 0 && v <= 100);
   } catch {
     return false;
@@ -78,16 +83,21 @@ const STOCH_PICK = pickSrc([STOCH_SRC, STOCH_LEN_SRC], "stoch");
 const LINREG_PICK = pickSrc([LINREG_SRC, LINREG_NO_OFF], "linreg");
 
 describe("interpret extra TA stoch / linreg", () => {
-  test.skipIf(!stochReady(STOCH_PICK))("ta.stoch(close, high, low, 3) on 1..5", () => {
-    const out = interpret(STOCH_PICK!, BARS);
-    expect(out.plots).toHaveLength(5);
-    const finite = out.plots.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-    expect(finite.length).toBeGreaterThan(0);
-    for (const v of finite) {
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(100);
-    }
-  });
+  test.skipIf(!stochReady(STOCH_PICK))(
+    "ta.stoch(close, high, low, 3) on 1..5",
+    () => {
+      const out = interpret(STOCH_PICK!, BARS);
+      expect(out.plots).toHaveLength(5);
+      const finite = out.plots.filter(
+        (v): v is number => typeof v === "number" && Number.isFinite(v),
+      );
+      expect(finite.length).toBeGreaterThan(0);
+      for (const v of finite) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(100);
+      }
+    },
+  );
 
   test.skipIf(!linregReady(LINREG_PICK))("ta.linreg(close, 3) on 1..5", () => {
     const out = interpret(LINREG_PICK!, BARS);

@@ -59,7 +59,9 @@ function haCloseLast(): number {
 }
 
 /** Interpret applied HA when last plot is finite and not raw close. */
-function interpretAppliesHa(interpreted: ReturnType<typeof runInterpret>): boolean {
+function interpretAppliesHa(
+  interpreted: ReturnType<typeof runInterpret>,
+): boolean {
   if (interpreted.error != null) return false;
   const last = lastPlot(interpreted.plots);
   return last != null && Number.isFinite(last) && last !== RAW_CLOSE_LAST;

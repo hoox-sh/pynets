@@ -21,20 +21,28 @@ const BARS: OHLCVBar[] = [100, 110, 120].map((close, i) => ({
 }));
 
 function nums(values: Array<number | null> | undefined): Array<number | null> {
-  return (values ?? []).map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
+  return (values ?? []).map((v) =>
+    typeof v === "number" && Number.isFinite(v) ? v : null,
+  );
 }
 
 function run(src: string, mode: "interpret" | "compile"): RuntimeResult {
   return new Runtime("TEST").run(src, BARS, { mode });
 }
 
-function expectSame(src: string): { interpret: RuntimeResult; compile: RuntimeResult } {
+function expectSame(src: string): {
+  interpret: RuntimeResult;
+  compile: RuntimeResult;
+} {
   const interpret = run(src, "interpret");
   const compile = run(src, "compile");
   expect(interpret.error).toBeUndefined();
   expect(compile.error).toBeUndefined();
   expect(compile.mode).toBe("compile");
-  const keys = new Set([...Object.keys(interpret.series), ...Object.keys(compile.series)]);
+  const keys = new Set([
+    ...Object.keys(interpret.series),
+    ...Object.keys(compile.series),
+  ]);
   for (const key of keys) {
     expect(nums(compile.series[key])).toEqual(nums(interpret.series[key]));
   }
@@ -177,7 +185,9 @@ plot(close, "c")`;
     expect(b.map((e) => e.extra)).toEqual(a.map((e) => e.extra));
     expect(b.every((e) => e.extra?.source === "alertcondition")).toBe(true);
     // close > 100 is false on bar 0; alertcondition(true, same title) still fires there.
-    expect(b.filter((e) => e.text === "msg").map((e) => e.bar)).toEqual([0, 1, 2]);
+    expect(b.filter((e) => e.text === "msg").map((e) => e.bar)).toEqual([
+      0, 1, 2,
+    ]);
     expect(b.filter((e) => e.text === "fire").length).toBe(BARS.length);
   });
 
@@ -188,7 +198,9 @@ plot(1, "p")`;
     const { compile } = expectSame(src);
     const fired = alerts(compile);
     expect(fired.length).toBe(BARS.length);
-    expect(fired.every((e) => e.text === "Alert" && e.extra?.title === "Alert")).toBe(true);
+    expect(
+      fired.every((e) => e.text === "Alert" && e.extra?.title === "Alert"),
+    ).toBe(true);
   });
 
   test("bare random follows math.random na rules without comparing draws", () => {

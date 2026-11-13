@@ -89,22 +89,22 @@ describe("compile vs interpret request", () => {
     },
   );
 
-  test.skipIf(!parseOk(ISFIRST_SRC))(
-    "barstate.isfirst plots 1 then 0",
+  test.skipIf(!parseOk(ISFIRST_SRC))("barstate.isfirst plots 1 then 0", () => {
+    const compiled = runCompile(ISFIRST_SRC);
+    const interpreted = runInterpret(ISFIRST_SRC);
+    expect(compiled.error).toBeUndefined();
+    expect(interpreted.error).toBeUndefined();
+    expect(compiled.mode).toBe("compile");
+    expect(interpreted.plots).toEqual([1, 0, 0, 0]);
+    expect(compiled.plots).toEqual(interpreted.plots);
+  });
+
+  test.skipIf(!parseOk(yearSrc))(
+    "year(time) or year() compile has no error",
     () => {
-      const compiled = runCompile(ISFIRST_SRC);
-      const interpreted = runInterpret(ISFIRST_SRC);
+      const compiled = runCompile(yearSrc);
       expect(compiled.error).toBeUndefined();
-      expect(interpreted.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
-      expect(interpreted.plots).toEqual([1, 0, 0, 0]);
-      expect(compiled.plots).toEqual(interpreted.plots);
     },
   );
-
-  test.skipIf(!parseOk(yearSrc))("year(time) or year() compile has no error", () => {
-    const compiled = runCompile(yearSrc);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-  });
 });

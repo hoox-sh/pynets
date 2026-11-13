@@ -26,9 +26,30 @@ function makeBars(n: number) {
     };
   });
   bars.push(
-    { open: 100, high: 102.3, low: 90, close: 102, volume: 1500, time: n * 86_400_000 },
-    { open: 100, high: 110, low: 90, close: 100.05, volume: 1600, time: (n + 1) * 86_400_000 },
-    { open: 80, high: 80, low: 80, close: 80, volume: 10, time: (n + 2) * 86_400_000 },
+    {
+      open: 100,
+      high: 102.3,
+      low: 90,
+      close: 102,
+      volume: 1500,
+      time: n * 86_400_000,
+    },
+    {
+      open: 100,
+      high: 110,
+      low: 90,
+      close: 100.05,
+      volume: 1600,
+      time: (n + 1) * 86_400_000,
+    },
+    {
+      open: 80,
+      high: 80,
+      low: 80,
+      close: 80,
+      volume: 10,
+      time: (n + 2) * 86_400_000,
+    },
   );
   return bars;
 }
@@ -75,10 +96,17 @@ print(json.dumps(out))
   if (codeExit !== 0) {
     throw new Error(stderr || stdout || `python exit ${codeExit}`);
   }
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
   if (actual.length !== expected.length) {
     throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
@@ -96,8 +124,13 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
-  const out = new Runtime("TEST", { mode: "interpret" }).run(src, bars, { mode: "interpret" });
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
+  const out = new Runtime("TEST", { mode: "interpret" }).run(src, bars, {
+    mode: "interpret",
+  });
   const series = (out.series ?? {}) as SeriesMap;
   return { error: out.error, series };
 }
@@ -126,113 +159,116 @@ async function parity(id: string, body: string, bare?: string): Promise<void> {
   }
 }
 
-describe.skipIf(!pythonAvailable())("interpret wave10a vs Python Runtime.run", () => {
-  test("ta.hammer", async () => {
-    await parity(
-      "hammer",
-      `h = ta.hammer(open, high, low, close)
+describe.skipIf(!pythonAvailable())(
+  "interpret wave10a vs Python Runtime.run",
+  () => {
+    test("ta.hammer", async () => {
+      await parity(
+        "hammer",
+        `h = ta.hammer(open, high, low, close)
 plot(h.is_hammer, "hm")
 plot(h.is_doji, "dj")
 plot(h.pattern_strength, "hs")`,
-      `h = hammer(open, high, low, close)
+        `h = hammer(open, high, low, close)
 plot(h.is_hammer, "hm")
 plot(h.is_doji, "dj")
 plot(h.pattern_strength, "hs")`,
-    );
-  });
+      );
+    });
 
-  test("ta.gap_detector", async () => {
-    await parity(
-      "gap",
-      `g = ta.gap_detector(high, low, close[1])
+    test("ta.gap_detector", async () => {
+      await parity(
+        "gap",
+        `g = ta.gap_detector(high, low, close[1])
 plot(g.gap_size, "gs")
 plot(g.gap_type, "gt")
 plot(g.gap_percent, "gp")`,
-      `g = gap_detector(high, low, close[1])
+        `g = gap_detector(high, low, close[1])
 plot(g.gap_size, "gs")
 plot(g.gap_type, "gt")
 plot(g.gap_percent, "gp")`,
-    );
-  });
+      );
+    });
 
-  test("ta.macd_signal", async () => {
-    // close[0]/open[0] are scalars. Passing the PineSeries `close` makes
-    // Python float() raise; ta.macd warmup is 0 there and na here, so this
-    // test feeds both hosts the same numbers (na stays na).
-    await parity(
-      "macd",
-      `plot(ta.macd_signal(close[0], open[0]), "d")
+    test("ta.macd_signal", async () => {
+      // close[0]/open[0] are scalars. Passing the PineSeries `close` makes
+      // Python float() raise; ta.macd warmup is 0 there and na here, so this
+      // test feeds both hosts the same numbers (na stays na).
+      await parity(
+        "macd",
+        `plot(ta.macd_signal(close[0], open[0]), "d")
 plot(ta.macd_signal(na, close[0]), "n1")
 plot(ta.macd_signal(close[0], na), "n2")
 plot(ta.macd_signal(true, 1), "b")
 plot(ta.macd_signal(5, false), "bf")`,
-      `plot(macd_signal(close[0], open[0]), "d")
+        `plot(macd_signal(close[0], open[0]), "d")
 plot(macd_signal(na, close[0]), "n1")
 plot(macd_signal(close[0], na), "n2")
 plot(macd_signal(true, 1), "b")
 plot(macd_signal(5, false), "bf")`,
-    );
-  });
+      );
+    });
 
-  test("ta.acceleration_factor", async () => {
-    await parity(
-      "accel",
-      `plot(ta.acceleration_factor(close, 5), "af")
+    test("ta.acceleration_factor", async () => {
+      await parity(
+        "accel",
+        `plot(ta.acceleration_factor(close, 5), "af")
 plot(ta.acceleration_factor(close, 5.9), "af59")
 plot(ta.acceleration_factor(close, 1), "af1")
 plot(ta.acceleration_factor(close, true), "afb")`,
-      `plot(acceleration_factor(close, 5), "af")
+        `plot(acceleration_factor(close, 5), "af")
 plot(acceleration_factor(close, 5.9), "af59")
 plot(acceleration_factor(close, 1), "af1")
 plot(acceleration_factor(close, true), "afb")`,
-    );
-  });
+      );
+    });
 
-  test("ta.stoch_smooth", async () => {
-    await parity(
-      "stoch",
-      `plot(ta.stoch_smooth(high, low, close, 14, 1, 1), "ss")
+    test("ta.stoch_smooth", async () => {
+      await parity(
+        "stoch",
+        `plot(ta.stoch_smooth(high, low, close, 14, 1, 1), "ss")
 plot(ta.stoch_smooth(high, low, close, 14, 3, 3), "wide")
 plot(ta.stoch_smooth(high, low, close, 3.9, 1.0, 1.2), "fl")`,
-      `plot(stoch_smooth(high, low, close, 14, 1, 1), "ss")
+        `plot(stoch_smooth(high, low, close, 14, 1, 1), "ss")
 plot(stoch_smooth(high, low, close, 14, 3, 3), "wide")
 plot(stoch_smooth(high, low, close, 3.9, 1.0, 1.2), "fl")`,
-    );
-  });
+      );
+    });
 
-  test("ta.engulfing", async () => {
-    await parity(
-      "engulf",
-      `e = ta.engulfing(open, high, low, close)
+    test("ta.engulfing", async () => {
+      await parity(
+        "engulf",
+        `e = ta.engulfing(open, high, low, close)
 plot(e.is_bullish, "bull")
 plot(e.is_bearish, "bear")
 plot(e.pattern_strength, "str")`,
-      `e = engulfing(open, high, low, close)
+        `e = engulfing(open, high, low, close)
 plot(e.is_bullish, "bull")
 plot(e.is_bearish, "bear")
 plot(e.pattern_strength, "str")`,
-    );
-  });
+      );
+    });
 
-  test("ta.inside_bar_pattern", async () => {
-    await parity(
-      "inside",
-      `plot(ta.inside_bar_pattern(high, low), "ib")`,
-      `plot(inside_bar_pattern(high, low), "ib")`,
-    );
-  });
+    test("ta.inside_bar_pattern", async () => {
+      await parity(
+        "inside",
+        `plot(ta.inside_bar_pattern(high, low), "ib")`,
+        `plot(inside_bar_pattern(high, low), "ib")`,
+      );
+    });
 
-  test("ta.double_top_bottom", async () => {
-    await parity(
-      "double",
-      `d = ta.double_top_bottom(high, low, 10)
+    test("ta.double_top_bottom", async () => {
+      await parity(
+        "double",
+        `d = ta.double_top_bottom(high, low, 10)
 plot(d.strength, "st")
 plot(d.breakout_level, "bl")
 plot(d.pattern_type, "pt")`,
-      `d = double_top_bottom(high, low, 10)
+        `d = double_top_bottom(high, low, 10)
 plot(d.strength, "st")
 plot(d.breakout_level, "bl")
 plot(d.pattern_type, "pt")`,
-    );
-  });
-});
+      );
+    });
+  },
+);

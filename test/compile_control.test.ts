@@ -100,7 +100,10 @@ function compileSeries(source: string): Record<string, Array<number | null>> {
     BARS.map((b) => b.volume),
     BARS.map((b) => b.time),
   );
-  if (/return\s*\{\s*\}/.test(compiled.source) || Object.keys(series).length === 0) {
+  if (
+    /return\s*\{\s*\}/.test(compiled.source) ||
+    Object.keys(series).length === 0
+  ) {
     throw new Error("compile emit is stub (empty return {})");
   }
   return series;
@@ -112,17 +115,23 @@ function interpretRun(source: string) {
   return out;
 }
 
-function plotOf(series: Record<string, Array<number | null>>, title?: string): Array<number | null> {
+function plotOf(
+  series: Record<string, Array<number | null>>,
+  title?: string,
+): Array<number | null> {
   if (title != null) {
     const hit = series[title];
     if (!Array.isArray(hit)) {
-      throw new Error(`compile missing plot ${JSON.stringify(title)}; keys=${Object.keys(series).join(",")}`);
+      throw new Error(
+        `compile missing plot ${JSON.stringify(title)}; keys=${Object.keys(series).join(",")}`,
+      );
     }
     return hit;
   }
   if (Array.isArray(series.plot)) return series.plot;
   const keys = Object.keys(series);
-  if (keys.length === 0) throw new Error("compile emit is stub (empty return {})");
+  if (keys.length === 0)
+    throw new Error("compile emit is stub (empty return {})");
   return series[keys[0]!]!;
 }
 

@@ -62,19 +62,32 @@ for job in jobs:
     }
 print(json.dumps(out))
 `;
-  const proc = Bun.spawn([PY, "-c", code], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([PY, "-c", code], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   proc.stdin.write(payload);
   proc.stdin.end();
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   const codeExit = await proc.exited;
-  if (codeExit !== 0) throw new Error(stderr || stdout || `python exit ${codeExit}`);
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  if (codeExit !== 0)
+    throw new Error(stderr || stdout || `python exit ${codeExit}`);
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
-  if (actual.length !== expected.length) throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
+  if (actual.length !== expected.length)
+    throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
   for (let i = 0; i < expected.length; i++) {
     const a = actual[i];
     const e = expected[i] ?? null;
@@ -82,11 +95,15 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
       if (a != null) throw new Error(`${label}[${i}] expected null, got ${a}`);
       continue;
     }
-    if (a == null || Math.abs(a - e) > 1e-6) throw new Error(`${label}[${i}] expected ${e}, got ${a}`);
+    if (a == null || Math.abs(a - e) > 1e-6)
+      throw new Error(`${label}[${i}] expected ${e}, got ${a}`);
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
   const out = new Runtime("TEST").run(src, bars, { mode: "interpret" });
   return { error: out.error, series: (out.series ?? {}) as SeriesMap };
 }
@@ -101,13 +118,19 @@ plot(e.signal == "buy" ? 1 : e.signal == "sell" ? -1 : 0, "sig")
 plot(e.strength, "st")
 plot(e.trend_direction, "td")`,
   },
-  { id: "momentum_filter", body: `plot(ta.momentum_filter(ta.mom(close, 5), volume, 10), "v")` },
+  {
+    id: "momentum_filter",
+    body: `plot(ta.momentum_filter(ta.mom(close, 5), volume, 10), "v")`,
+  },
   {
     id: "volatility_regime",
     body: `r = ta.volatility_regime(ta.atr(14), 10)
 plot(r == "low" ? 1 : r == "high" ? 2 : r == "extreme" ? 3 : 0, "v")`,
   },
-  { id: "economic_impact", body: `plot(ta.economic_impact_score(close - close[1], ta.atr(14), volume - 1000), "v")` },
+  {
+    id: "economic_impact",
+    body: `plot(ta.economic_impact_score(close - close[1], ta.atr(14), volume - 1000), "v")`,
+  },
   {
     id: "contrarian",
     body: `x = ta.contrarian_signal(ta.rsi(close, 14), ta.atr(14), 3)
@@ -254,25 +277,36 @@ function check(id: string, body: string): void {
   expect(ts.error, id).toBeUndefined();
   const keys = Object.keys(ref.series);
   expect(keys.length, id).toBeGreaterThan(0);
-  for (const key of keys) expectMatch(ts.series[key], ref.series[key]!, `${id}.${key}`);
+  for (const key of keys)
+    expectMatch(ts.series[key], ref.series[key]!, `${id}.${key}`);
 }
 
-describe.skipIf(!pythonAvailable())("interpret wave13 vs Python Runtime.run", () => {
-  beforeAll(async () => {
-    Object.assign(py, await pythonRuns(cases.map((c) => ({ id: c.id, src: script(c.body), bars }))));
-  });
+describe.skipIf(!pythonAvailable())(
+  "interpret wave13 vs Python Runtime.run",
+  () => {
+    beforeAll(async () => {
+      Object.assign(
+        py,
+        await pythonRuns(
+          cases.map((c) => ({ id: c.id, src: script(c.body), bars })),
+        ),
+      );
+    });
 
-  for (const c of cases) {
-    test(`ta.${c.id}`, () => check(c.id, c.body));
-  }
-});
+    for (const c of cases) {
+      test(`ta.${c.id}`, () => check(c.id, c.body));
+    }
+  },
+);
 
 describe("compile wave13 vs interpret", () => {
   for (const c of cases) {
     test(`ta.${c.id}`, () => {
       const src = script(c.body);
       const compiled = new Runtime("TEST").run(src, bars, { mode: "compile" });
-      const interpreted = new Runtime("TEST").run(src, bars, { mode: "interpret" });
+      const interpreted = new Runtime("TEST").run(src, bars, {
+        mode: "interpret",
+      });
       expect(compiled.error, c.id).toBeUndefined();
       expect(interpreted.error, c.id).toBeUndefined();
       expect(compiled.series).toEqual(interpreted.series);

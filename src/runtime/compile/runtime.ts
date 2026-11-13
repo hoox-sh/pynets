@@ -79,7 +79,14 @@ import {
 } from "../footprint.ts";
 import { resolveCurrencyRate, resolveSeed } from "../request.ts";
 import { TaEngine } from "../ta.ts";
-import { utcPartsFromMs, timestamp, timestampToMs, weekOfYear, timeTradingDay, type UtcParts } from "../time.ts";
+import {
+  utcPartsFromMs,
+  timestamp,
+  timestampToMs,
+  weekOfYear,
+  timeTradingDay,
+  type UtcParts,
+} from "../time.ts";
 import { TickerId } from "../ticker.ts";
 import { timeframeInSeconds, timeframePeriodChanged } from "../timeframe.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
@@ -287,7 +294,8 @@ function compileFootprintRows(fp: unknown): PineArray {
 function compileColorNew(color: unknown, transp?: unknown) {
   const parsed = asColor(color);
   if (!parsed) return null;
-  const t = typeof transp === "number" && Number.isFinite(transp) ? transp : undefined;
+  const t =
+    typeof transp === "number" && Number.isFinite(transp) ? transp : undefined;
   return colorNew(parsed.r, parsed.g, parsed.b, t);
 }
 
@@ -314,7 +322,11 @@ function hasInput(inputs: CompileHelperInputs, key: unknown): boolean {
 /** Pine v4 `iff`: na cond → na; 0 / false → else; else then. */
 function iff(cond: unknown, thenV: unknown, elseV: unknown): unknown {
   if (typeof cond === "boolean") return cond ? thenV : elseV;
-  return mathIff(cond as number | null, thenV as number | null, elseV as number | null);
+  return mathIff(
+    cond as number | null,
+    thenV as number | null,
+    elseV as number | null,
+  );
 }
 
 /** Plot cell: tagged `strategy.cash` unwraps to its number (interpret `unwrap`). */
@@ -393,7 +405,12 @@ function logBar(bar: unknown): number {
 }
 
 /** `timeframe.change`: bar 0 is a new period; empty / unknown tf → false. */
-function timeframeChange(tf: unknown, curr: unknown, prev: unknown, barIndex: unknown): number {
+function timeframeChange(
+  tf: unknown,
+  curr: unknown,
+  prev: unknown,
+  barIndex: unknown,
+): number {
   const s =
     typeof tf === "string"
       ? tf
@@ -402,7 +419,8 @@ function timeframeChange(tf: unknown, curr: unknown, prev: unknown, barIndex: un
         : null;
   if (s == null || s.trim() === "") return 0;
   if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
-  const idx = typeof barIndex === "number" && Number.isFinite(barIndex) ? barIndex : null;
+  const idx =
+    typeof barIndex === "number" && Number.isFinite(barIndex) ? barIndex : null;
   return timeframePeriodChanged(curr, prev, s, idx) ? 1 : 0;
 }
 
@@ -411,8 +429,13 @@ function timeframeChange(tf: unknown, curr: unknown, prev: unknown, barIndex: un
  * (interpret beginBar). Compile has no per-bar `time_close` column.
  */
 function timeClose(barIdx: unknown, timeArr: unknown): number {
-  const i = typeof barIdx === "number" && Number.isFinite(barIdx) ? Math.trunc(barIdx) : 0;
-  const arr = Array.isArray(timeArr) ? (timeArr as Array<number | null | undefined>) : [];
+  const i =
+    typeof barIdx === "number" && Number.isFinite(barIdx)
+      ? Math.trunc(barIdx)
+      : 0;
+  const arr = Array.isArray(timeArr)
+    ? (timeArr as Array<number | null | undefined>)
+    : [];
   const t = arr[i];
   const tNum = typeof t === "number" && Number.isFinite(t) ? t : 0;
   if (i + 1 < arr.length) {
@@ -434,9 +457,11 @@ function extractPrefix(symbol: string): string {
 }
 
 function syminfoPrefix(tickerid?: unknown): string {
-  if (arguments.length === 0 || tickerid === undefined) return extractPrefix("SYMBOL");
+  if (arguments.length === 0 || tickerid === undefined)
+    return extractPrefix("SYMBOL");
   if (tickerid instanceof TickerId) return extractPrefix(tickerid.symbol);
   if (typeof tickerid === "string") return extractPrefix(tickerid);
-  if (typeof tickerid === "number" && Number.isFinite(tickerid)) return extractPrefix(String(tickerid));
+  if (typeof tickerid === "number" && Number.isFinite(tickerid))
+    return extractPrefix(String(tickerid));
   return "";
 }

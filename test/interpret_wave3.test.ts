@@ -23,18 +23,30 @@ describe("interpret wave3 wiring", () => {
   });
 
   test("str.startswith / tonumber / substring", () => {
-    const a = interpret(`indicator("t")\nplot(str.startswith("hello", "he") ? 1 : 0)`, BARS);
+    const a = interpret(
+      `indicator("t")\nplot(str.startswith("hello", "he") ? 1 : 0)`,
+      BARS,
+    );
     expect(a.plots[0]).toBe(1);
     const n = interpret(`indicator("t")\nplot(str.tonumber("12.5"))`, BARS);
     expect(n.plots[0]).toBe(12.5);
-    const s = interpret(`indicator("t")\nplot(str.length(str.substring("hello", 1, 3)))`, BARS);
+    const s = interpret(
+      `indicator("t")\nplot(str.length(str.substring("hello", 1, 3)))`,
+      BARS,
+    );
     expect(s.plots[0]).toBe(2);
   });
 
   test("request.financial is na; currency_rate same pair is 1", () => {
-    const fin = interpret(`indicator("t")\nplot(na(request.financial("AAPL", "net_income", "FQ")) ? 1 : 0)`, BARS);
+    const fin = interpret(
+      `indicator("t")\nplot(na(request.financial("AAPL", "net_income", "FQ")) ? 1 : 0)`,
+      BARS,
+    );
     expect(fin.plots[0]).toBe(1);
-    const fx = interpret(`indicator("t")\nplot(request.currency_rate("USD", "USD"))`, BARS);
+    const fx = interpret(
+      `indicator("t")\nplot(request.currency_rate("USD", "USD"))`,
+      BARS,
+    );
     expect(fx.plots[0]).toBe(1);
   });
 

@@ -16,7 +16,9 @@ function both(source: string) {
 
 describe("compile vs interpret bitwise / AugAssign", () => {
   test("plot((3 << 1) | 1) is 7", () => {
-    const { compiled, interpreted } = both(`indicator("t")\nplot((3 << 1) | 1)`);
+    const { compiled, interpreted } = both(
+      `indicator("t")\nplot((3 << 1) | 1)`,
+    );
     expect(compiled.error).toBeUndefined();
     expect(interpreted.plots).toEqual([7, 7, 7]);
     expect(compiled.plots).toEqual(interpreted.plots);

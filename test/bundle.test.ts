@@ -13,8 +13,12 @@ const browserBundle = join(root, "dist/browser.js");
 const dts = join(root, "dist/index.d.ts");
 
 function ensureBuild(): void {
-  if (existsSync(nodeBundle) && existsSync(browserBundle) && existsSync(dts)) return;
-  const r = spawnSync("bun", ["run", "scripts/build.ts"], { cwd: root, encoding: "utf8" });
+  if (existsSync(nodeBundle) && existsSync(browserBundle) && existsSync(dts))
+    return;
+  const r = spawnSync("bun", ["run", "scripts/build.ts"], {
+    cwd: root,
+    encoding: "utf8",
+  });
   expect(r.status).toBe(0);
 }
 

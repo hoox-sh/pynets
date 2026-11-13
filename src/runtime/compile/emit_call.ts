@@ -317,8 +317,14 @@ const MATH_UNARY: Record<string, { fn: string; guard?: string }> = {
   sin: { fn: "Math.sin(Number(__x))" },
   cos: { fn: "Math.cos(Number(__x))" },
   tan: { fn: "Math.tan(Number(__x))" },
-  asin: { fn: "Math.asin(Number(__x))", guard: "Number(__x) < -1 || Number(__x) > 1" },
-  acos: { fn: "Math.acos(Number(__x))", guard: "Number(__x) < -1 || Number(__x) > 1" },
+  asin: {
+    fn: "Math.asin(Number(__x))",
+    guard: "Number(__x) < -1 || Number(__x) > 1",
+  },
+  acos: {
+    fn: "Math.acos(Number(__x))",
+    guard: "Number(__x) < -1 || Number(__x) > 1",
+  },
   atan: { fn: "Math.atan(Number(__x))" },
   todegrees: { fn: "Number(__x) * 180 / Math.PI" },
   toradians: { fn: "Number(__x) * Math.PI / 180" },
@@ -341,7 +347,11 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     const alias = (methodSrc as Name).id;
     if (ctx.importAliases.has(alias)) {
       if (ctx.userFuncs.has(rawName)) {
-        return emitUserFuncCall(ctx, rawName, packUserFuncArgs(ctx, rawName, args));
+        return emitUserFuncCall(
+          ctx,
+          rawName,
+          packUserFuncArgs(ctx, rawName, args),
+        );
       }
       return "null";
     }
@@ -361,27 +371,36 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
 
   let name = rawName;
   if (methodSrc != null && TA_METHODS.has(name)) name = `ta_${name}`;
-  if (methodSrc != null && (name === "tostring" || name === "format")) name = `str_${name}`;
+  if (methodSrc != null && (name === "tostring" || name === "format"))
+    name = `str_${name}`;
 
   if (PLOT_FUNCS.has(name)) return emitPlot(ctx, name, args);
 
-  if (name === "indicator" || name === "study" || name === "library") return "null";
+  if (name === "indicator" || name === "study" || name === "library")
+    return "null";
   if (name === "strategy") return emitStrategyDecl(ctx, args);
 
   if (name === "na") {
-    if (args.pos.length === 0 && args.kw.x == null && args.kw.source == null) return "null";
+    if (args.pos.length === 0 && args.kw.x == null && args.kw.source == null)
+      return "null";
     const x = pick(args, 0, ["x", "source"], "null");
     return `(__h.isNa(${x}) ? 1 : 0)`;
   }
   if (name === "nz") {
     const x = pick(args, 0, ["source", "x"], "null");
-    if (hasArg(args, 1, ["replacement", "y"])) return `__h.nz(${x}, ${pick(args, 1, ["replacement", "y"], "0")})`;
+    if (hasArg(args, 1, ["replacement", "y"]))
+      return `__h.nz(${x}, ${pick(args, 1, ["replacement", "y"], "0")})`;
     return `__h.nz(${x})`;
   }
 
-  if (name === "input" || name.startsWith("input_")) return emitInput(ctx, args);
+  if (name === "input" || name.startsWith("input_"))
+    return emitInput(ctx, args);
 
-  if (STRATEGY_ACTIONS.has(name) || STRATEGY_QUERIES.has(name) || name.startsWith("strategy_")) {
+  if (
+    STRATEGY_ACTIONS.has(name) ||
+    STRATEGY_QUERIES.has(name) ||
+    name.startsWith("strategy_")
+  ) {
     return emitStrategy(ctx, name, args);
   }
 
@@ -389,7 +408,15 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     return emitUserFuncCall(ctx, name, packUserFuncArgs(ctx, name, args));
   }
 
-  if (name === "year" || name === "month" || name === "dayofmonth" || name === "hour" || name === "minute" || name === "second" || name === "dayofweek") {
+  if (
+    name === "year" ||
+    name === "month" ||
+    name === "dayofmonth" ||
+    name === "hour" ||
+    name === "minute" ||
+    name === "second" ||
+    name === "dayofweek"
+  ) {
     const t = pick(args, 0, ["time"], "time");
     return `__h.${name}(${t})`;
   }
@@ -427,10 +454,20 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     return `"__HEIKINASHI__"`;
   }
   if (name === "ticker_inherit") {
-    const fallback = pick(args, 0, ["ticker", "tickerid", "from", "source"], `"SYMBOL"`);
+    const fallback = pick(
+      args,
+      0,
+      ["ticker", "tickerid", "from", "source"],
+      `"SYMBOL"`,
+    );
     return pick(args, 1, ["symbol", "ticker"], fallback);
   }
-  if (name === "renko" || name === "kagi" || name === "linebreak" || name === "pointfigure") {
+  if (
+    name === "renko" ||
+    name === "kagi" ||
+    name === "linebreak" ||
+    name === "pointfigure"
+  ) {
     return pick(args, 0, ["ticker", "tickerid", "symbol"], `"SYMBOL"`);
   }
   // ticker.new / standard / modify / renko / kagi / linebreak / pointfigure → first arg or "SYMBOL"
@@ -457,8 +494,12 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
   if (name === "alertcondition") {
     ctx.usesDrawings = true;
     const cond = pick(args, 0, ["condition"], "null");
-    const title = hasArg(args, 1, ["title"]) ? pick(args, 1, ["title"], `"Alert"`) : `"Alert"`;
-    const message = hasArg(args, 2, ["message"]) ? pick(args, 2, ["message"], `"Alert"`) : `"Alert"`;
+    const title = hasArg(args, 1, ["title"])
+      ? pick(args, 1, ["title"], `"Alert"`)
+      : `"Alert"`;
+    const message = hasArg(args, 2, ["message"])
+      ? pick(args, 2, ["message"], `"Alert"`)
+      : `"Alert"`;
     return `__h.draw.alertcondition(__bar_idx, ${cond}, ${title}, ${message})`;
   }
   if (name === "str_tostring" || name === "tostring") {
@@ -472,7 +513,9 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
       Object.hasOwn(args.kw, "format") ||
       Object.hasOwn(args.kw, "fmt");
     const extras = fmtFromKw ? args.pos.slice() : args.pos.slice(1);
-    return extras.length > 0 ? `__h.strFormat(${fmt}, ${extras.join(", ")})` : `__h.strFormat(${fmt})`;
+    return extras.length > 0
+      ? `__h.strFormat(${fmt}, ${extras.join(", ")})`
+      : `__h.strFormat(${fmt})`;
   }
   if (name === "str_format_time" || name === "format_time") {
     return `__h.strFormatTime(${pick(args, 0, ["time", "timestamp"], "null")}, ${pick(args, 1, ["format"], "undefined")}, ${pick(args, 2, ["timezone"], "undefined")})`;
@@ -495,8 +538,19 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
     const key = alias[meth];
     if (key) {
       const a0 = pick(args, 0, ["source", "string", "value"], "null");
-      const a1 = args.pos[1] ?? args.kw.substring ?? args.kw.str ?? args.kw.replacement ?? "undefined";
-      if (meth === "length" || meth === "lower" || meth === "upper" || meth === "tonumber" || meth === "trim") {
+      const a1 =
+        args.pos[1] ??
+        args.kw.substring ??
+        args.kw.str ??
+        args.kw.replacement ??
+        "undefined";
+      if (
+        meth === "length" ||
+        meth === "lower" ||
+        meth === "upper" ||
+        meth === "tonumber" ||
+        meth === "trim"
+      ) {
         return `__h.str.${key}(${a0})`;
       }
       return `__h.str.${key}(${a0}, ${a1})`;
@@ -530,7 +584,8 @@ export function emitCall(ctx: EmitCtx, node: Call, visit: VisitFn): string {
 function resolveCallee(func: expr): { name: string; methodSrc: expr | null } {
   func = unwrapSpecialize(func);
   if (func.kind === "Name") return { name: (func as Name).id, methodSrc: null };
-  if (func.kind !== "Attribute") return { name: "unknown_func", methodSrc: null };
+  if (func.kind !== "Attribute")
+    return { name: "unknown_func", methodSrc: null };
 
   const attrNode = func as Attribute;
   const attr = attrNode.attr;
@@ -546,7 +601,10 @@ function resolveCallee(func: expr): { name: string; methodSrc: expr | null } {
     const mid = recv as Attribute;
     const inner = unwrapSpecialize(mid.value);
     if (inner.kind === "Name" && NS.has((inner as Name).id)) {
-      return { name: `${(inner as Name).id}_${mid.attr}_${attr}`, methodSrc: null };
+      return {
+        name: `${(inner as Name).id}_${mid.attr}_${attr}`,
+        methodSrc: null,
+      };
     }
     return { name: attr, methodSrc: attrNode.value };
   }
@@ -569,7 +627,12 @@ function unwrapSpecialize(node: expr): expr {
 export function isArrayReturningCall(func: expr): boolean {
   const { name } = resolveCallee(func);
   if (name === "ta_gamma_levels" || name === "gamma_levels") return true;
-  if (name === "array_from" || name === "array_copy" || name === "array_concat" || name === "array_slice") {
+  if (
+    name === "array_from" ||
+    name === "array_copy" ||
+    name === "array_concat" ||
+    name === "array_slice"
+  ) {
     return true;
   }
   return name.startsWith("array_new");
@@ -596,7 +659,12 @@ function collectArgs(node: Call, visit: VisitFn): CallArgs {
   return { pos, kw, posNodes, kwNodes };
 }
 
-function pick(args: CallArgs, index: number, names: string[], fallback: string): string {
+function pick(
+  args: CallArgs,
+  index: number,
+  names: string[],
+  fallback: string,
+): string {
   for (const n of names) {
     if (Object.hasOwn(args.kw, n)) return args.kw[n]!;
   }
@@ -627,8 +695,11 @@ const BARE_SERIES_NAMES = new Set([
 ]);
 
 function hasSeriesArg(args: CallArgs): boolean {
-  const isSeries = (n: expr): boolean => n.kind === "Name" && BARE_SERIES_NAMES.has(n.id);
-  return args.posNodes.some(isSeries) || Object.values(args.kwNodes).some(isSeries);
+  const isSeries = (n: expr): boolean =>
+    n.kind === "Name" && BARE_SERIES_NAMES.has(n.id);
+  return (
+    args.posNodes.some(isSeries) || Object.values(args.kwNodes).some(isSeries)
+  );
 }
 
 function isSeriesNode(n: expr | undefined): boolean {
@@ -682,7 +753,14 @@ function cellLast(expr: string): string {
   return `(() => { const __v = ${expr}; const __cell = (e) => (e == null ? null : typeof e === "boolean" ? (e ? 1 : 0) : (typeof e === "number" && Number.isFinite(e) ? e : null)); if (__v != null && typeof __v.size === "function" && typeof __v.get === "function") { const __n = __v.size(); return __n === 0 ? null : __cell(__v.get(__n - 1)); } return __cell(__v); })()`;
 }
 
-const DRAW_KINDS = new Set(["label", "line", "box", "table", "polyline", "linefill"]);
+const DRAW_KINDS = new Set([
+  "label",
+  "line",
+  "box",
+  "table",
+  "polyline",
+  "linefill",
+]);
 
 const ARRAY_SIGS: Record<string, string[][]> = {
   new: [["size"], ["initial_value", "initial"]],
@@ -804,7 +882,13 @@ const MATRIX_SIGS: Record<string, string[][]> = {
   remove_row: [["id"], ["row", "index"]],
   remove_col: [["id"], ["column", "index"]],
   remove_column: [["id"], ["column", "index"]],
-  submatrix: [["id"], ["from_row"], ["to_row"], ["from_column", "from_col"], ["to_column", "to_col"]],
+  submatrix: [
+    ["id"],
+    ["from_row"],
+    ["to_row"],
+    ["from_column", "from_col"],
+    ["to_column", "to_col"],
+  ],
   sum_row: [["id"], ["row", "index"]],
   avg_row: [["id"], ["row", "index"]],
   min_row: [["id"], ["row", "index"]],
@@ -853,7 +937,12 @@ const MATRIX_HOST_ALIAS: Record<string, string> = {
   max_all: "max",
 };
 
-function emitHostCall(ns: string, method: string, args: CallArgs, params: string[][]): string {
+function emitHostCall(
+  ns: string,
+  method: string,
+  args: CallArgs,
+  params: string[][],
+): string {
   const parts = params.map((names, i) => pick(args, i, names, "null"));
   return `__h.${ns}.${method}(${parts.join(", ")})`;
 }
@@ -868,7 +957,12 @@ function emitArray(name: string, args: CallArgs): string | null {
   const method = ctorMethod(raw);
   const params = ARRAY_SIGS[method];
   if (params == null) return null;
-  return emitHostCall("array", ARRAY_HOST_ALIAS[method] ?? method, args, params);
+  return emitHostCall(
+    "array",
+    ARRAY_HOST_ALIAS[method] ?? method,
+    args,
+    params,
+  );
 }
 
 function emitMap(name: string, args: CallArgs): string | null {
@@ -886,10 +980,18 @@ function emitMatrix(name: string, args: CallArgs): string | null {
   const method = ctorMethod(raw);
   const params = MATRIX_SIGS[method];
   if (params == null) return null;
-  return emitHostCall("matrix", MATRIX_HOST_ALIAS[method] ?? method, args, params);
+  return emitHostCall(
+    "matrix",
+    MATRIX_HOST_ALIAS[method] ?? method,
+    args,
+    params,
+  );
 }
 
-function drawKindAndMethod(name: string, methodSrc: expr | null): { kind: string; method: string } | null {
+function drawKindAndMethod(
+  name: string,
+  methodSrc: expr | null,
+): { kind: string; method: string } | null {
   if (methodSrc != null && methodSrc.kind === "Name") {
     const id = (methodSrc as Name).id;
     if (DRAW_KINDS.has(id)) return { kind: id, method: name };
@@ -950,8 +1052,20 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
     get_y2: [["id"]],
   },
   box: {
-    set_corners: [["id"], ["left", "x1"], ["top", "y1"], ["right", "x2"], ["bottom", "y2"]],
-    set_lefttop: [["id"], ["left", "x1"], ["top", "y1"], ["right", "x2"], ["bottom", "y2"]],
+    set_corners: [
+      ["id"],
+      ["left", "x1"],
+      ["top", "y1"],
+      ["right", "x2"],
+      ["bottom", "y2"],
+    ],
+    set_lefttop: [
+      ["id"],
+      ["left", "x1"],
+      ["top", "y1"],
+      ["right", "x2"],
+      ["bottom", "y2"],
+    ],
     set_left: [["id"], ["left"]],
     set_right: [["id"], ["right"]],
     set_top: [["id"], ["top"]],
@@ -982,7 +1096,12 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
     // Interpret positional order is (id, row, column, text), not column-first.
     cell_set_text: [["id"], ["row"], ["column", "col"], ["text"]],
     cell_get_text: [["id"], ["row"], ["column", "col"]],
-    cell_set_text_color: [["id"], ["row"], ["column", "col"], ["color", "text"]],
+    cell_set_text_color: [
+      ["id"],
+      ["row"],
+      ["column", "col"],
+      ["color", "text"],
+    ],
     cell_set_bgcolor: [["id"], ["row"], ["column", "col"], ["color"]],
     cell_set_border_color: [["id"], ["row"], ["column", "col"], ["color"]],
     cell_set_border_width: [["id"], ["row"], ["column", "col"], ["width"]],
@@ -992,15 +1111,31 @@ const DRAW_METHODS: Record<string, Record<string, string[][]>> = {
     cell_set_text_halign: [["id"], ["column", "col"], ["row"], ["halign"]],
     cell_set_text_valign: [["id"], ["column", "col"], ["row"], ["valign"]],
     cell_set_text_size: [["id"], ["column", "col"], ["row"], ["size"]],
-    cell_set_text_font_family: [["id"], ["column", "col"], ["row"], ["font_family"]],
-    cell_set_text_formatting: [["id"], ["column", "col"], ["row"], ["formatting"]],
+    cell_set_text_font_family: [
+      ["id"],
+      ["column", "col"],
+      ["row"],
+      ["font_family"],
+    ],
+    cell_set_text_formatting: [
+      ["id"],
+      ["column", "col"],
+      ["row"],
+      ["formatting"],
+    ],
     set_position: [["id"], ["position"]],
     set_bgcolor: [["id"], ["color", "bgcolor"]],
     set_border_color: [["id"], ["color"]],
     set_border_width: [["id"], ["width"]],
     set_frame_color: [["id"], ["color"]],
     set_frame_width: [["id"], ["width"]],
-    merge_cells: [["id"], ["start_row"], ["start_column", "start_col"], ["end_row"], ["end_column", "end_col"]],
+    merge_cells: [
+      ["id"],
+      ["start_row"],
+      ["start_column", "start_col"],
+      ["end_row"],
+      ["end_column", "end_col"],
+    ],
     delete: [["id"]],
   },
   polyline: {
@@ -1041,7 +1176,12 @@ function emitChartPoint(name: string, args: CallArgs): string | null {
   return null;
 }
 
-function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: CallArgs): string | null {
+function emitDraw(
+  ctx: EmitCtx,
+  name: string,
+  methodSrc: expr | null,
+  args: CallArgs,
+): string | null {
   if (name === "alert" && methodSrc == null) {
     ctx.usesDrawings = true;
     return `__h.draw.alert(__bar_idx, ${pick(args, 0, ["message"], "null")})`;
@@ -1057,7 +1197,13 @@ function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: Call
   let code: string | null = null;
   if (method === "all") {
     code = `__h.draw.all(${JSON.stringify(kind)})`;
-  } else if (method === "copy" && (kind === "line" || kind === "label" || kind === "box" || kind === "polyline")) {
+  } else if (
+    method === "copy" &&
+    (kind === "line" ||
+      kind === "label" ||
+      kind === "box" ||
+      kind === "polyline")
+  ) {
     code = `__h.draw.copy(${pick(args, 0, ["id"], "null")})`;
   } else if (method === "new") {
     if (kind === "label") {
@@ -1073,18 +1219,24 @@ function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: Call
       // frame_width, border_color, border_width, force_overlay).
       code = `__h.draw.table_new(__bar_idx, ${pick(args, 0, ["position"], "null")}, ${pick(args, 1, ["columns"], "null")}, ${pick(args, 2, ["rows"], "null")}, ${pick(args, 3, ["bgcolor"], "null")}, ${pick(args, 4, ["frame_color"], "null")}, ${pick(args, 5, ["frame_width"], "null")}, ${pick(args, 6, ["border_color"], "null")}, ${pick(args, 7, ["border_width"], "null")}, ${pick(args, 8, ["force_overlay"], "null")})`;
     } else if (kind === "linefill") {
-      const color = hasArg(args, 2, ["color"]) ? pick(args, 2, ["color"], "null") : "null";
+      const color = hasArg(args, 2, ["color"])
+        ? pick(args, 2, ["color"], "null")
+        : "null";
       code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1", "line1"], "null")}, ${pick(args, 1, ["id2", "line2"], "null")}, ${color})`;
     } else if (DRAW_KINDS.has(kind)) {
       code = `__h.draw.${kind}_new(__bar_idx)`;
     }
   } else if (kind === "line" && method === "fill") {
-    const color = hasArg(args, 2, ["color"]) ? pick(args, 2, ["color"], "null") : "null";
+    const color = hasArg(args, 2, ["color"])
+      ? pick(args, 2, ["color"], "null")
+      : "null";
     code = `__h.draw.linefill_new(__bar_idx, ${pick(args, 0, ["id1", "line1"], "null")}, ${pick(args, 1, ["id2", "line2"], "null")}, ${color})`;
   } else if (
-    (kind === "line" && (method === "set_first_point" || method === "set_second_point")) ||
+    (kind === "line" &&
+      (method === "set_first_point" || method === "set_second_point")) ||
     (kind === "label" && method === "set_point") ||
-    (kind === "box" && (method === "set_top_left_point" || method === "set_bottom_right_point"))
+    (kind === "box" &&
+      (method === "set_top_left_point" || method === "set_bottom_right_point"))
   ) {
     code = `__h.draw.${kind}_${method}(${pick(args, 0, ["id"], "null")}, ${pick(args, 1, ["point"], "null")})`;
   } else if (kind === "box" && method === "set_xloc") {
@@ -1095,8 +1247,10 @@ function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: Call
       ? `__h.draw.table_clear(${id}, ${pick(args, 1, ["start_row"], "null")}, ${pick(args, 2, ["start_column", "start_col"], "null")}, ${pick(args, 3, ["end_row"], "null")}, ${pick(args, 4, ["end_column", "end_col"], "null")})`
       : `__h.draw.table_clear(${id})`;
   } else {
-    const aliased = kind === "box" && method === "set_lefttop" ? "set_corners" : method;
-    const params = DRAW_METHODS[kind]?.[method] ?? DRAW_METHODS[kind]?.[aliased];
+    const aliased =
+      kind === "box" && method === "set_lefttop" ? "set_corners" : method;
+    const params =
+      DRAW_METHODS[kind]?.[method] ?? DRAW_METHODS[kind]?.[aliased];
     if (params != null) {
       code = emitHostCall("draw", `${kind}_${aliased}`, args, params);
     }
@@ -1105,7 +1259,12 @@ function emitDraw(ctx: EmitCtx, name: string, methodSrc: expr | null, args: Call
   return code;
 }
 
-function emitUdt(ctx: EmitCtx, name: string, methodSrc: expr | null, args: CallArgs): string | null {
+function emitUdt(
+  ctx: EmitCtx,
+  name: string,
+  methodSrc: expr | null,
+  args: CallArgs,
+): string | null {
   if (methodSrc == null || methodSrc.kind !== "Name") return null;
   const id = (methodSrc as Name).id;
   const spec = ctx.udtTypes.get(id);
@@ -1155,7 +1314,8 @@ const SIMPLE_CHART_EXPR = new Set([
   "ohlc4",
 ]);
 
-const SIMPLE_CHART_ARR = /^(?:open|high|low|close|vol|volume|time|hl2|hlc3|ohlc4)_arr\[__bar_idx\]$/;
+const SIMPLE_CHART_ARR =
+  /^(?:open|high|low|close|vol|volume|time|hl2|hlc3|ohlc4)_arr\[__bar_idx\]$/;
 
 /** `p.plus(1)` → method UDF with instance first. TA methods stay TA. */
 function emitUdtMethod(
@@ -1172,7 +1332,11 @@ function emitUdtMethod(
 }
 
 /** Same-symbol OHLCV passthrough only. HA marker remaps OHLC. Foreign / complex expr → `null`. */
-function emitRequest(ctx: EmitCtx, name: string, args: CallArgs): string | null {
+function emitRequest(
+  ctx: EmitCtx,
+  name: string,
+  args: CallArgs,
+): string | null {
   if (SECURITY_FUNCS.has(name)) {
     const symbol = pick(args, 0, ["symbol", "ticker"], "null");
     const expression = pick(args, 2, ["expression", "expr"], "close");
@@ -1180,7 +1344,8 @@ function emitRequest(ctx: EmitCtx, name: string, args: CallArgs): string | null 
       ctx.needsHeikinashi = true;
       return mapOhlcvExprToHeikinashi(expression);
     }
-    if (isSimpleSecurityExpr(expression) && isChartSecuritySymbol(symbol)) return expression;
+    if (isSimpleSecurityExpr(expression) && isChartSecuritySymbol(symbol))
+      return expression;
     return "null";
   }
   if (name === "request_currency_rate" || name === "currency_rate") {
@@ -1248,7 +1413,11 @@ function isSimpleSecurityExpr(expr: string): boolean {
 }
 
 function unquoteJsString(s: string): string {
-  if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+  if (
+    s.length >= 2 &&
+    ((s.startsWith('"') && s.endsWith('"')) ||
+      (s.startsWith("'") && s.endsWith("'")))
+  ) {
     if (s.startsWith('"')) {
       try {
         return JSON.parse(s) as string;
@@ -1263,9 +1432,15 @@ function unquoteJsString(s: string): string {
 
 function isHeikinashiSecurity(sym: string): boolean {
   const s = sym.trim();
-  if (s === "__HEIKINASHI__" || s === "'__HEIKINASHI__'" || s === '"__HEIKINASHI__"') return true;
+  if (
+    s === "__HEIKINASHI__" ||
+    s === "'__HEIKINASHI__'" ||
+    s === '"__HEIKINASHI__"'
+  )
+    return true;
   if (/^['"]__HEIKINASHI__['"]$/.test(s)) return true;
-  if (s.includes("__HEIKINASHI__") && !s.toUpperCase().includes("HA(")) return true;
+  if (s.includes("__HEIKINASHI__") && !s.toUpperCase().includes("HA("))
+    return true;
   return false;
 }
 
@@ -1303,16 +1478,30 @@ function mapOhlcvExprToHeikinashi(expr: string): string {
 
 function isChartSecuritySymbol(sym: string): boolean {
   const s = sym.trim();
-  if (!s || s === "null" || s === "na" || s === "undefined" || s === "None" || s === "np.nan") {
+  if (
+    !s ||
+    s === "null" ||
+    s === "na" ||
+    s === "undefined" ||
+    s === "None" ||
+    s === "np.nan"
+  ) {
     return true;
   }
   if (isHeikinashiSecurity(s)) return true;
   const inner = unquoteJsString(s).trim();
-  if (!inner || inner === "na" || inner === "null" || inner === "SYMBOL") return true;
+  if (!inner || inner === "na" || inner === "null" || inner === "SYMBOL")
+    return true;
   if (s === "SYMBOL" || s === "tickerid" || s === "ticker") return true;
   if (s === "syminfo_ticker" || s === "syminfo_tickerid") return true;
   const low = s.toLowerCase();
-  if (low.includes("syminfo") && (s.includes("ticker") || s.includes("tickerid") || s.includes("root") || s.includes("prefix"))) {
+  if (
+    low.includes("syminfo") &&
+    (s.includes("ticker") ||
+      s.includes("tickerid") ||
+      s.includes("root") ||
+      s.includes("prefix"))
+  ) {
     return true;
   }
   return false;
@@ -1345,7 +1534,8 @@ function emitStrategyDecl(ctx: EmitCtx, args: CallArgs): string {
   ctx.usesStrategy = true;
   const fields: string[] = [];
   const add = (names: string[], key: string): void => {
-    if (hasArg(args, -1, names)) fields.push(`${key}: ${pick(args, -1, names, "null")}`);
+    if (hasArg(args, -1, names))
+      fields.push(`${key}: ${pick(args, -1, names, "null")}`);
   };
   add(["commission", "commission_value"], "commission");
   add(["slippage"], "slippage");
@@ -1366,18 +1556,24 @@ function emitStrategyEntry(method: "entry" | "order", args: CallArgs): string {
   const direction = pick(args, 1, ["direction"], "null");
   const qty = pick(args, 2, ["qty"], "null");
   const fields: string[] = [];
-  if (hasArg(args, 3, ["limit"])) fields.push(`limit: ${pick(args, 3, ["limit"], "null")}`);
-  if (hasArg(args, 4, ["stop"])) fields.push(`stop: ${pick(args, 4, ["stop"], "null")}`);
-  if (hasArg(args, 5, ["comment"])) fields.push(`comment: ${pick(args, 5, ["comment"], "null")}`);
+  if (hasArg(args, 3, ["limit"]))
+    fields.push(`limit: ${pick(args, 3, ["limit"], "null")}`);
+  if (hasArg(args, 4, ["stop"]))
+    fields.push(`stop: ${pick(args, 4, ["stop"], "null")}`);
+  if (hasArg(args, 5, ["comment"]))
+    fields.push(`comment: ${pick(args, 5, ["comment"], "null")}`);
   return `__h.strategy.${method}(${id}, ${direction}, ${qty}, {${fields.join(", ")}})`;
 }
 
 function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
-  const method = name.startsWith("strategy_") ? name.slice("strategy_".length) : name;
+  const method = name.startsWith("strategy_")
+    ? name.slice("strategy_".length)
+    : name;
 
   if (method === "long" || method === "short") return JSON.stringify(method);
 
-  if (isStrategyAction(name, method) || STRATEGY_QUERIES.has(name)) ctx.usesStrategy = true;
+  if (isStrategyAction(name, method) || STRATEGY_QUERIES.has(name))
+    ctx.usesStrategy = true;
 
   switch (method) {
     case "entry":
@@ -1399,7 +1595,8 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
       const id = pick(args, 0, ["id"], "null");
       const fields: string[] = [];
       const add = (index: number, names: string[], key: string): void => {
-        if (hasArg(args, index, names)) fields.push(`${key}: ${pick(args, index, names, "null")}`);
+        if (hasArg(args, index, names))
+          fields.push(`${key}: ${pick(args, index, names, "null")}`);
       };
       add(1, ["from_entry"], "from_entry");
       add(2, ["qty"], "qty");
@@ -1472,7 +1669,9 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
     case "convert_to_account":
     case "convert_to_symbol":
       ctx.usesStrategy = true;
-      return hasArg(args, 0, ["value"]) ? `__h.strategy.convert_to(${pick(args, 0, ["value"], "null")})` : "1";
+      return hasArg(args, 0, ["value"])
+        ? `__h.strategy.convert_to(${pick(args, 0, ["value"], "null")})`
+        : "1";
     case "risk_allow_entry_in":
       ctx.usesStrategy = true;
       return `__h.strategy.risk_allow_entry_in(${pick(args, 0, ["value"], "null")})`;
@@ -1485,22 +1684,33 @@ function emitStrategy(ctx: EmitCtx, name: string, args: CallArgs): string {
     default: {
       if (method.startsWith("direction_")) {
         const tail = method.slice("direction_".length);
-        if (tail === "long" || tail === "short" || tail === "all") return JSON.stringify(tail);
+        if (tail === "long" || tail === "short" || tail === "all")
+          return JSON.stringify(tail);
       }
       if (method.startsWith("oca_")) {
         const tail = method.slice("oca_".length);
-        if (tail === "none" || tail === "cancel" || tail === "reduce") return JSON.stringify(tail);
+        if (tail === "none" || tail === "cancel" || tail === "reduce")
+          return JSON.stringify(tail);
       }
       if (method.startsWith("commission_")) {
         const tail = method.slice("commission_".length);
-        if (tail === "percent" || tail === "cash_per_order" || tail === "cash_per_contract") {
+        if (
+          tail === "percent" ||
+          tail === "cash_per_order" ||
+          tail === "cash_per_contract"
+        ) {
           return JSON.stringify(tail);
         }
       }
-      if (method.startsWith("closedtrades_") || method.startsWith("opentrades_")) {
+      if (
+        method.startsWith("closedtrades_") ||
+        method.startsWith("opentrades_")
+      ) {
         ctx.usesStrategy = true;
-        if (method === "opentrades_capital_held") return "__h.strategy.capital_held()";
-        if (method === "closedtrades_first_index") return "__h.strategy.closedtrades_first_index()";
+        if (method === "opentrades_capital_held")
+          return "__h.strategy.capital_held()";
+        if (method === "closedtrades_first_index")
+          return "__h.strategy.closedtrades_first_index()";
         const idx = hasArg(args, 0, ["trade_num", "trade_index", "index"])
           ? pick(args, 0, ["trade_num", "trade_index", "index"], "0")
           : "0";
@@ -1522,12 +1732,21 @@ function seriesNameRef(ctx: EmitCtx, id: string): string {
   return raw;
 }
 
-function seriesArg(ctx: EmitCtx, node: expr | undefined, visited: string): string {
-  if (node != null && node.kind === "Name") return seriesNameRef(ctx, (node as Name).id);
+function seriesArg(
+  ctx: EmitCtx,
+  node: expr | undefined,
+  visited: string,
+): string {
+  if (node != null && node.kind === "Name")
+    return seriesNameRef(ctx, (node as Name).id);
   return visited || "null";
 }
 
-function packUserFuncArgs(ctx: EmitCtx, name: string, args: CallArgs): string[] {
+function packUserFuncArgs(
+  ctx: EmitCtx,
+  name: string,
+  args: CallArgs,
+): string[] {
   const formals = ctx.funcParamNames.get(name);
   const series = ctx.funcSeriesParams.get(name);
   if (formals == null || formals.length === 0) return args.pos.slice();
@@ -1540,7 +1759,8 @@ function packUserFuncArgs(ctx: EmitCtx, name: string, args: CallArgs): string[] 
     const visited = fromPos ? args.pos[i]! : (args.kw[formal] ?? "null");
     packed.push(series?.has(formal) ? seriesArg(ctx, node, visited) : visited);
   }
-  for (let i = formals.length; i < args.pos.length; i++) packed.push(args.pos[i]!);
+  for (let i = formals.length; i < args.pos.length; i++)
+    packed.push(args.pos[i]!);
   return packed;
 }
 
@@ -1571,10 +1791,14 @@ function emitPlot(ctx: EmitCtx, fname: string, args: CallArgs): string {
 }
 
 function emitColor(name: string, args: CallArgs): string | null {
-  if (name === "color_r") return `__h.colorR(${pick(args, 0, ["color"], "null")})`;
-  if (name === "color_g") return `__h.colorG(${pick(args, 0, ["color"], "null")})`;
-  if (name === "color_b") return `__h.colorB(${pick(args, 0, ["color"], "null")})`;
-  if (name === "color_t") return `__h.colorT(${pick(args, 0, ["color"], "null")})`;
+  if (name === "color_r")
+    return `__h.colorR(${pick(args, 0, ["color"], "null")})`;
+  if (name === "color_g")
+    return `__h.colorG(${pick(args, 0, ["color"], "null")})`;
+  if (name === "color_b")
+    return `__h.colorB(${pick(args, 0, ["color"], "null")})`;
+  if (name === "color_t")
+    return `__h.colorT(${pick(args, 0, ["color"], "null")})`;
   if (name === "color_rgb") {
     const r = pick(args, 0, ["red", "r"], "null");
     const g = pick(args, 1, ["green", "g"], "null");
@@ -1681,7 +1905,9 @@ function emitMath(name: string, args: CallArgs): string | null {
   }
   if (bare === "pow") {
     const b = pick(args, 0, ["base", "number", "x"], "null");
-    const e = hasArg(args, 1, ["exponent", "exp", "y"]) ? pick(args, 1, ["exponent", "exp", "y"], "2") : "2";
+    const e = hasArg(args, 1, ["exponent", "exp", "y"])
+      ? pick(args, 1, ["exponent", "exp", "y"], "2")
+      : "2";
     return `((__b, __e) => { if (__h.isNa(__b) || __h.isNa(__e)) return null; const __r = Math.pow(Number(__b), Number(__e)); return Number.isFinite(__r) ? __r : null; })(${b}, ${e})`;
   }
   if (bare === "round") {
@@ -1710,7 +1936,12 @@ function emitMath(name: string, args: CallArgs): string | null {
   }
   const spec = MATH_UNARY[bare];
   if (spec != null) {
-    const x = pick(args, 0, ["number", "x", "angle", "radians", "degrees"], "null");
+    const x = pick(
+      args,
+      0,
+      ["number", "x", "angle", "radians", "degrees"],
+      "null",
+    );
     return naMath(x, spec.fn, spec.guard);
   }
   return isNs ? "null" : null;
@@ -1748,8 +1979,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (method === "ad") method = "accdist";
   const site = allocSite(ctx);
   const src = () => pick(args, 0, ["source", "series", "src"], CLOSE);
-  const len = (index: number, fb: string, names: string[] = ["length", "len", "period"]) =>
-    pick(args, index, names, fb);
+  const len = (
+    index: number,
+    fb: string,
+    names: string[] = ["length", "len", "period"],
+  ) => pick(args, index, names, fb);
 
   if (SRC_LEN.has(method)) {
     return taCall(method, site, [src(), len(1, "14")]);
@@ -1763,22 +1997,38 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       // Python 1-arg period-only form (basic.py:222-246): source defaults to
       // the context high/low series and the length gates on _is_period_like
       // → non-period-like → na period 0 (interpret evalExtraTa).
-      return taCall(method, site, [defSrc, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+      return taCall(method, site, [
+        defSrc,
+        periodGate(pick(args, 0, ["length"], "null"), "0"),
+      ]);
     }
-    return taCall(method, site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+    return taCall(method, site, [
+      src(),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "highestbars" || method === "lowestbars") {
     const defSrc = method === "lowestbars" ? LOW : HIGH;
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
       // Python 1-arg period-only form (basic.py:248-291): context high/low
       // source, length gated like ta.highest (interpret evalExtraTa).
-      return taCall(method, site, [defSrc, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+      return taCall(method, site, [
+        defSrc,
+        periodGate(pick(args, 0, ["length"], "null"), "0"),
+      ]);
     }
-    return taCall(method, site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+    return taCall(method, site, [
+      src(),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "max" || method === "min") {
     const defSrc = method === "min" ? LOW : HIGH;
-    if (args.pos.length >= 2 || Object.hasOwn(args.kw, "source") || Object.hasOwn(args.kw, "series")) {
+    if (
+      args.pos.length >= 2 ||
+      Object.hasOwn(args.kw, "source") ||
+      Object.hasOwn(args.kw, "series")
+    ) {
       return taCall(method, site, [src(), len(1, "14")]);
     }
     if (args.pos.length === 1 || Object.hasOwn(args.kw, "length")) {
@@ -1788,7 +2038,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "atr") {
     if (args.pos.length >= 4) {
-      return taCall("atr", site, [args.pos[0]!, args.pos[1]!, args.pos[2]!, args.pos[3]!]);
+      return taCall("atr", site, [
+        args.pos[0]!,
+        args.pos[1]!,
+        args.pos[2]!,
+        args.pos[3]!,
+      ]);
     }
     return taCall("atr", site, [HIGH, LOW, CLOSE, len(0, "14")]);
   }
@@ -1820,9 +2075,15 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       // callArg) — a non-period-like slot falls through to the series arm on
       // the raw slot-0 value, exactly like interpret.
       const p0Expr = pick(args, 0, ["source", "series", "length"], "null");
-      const multPf = finiteOr(pick(args, 1, ["mult", "multiplier"], "null"), "NaN");
+      const multPf = finiteOr(
+        pick(args, 1, ["mult", "multiplier"], "null"),
+        "NaN",
+      );
       const lenFt = finiteOr(pick(args, 1, ["length"], "null"), "0");
-      const multFt = finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2");
+      const multFt = finiteOr(
+        pick(args, 2, ["mult", "multiplier"], "null"),
+        "2",
+      );
       const pf = `(() => { const __r = __h.ta.bb(${site}, close_arr[__bar_idx], __p0, ${multPf}); return [__r.mid, __r.up, __r.lo]; })()`;
       const ft = `(() => { const __r = __h.ta.bb(${site}, __s0, ${lenFt}, ${multFt}); return [__r.mid, __r.up, __r.lo]; })()`;
       return `((__p0, __s0) => (Number.isInteger(__p0) ? ${pf} : ${ft}))(${p0Expr}, ${pick(args, 0, ["source", "series"], "null")})`;
@@ -1835,7 +2096,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }
   if (method === "bbw") {
-    return taCall("bbw", site, [src(), len(1, "20"), pick(args, 2, ["mult", "multiplier"], "2")]);
+    return taCall("bbw", site, [
+      src(),
+      len(1, "20"),
+      pick(args, 2, ["mult", "multiplier"], "2"),
+    ]);
   }
   if (method === "kc") {
     const call = taCall("kc", site, [
@@ -1869,31 +2134,52 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     if (args.pos.length <= 1 && !hasAnyKw(args, ["volume"])) {
       // Python 1-arg period-only form (basic.py:80-88): close + volume from
       // the chart context; length gates on _is_period_like → na period 0.
-      return taCall("vwma", site, [CLOSE, VOL, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+      return taCall("vwma", site, [
+        CLOSE,
+        VOL,
+        periodGate(pick(args, 0, ["length"], "null"), "0"),
+      ]);
     }
     if (args.pos.length >= 3 || hasAnyKw(args, ["volume"])) {
       // Python 3-arg community form (basic.py:89-100): (source, volume,
       // length). A period-like middle slot swaps volume back to the context
       // series (basic.py:93/97) — mirror interpret's per-bar swap.
       const vol = `((__v) => (Number.isInteger(__v) ? ${VOL} : __v))(${pick(args, 1, ["volume"], "null")})`;
-      return taCall("vwma", site, [src(), vol, finiteOr(pick(args, 2, ["length", "period"], "null"), "0")]);
+      return taCall("vwma", site, [
+        src(),
+        vol,
+        finiteOr(pick(args, 2, ["length", "period"], "null"), "0"),
+      ]);
     }
-    return taCall("vwma", site, [src(), VOL, finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+    return taCall("vwma", site, [
+      src(),
+      VOL,
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "cci") {
     if (args.pos.length >= 4) {
       // Python legacy 4-arg form (oscillators.py:178-187): typical price of
       // the given (high, low, close) series. Slots resolve kwarg-first.
       const tp = `((__h, __l, __c) => ((__h != null && __l != null && __c != null) ? (__h + __l + __c) / 3 : __c))(${pick(args, 0, ["high"], "null")}, ${pick(args, 1, ["low"], "null")}, ${pick(args, 2, ["close"], "null")})`;
-      return taCall("cci", site, [tp, finiteOr(pick(args, 3, ["length"], "null"), "0")]);
+      return taCall("cci", site, [
+        tp,
+        finiteOr(pick(args, 3, ["length"], "null"), "0"),
+      ]);
     }
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
       // Python 1-arg period-only form (oscillators.py:159-171): typical price
       // from the context high/low/close; length gates on _is_period_like.
-      return taCall("cci", site, [TP, periodGate(pick(args, 0, ["length"], "null"), "0")]);
+      return taCall("cci", site, [
+        TP,
+        periodGate(pick(args, 0, ["length"], "null"), "0"),
+      ]);
     }
     // Python 2-arg form (oscillators.py:172-177): CCI over the source alone.
-    return taCall("cci", site, [src(), finiteOr(pick(args, 1, ["length"], "null"), "0")]);
+    return taCall("cci", site, [
+      src(),
+      finiteOr(pick(args, 1, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "mfi") {
     if (args.pos.length <= 1) {
@@ -1912,7 +2198,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "tsi") {
     if (args.pos.length === 2) {
-      return taCall("tsi", site, [CLOSE, pick(args, 1, ["long", "long_length"], "25"), pick(args, 0, ["short", "short_length"], "13")]);
+      return taCall("tsi", site, [
+        CLOSE,
+        pick(args, 1, ["long", "long_length"], "25"),
+        pick(args, 0, ["short", "short_length"], "13"),
+      ]);
     }
     return taCall("tsi", site, [
       src(),
@@ -1957,10 +2247,16 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "linreg") {
-    return taCall("linreg", site, [src(), len(1, "14"), pick(args, 2, ["offset"], "0")]);
+    return taCall("linreg", site, [
+      src(),
+      len(1, "14"),
+      pick(args, 2, ["offset"], "0"),
+    ]);
   }
   if (method === "barssince") {
-    return taCall("barssince", site, [pick(args, 0, ["condition", "cond"], "null")]);
+    return taCall("barssince", site, [
+      pick(args, 0, ["condition", "cond"], "null"),
+    ]);
   }
   if (method === "valuewhen") {
     return taCall("valuewhen", site, [
@@ -1980,7 +2276,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       const lExpr = pick(args, 0, ["leftbars", "left"], "null");
       const rExpr = pick(args, 1, ["rightbars", "right"], "null");
       const leftFt = finiteOr(pick(args, 1, ["leftbars", "left"], "null"), "5");
-      const rightFt = finiteOr(pick(args, 2, ["rightbars", "right"], "null"), "5");
+      const rightFt = finiteOr(
+        pick(args, 2, ["rightbars", "right"], "null"),
+        "5",
+      );
       const pf = taCall(method, site, [defSrc, "__l", "__r"]);
       const ft = taCall(method, site, ["__s", leftFt, rightFt]);
       return `((__l, __r, __s) => (((Number.isInteger(__l) && Number.isInteger(__r))) ? ${pf} : ${ft}))(${lExpr}, ${rExpr}, ${pick(args, 0, ["source", "series"], "null")})`;
@@ -2001,7 +2300,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "willr" || method === "wpr") {
     if (args.pos.length >= 4) {
-      return taCall("willr", site, [args.pos[0]!, args.pos[1]!, args.pos[2]!, args.pos[3]!]);
+      return taCall("willr", site, [
+        args.pos[0]!,
+        args.pos[1]!,
+        args.pos[2]!,
+        args.pos[3]!,
+      ]);
     }
     return taCall("willr", site, [HIGH, LOW, CLOSE, len(0, "14")]);
   }
@@ -2041,7 +2345,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     }
     // Python 1-arg period-only form gates length via _is_period_like
     // (common.py ~701): non-period-like → ignored → default 14 (as absent).
-    return taCall("adx", site, [HIGH, LOW, CLOSE, periodGate(pick(args, 0, ["length"], "null"), "14")]);
+    return taCall("adx", site, [
+      HIGH,
+      LOW,
+      CLOSE,
+      periodGate(pick(args, 0, ["length"], "null"), "14"),
+    ]);
   }
   if (method === "correlation") {
     return taCall("correlation", site, [
@@ -2062,7 +2371,13 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   // `vpt` is an alias of the pvt kernel on interpret (no ta.vpt engine fn).
-  if (method === "pvt" || method === "vpt" || method === "obv" || method === "nvi" || method === "pvi") {
+  if (
+    method === "pvt" ||
+    method === "vpt" ||
+    method === "obv" ||
+    method === "nvi" ||
+    method === "pvi"
+  ) {
     return taCall(method === "vpt" ? "pvt" : method, site, [
       pick(args, 0, ["source", "close"], CLOSE),
       pick(args, 1, ["volume"], VOL),
@@ -2089,7 +2404,13 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
         pick(args, 4, ["length", "period"], "20"),
       ]);
     }
-    return taCall("wvad", site, [HIGH, LOW, CLOSE, VOL, pick(args, 0, ["length", "period"], "20")]);
+    return taCall("wvad", site, [
+      HIGH,
+      LOW,
+      CLOSE,
+      VOL,
+      pick(args, 0, ["length", "period"], "20"),
+    ]);
   }
   if (method === "cmf") {
     if (args.pos.length >= 5) {
@@ -2101,7 +2422,13 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
         pick(args, 4, ["length", "period"], "20"),
       ]);
     }
-    return taCall("cmf", site, [HIGH, LOW, CLOSE, VOL, pick(args, 0, ["length", "period"], "20")]);
+    return taCall("cmf", site, [
+      HIGH,
+      LOW,
+      CLOSE,
+      VOL,
+      pick(args, 0, ["length", "period"], "20"),
+    ]);
   }
   if (method === "klinger") {
     return taCall("klinger", site, [
@@ -2122,7 +2449,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "aroon") {
     // Kernel returns {down, up}; interpret exposes the tuple [down, up].
-    const call = taCall("aroon", site, [HIGH, LOW, pick(args, 0, ["length"], "14")]);
+    const call = taCall("aroon", site, [
+      HIGH,
+      LOW,
+      pick(args, 0, ["length"], "14"),
+    ]);
     return `(() => { const __r = ${call}; return [__r.down, __r.up]; })()`;
   }
   if (method === "uo") {
@@ -2143,7 +2474,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "dpo") {
-    return taCall("dpo", site, [CLOSE, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+    return taCall("dpo", site, [
+      CLOSE,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "kst") {
     return taCall("kst", site, [
@@ -2163,7 +2497,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "donchian") {
-    return taCall("donchian", site, [HIGH, LOW, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+    return taCall("donchian", site, [
+      HIGH,
+      LOW,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "ichimoku") {
     return taCall("ichimoku", site, [
@@ -2181,10 +2519,19 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "emv") {
-    return taCall("emv", site, [HIGH, LOW, VOL, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+    return taCall("emv", site, [
+      HIGH,
+      LOW,
+      VOL,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "fractal") {
-    return taCall("fractal", site, [HIGH, LOW, finiteOr(pick(args, 0, ["length"], "null"), "0")]);
+    return taCall("fractal", site, [
+      HIGH,
+      LOW,
+      finiteOr(pick(args, 0, ["length"], "null"), "0"),
+    ]);
   }
   if (method === "atr_stop") {
     // Kernel has no call-site; missing multiplier → 2 (interpret numArg).
@@ -2193,7 +2540,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (method === "zigzag") {
     const call = taCall("zigzag", site, [
       pick(args, 0, ["source", "series"], "null"),
-      finiteOr(pick(args, 1, ["threshold", "percent", "deviation"], "null"), "5"),
+      finiteOr(
+        pick(args, 1, ["threshold", "percent", "deviation"], "null"),
+        "5",
+      ),
     ]);
     return `(() => { const __r = ${call}; return [__r.high, __r.low, __r.dir]; })()`;
   }
@@ -2208,7 +2558,14 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "acceleration_factor") {
     return taCall("accelerationFactor", site, [
-      cellOf(pick(args, 0, ["momentum_list", "momentum", "source", "series"], "null")),
+      cellOf(
+        pick(
+          args,
+          0,
+          ["momentum_list", "momentum", "source", "series"],
+          "null",
+        ),
+      ),
       cellOf(pick(args, 1, ["period", "length"], "null")),
     ]);
   }
@@ -2312,7 +2669,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "beta" || method === "r_squared" || method === "comovement") {
-    const fn = method === "beta" ? "beta" : method === "r_squared" ? "rSquared" : "comovement";
+    const fn =
+      method === "beta"
+        ? "beta"
+        : method === "r_squared"
+          ? "rSquared"
+          : "comovement";
     return taCall(fn, site, [
       cellOf(pick(args, 0, ["series1", "series", "source"], "null")),
       cellOf(pick(args, 1, ["series2", "series_b", "other"], "null")),
@@ -2471,7 +2833,9 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
   if (method === "optimal_entry_zone") {
-    return taCall("optimalEntryZone", site, [arrOrCell(pick(args, 2, ["close"], "null"))]);
+    return taCall("optimalEntryZone", site, [
+      arrOrCell(pick(args, 2, ["close"], "null")),
+    ]);
   }
   if (method === "mean_reversion_entry") {
     return taCall("meanReversionEntry", site, [
@@ -2516,7 +2880,9 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "breakout_detection") {
     const arg = (i: number, names: string[]): string =>
-      isSeriesNode(args.posNodes[i]) ? "null" : cellOf(pick(args, i, names, "null"));
+      isSeriesNode(args.posNodes[i])
+        ? "null"
+        : cellOf(pick(args, i, names, "null"));
     return taPure("breakoutDetection", [
       arg(0, ["close", "source"]),
       arg(1, ["resistance"]),
@@ -2658,7 +3024,11 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     const price = isSeriesNode(args.posNodes[1])
       ? "null"
       : cellOf(pick(args, 1, ["current_price", "price"], "null"));
-    return taPure("gammaLevels", [vol, price, cellOf(pick(args, 2, ["period", "length"], "null"))]);
+    return taPure("gammaLevels", [
+      vol,
+      price,
+      cellOf(pick(args, 2, ["period", "length"], "null")),
+    ]);
   }
   if (method === "intelligent_strategy_synthesizer") {
     return taCall("intelligentStrategySynthesizer", site, [

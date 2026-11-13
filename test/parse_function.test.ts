@@ -37,7 +37,9 @@ plot(ilog2(8))
 `;
     const tree = parse(src) as Script;
     expect(tree.kind).toBe("Script");
-    const funcs = tree.body.filter((s): s is FunctionDef => s.kind === "FunctionDef");
+    const funcs = tree.body.filter(
+      (s): s is FunctionDef => s.kind === "FunctionDef",
+    );
     const byName = Object.fromEntries(funcs.map((f) => [f.name, f]));
     expect(byName.ilog2?.returns).toMatchObject({ kind: "Name", id: "int" });
     expect(byName.noop?.returns).toMatchObject({ kind: "Name", id: "void" });
@@ -46,7 +48,9 @@ plot(ilog2(8))
     expect(out).toContain("void noop(");
     const again = parse(out) as Script;
     const againFn = Object.fromEntries(
-      again.body.filter((s): s is FunctionDef => s.kind === "FunctionDef").map((f) => [f.name, f]),
+      again.body
+        .filter((s): s is FunctionDef => s.kind === "FunctionDef")
+        .map((f) => [f.name, f]),
     );
     expect(againFn.ilog2?.returns).toMatchObject({ kind: "Name", id: "int" });
   });

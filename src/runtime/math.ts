@@ -193,7 +193,8 @@ export function mathIsFinite(x: Cell): Cell {
 export function mathRoundToMintick(x: Cell, mintick: Cell = 0.01): Cell {
   const n = finite(x);
   const tick = finite(mintick);
-  if (n === null || tick === null || tick <= 0) return n === null ? null : finiteOut(Number(n.toFixed(8)));
+  if (n === null || tick === null || tick <= 0)
+    return n === null ? null : finiteOut(Number(n.toFixed(8)));
   return finiteOut(Math.round(n / tick) * tick);
 }
 
@@ -217,7 +218,11 @@ export function mathFixnan(x: Cell): Cell {
  * via `lo + (hi - lo) * u` (Python `random.uniform`). Any na / non-finite → na.
  * `rng` is a [0, 1) source (default `Math.random`).
  */
-export function mathRandom(a?: Cell, b?: Cell, rng: () => number = Math.random): Cell {
+export function mathRandom(
+  a?: Cell,
+  b?: Cell,
+  rng: () => number = Math.random,
+): Cell {
   if (a === undefined && b === undefined) return finiteOut(rng());
   if (b === undefined) {
     const hi = finite(a as Cell);

@@ -80,7 +80,11 @@ function assertHandlesSurvived(
   }
 }
 
-function assertCompileMatchesInterpret(source: string, expectedLast: number, expectedAll?: Array<number | null>): void {
+function assertCompileMatchesInterpret(
+  source: string,
+  expectedLast: number,
+  expectedAll?: Array<number | null>,
+): void {
   const compiled = runCompile(source);
   const interpreted = runInterpret(source);
   assertHandlesSurvived(compiled, interpreted);

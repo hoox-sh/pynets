@@ -135,7 +135,7 @@ Bars inside the window are visited once per tick, matching Python
 ## List subscript (`g[0]`)
 
 Python `visit_Subscript` indexes list-valued names newest-first
-(`value[-(offset + 1)]`; OOB / negative / na → na) — `g[0]` is the *last*
+(`value[-(offset + 1)]`; OOB / negative / na → na) — `g[0]` is the _last_
 element of `ta.gamma_levels`' `[high, low]`. Both interpret and JS compile
 lower `g[0]` this way for names bound from `ta.gamma_levels`, `array.from`,
 `array.new*`, `array.copy`, `array.concat`, and `array.slice` (compile tracks
@@ -159,7 +159,6 @@ array-valued names; Python's own compile mode returns na here).
   `isinstance` check), matching PYNE's bar-mode quirk.
 - `ta.mean_reversion_entry` parity requires series arguments; Python errors on
   nested `ta.sma`/`ta.stdev` arguments in bar mode.
-
 
 ## Adding a builtin
 

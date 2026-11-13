@@ -219,7 +219,9 @@ function normalizeBarTime(msOrSec: number): number {
 }
 
 function asFinite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function hasBarField(bar: ProviderBar): boolean {

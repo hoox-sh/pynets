@@ -11,7 +11,10 @@ import { unparse } from "./unparse.ts";
 import type { AST, Script } from "./nodes.ts";
 import PinescriptLexer from "../generated/PinescriptLexer.ts";
 import PinescriptParser from "../generated/PinescriptParser.ts";
-import { PinescriptErrorListener, PinescriptSyntaxError } from "../parser/error.ts";
+import {
+  PinescriptErrorListener,
+  PinescriptSyntaxError,
+} from "../parser/error.ts";
 
 export { dump, unparse };
 export { PinescriptSyntaxError };
@@ -50,7 +53,8 @@ export function parse(
   lexer.addErrorListener(listener as never);
   parser.addErrorListener(listener as never);
 
-  const rule = mode === "exec" ? parser.start_script() : parser.start_expression();
+  const rule =
+    mode === "exec" ? parser.start_script() : parser.start_expression();
   const builder = new PinescriptASTBuilder();
   const node = builder.visit(rule) as AST;
   if (!node || typeof node !== "object" || !("kind" in node)) {

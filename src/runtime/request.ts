@@ -202,8 +202,15 @@ export function resolveSecurityLowerTf(
 }
 
 /** HTF bucket: floor(timeMs / (tfMinutes * 60 * 1000)); non-finite → null. */
-export function bucketIndex(barTimeMs: number, tfMinutes: number): number | null {
-  if (!Number.isFinite(barTimeMs) || !Number.isFinite(tfMinutes) || tfMinutes <= 0) {
+export function bucketIndex(
+  barTimeMs: number,
+  tfMinutes: number,
+): number | null {
+  if (
+    !Number.isFinite(barTimeMs) ||
+    !Number.isFinite(tfMinutes) ||
+    tfMinutes <= 0
+  ) {
     return null;
   }
   return Math.floor(barTimeMs / (tfMinutes * 60 * 1000));
@@ -281,7 +288,12 @@ export function resolveRequest(
   }
   if (fname === "request.security_lower_tf") {
     const { sec, value } = securityFromArgs(args);
-    return resolveSecurityLowerTf(host.symbol, host.timeframe ?? null, sec, value);
+    return resolveSecurityLowerTf(
+      host.symbol,
+      host.timeframe ?? null,
+      sec,
+      value,
+    );
   }
   if (fname === "request.currency_rate") {
     const [from, to] = currencyFromArgs(args);
@@ -301,7 +313,10 @@ function isNamedArgs(args: RequestArgs): args is RequestNamedArgs {
   return !Array.isArray(args);
 }
 
-function securityFromArgs(args: RequestArgs): { sec: SecurityArgs; value: Cell } {
+function securityFromArgs(args: RequestArgs): {
+  sec: SecurityArgs;
+  value: Cell;
+} {
   if (!isNamedArgs(args)) {
     return {
       sec: {
@@ -355,7 +370,8 @@ function currencyPair(
 }
 
 function coerceSeed(seed: unknown): number {
-  if (typeof seed === "number" && Number.isFinite(seed)) return Math.trunc(seed);
+  if (typeof seed === "number" && Number.isFinite(seed))
+    return Math.trunc(seed);
   if (typeof seed === "string") {
     const n = Number(seed);
     if (seed.trim() !== "" && Number.isFinite(n)) return Math.trunc(n);

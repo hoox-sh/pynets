@@ -100,7 +100,10 @@ describe("ticker.modify", () => {
   });
 
   test("modify from string", () => {
-    const t = tickerModify("NASDAQ:MSFT", { session: "extended", adjust: "dividends" });
+    const t = tickerModify("NASDAQ:MSFT", {
+      session: "extended",
+      adjust: "dividends",
+    });
     expect(t.symbol).toBe("NASDAQ:MSFT");
     expect(t.session).toBe("extended");
     expect(t.adjust).toBe("dividends");

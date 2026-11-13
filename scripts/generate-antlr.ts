@@ -11,7 +11,14 @@
  *   3. parent checkout (this repo used as the pynets/ submodule of pyne)
  *   4. sibling checkouts: ../pynescript or ../pyne
  */
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  copyFileSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -34,7 +41,10 @@ function must(ok: boolean, msg: string): void {
 }
 
 function isGrammarDir(dir: string): boolean {
-  return existsSync(join(dir, "PinescriptLexer.g4")) && existsSync(join(dir, "PinescriptParser.g4"));
+  return (
+    existsSync(join(dir, "PinescriptLexer.g4")) &&
+    existsSync(join(dir, "PinescriptParser.g4"))
+  );
 }
 
 function resolveGrammar(): string {
@@ -62,8 +72,12 @@ function resolveGrammar(): string {
     [
       "missing PinescriptLexer.g4 / PinescriptParser.g4",
       "looked at:",
-      envGrammar ? `  PYNETS_GRAMMAR=${resolve(envGrammar)}` : "  PYNETS_GRAMMAR (unset)",
-      envRoot ? `  PYNESCRIPT_ROOT → ${join(resolve(envRoot), GRAMMAR_REL)}` : "  PYNESCRIPT_ROOT (unset)",
+      envGrammar
+        ? `  PYNETS_GRAMMAR=${resolve(envGrammar)}`
+        : "  PYNETS_GRAMMAR (unset)",
+      envRoot
+        ? `  PYNESCRIPT_ROOT → ${join(resolve(envRoot), GRAMMAR_REL)}`
+        : "  PYNESCRIPT_ROOT (unset)",
       ...candidates.map((dir) => `  ${dir}`),
       "clone hoox-sh/pyne next to this repo, use this repo as the pynets/ submodule of pyne,",
       "or set PYNESCRIPT_ROOT (checkout root) / PYNETS_GRAMMAR (directory with the two .g4 files)",
@@ -79,12 +93,17 @@ mkdirSync(OUT, { recursive: true });
 
 if (!existsSync(JAR)) {
   console.log(`downloading ${JAR_NAME} …`);
-  const curl = spawnSync("curl", ["-fsSL", "-o", JAR, JAR_URL], { stdio: "inherit" });
+  const curl = spawnSync("curl", ["-fsSL", "-o", JAR, JAR_URL], {
+    stdio: "inherit",
+  });
   must(curl.status === 0 && existsSync(JAR), `failed to download ${JAR_URL}`);
 }
 
 const java = spawnSync("java", ["-version"], { encoding: "utf8" });
-must(java.status === 0, "java is required to regenerate the ANTLR TypeScript target");
+must(
+  java.status === 0,
+  "java is required to regenerate the ANTLR TypeScript target",
+);
 
 const args = [
   "-jar",
@@ -101,7 +120,10 @@ const args = [
   join(GRAMMAR, "PinescriptParser.g4"),
 ];
 
-console.log("antlr4", args.filter((a) => !a.endsWith(".jar") && a !== "-jar").join(" "));
+console.log(
+  "antlr4",
+  args.filter((a) => !a.endsWith(".jar") && a !== "-jar").join(" "),
+);
 const gen = spawnSync("java", args, { stdio: "inherit", cwd: PYNETS });
 must(gen.status === 0, "antlr4 TypeScript generation failed");
 
@@ -118,11 +140,20 @@ for (const name of readdirSync(OUT)) {
   let text = readFileSync(path, "utf8");
   const before = text;
   // Official target often emits `.js` imports; Bun/TS resolve the `.ts` bases.
-  text = text.replaceAll("./PinescriptLexerBase.js", "./PinescriptLexerBase.ts");
-  text = text.replaceAll("./PinescriptParserBase.js", "./PinescriptParserBase.ts");
+  text = text.replaceAll(
+    "./PinescriptLexerBase.js",
+    "./PinescriptLexerBase.ts",
+  );
+  text = text.replaceAll(
+    "./PinescriptParserBase.js",
+    "./PinescriptParserBase.ts",
+  );
   text = text.replaceAll("./PinescriptLexer.js", "./PinescriptLexer.ts");
   text = text.replaceAll("./PinescriptParser.js", "./PinescriptParser.ts");
-  text = text.replaceAll("./PinescriptParserVisitor.js", "./PinescriptParserVisitor.ts");
+  text = text.replaceAll(
+    "./PinescriptParserVisitor.js",
+    "./PinescriptParserVisitor.ts",
+  );
   if (text !== before) writeFileSync(path, text);
 }
 

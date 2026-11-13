@@ -20,7 +20,11 @@ type PyAlert = {
 
 type PyOut = { alerts: PyAlert[]; error?: string };
 
-function pythonRun(src: string, bars: OHLCVBar[] = BARS, symbol = "TEST"): PyOut {
+function pythonRun(
+  src: string,
+  bars: OHLCVBar[] = BARS,
+  symbol = "TEST",
+): PyOut {
   const payload = JSON.stringify({ src, bars, symbol });
   const proc = Bun.spawnSync(
     [
@@ -51,7 +55,10 @@ function alertEvents(out: RuntimeResult) {
   return (out.drawings ?? []).filter((d) => d.kind === "alert");
 }
 
-function matchPythonAlerts(src: string): { ts: ReturnType<typeof alertEvents>; py: PyAlert[] } {
+function matchPythonAlerts(src: string): {
+  ts: ReturnType<typeof alertEvents>;
+  py: PyAlert[];
+} {
   const py = pythonRun(src);
   const out = run(src);
   expect(out.error).toBeUndefined();
@@ -112,7 +119,9 @@ plot(close)`);
     expect(out.error).toBeUndefined();
     const alerts = alertEvents(out);
     expect(alerts.length).toBe(BARS.length);
-    expect(alerts.every((a) => a.extra?.freq === "once_per_bar_close")).toBe(true);
+    expect(alerts.every((a) => a.extra?.freq === "once_per_bar_close")).toBe(
+      true,
+    );
   });
 
   test("alertcondition still fires once per bar", () => {
@@ -123,69 +132,74 @@ plot(1)`);
     const alerts = alertEvents(out);
     expect(alerts.length).toBe(BARS.length);
     expect(alerts.every((a) => a.text === "fire")).toBe(true);
-    expect(alerts.every((a) => a.extra?.source === "alertcondition")).toBe(true);
+    expect(alerts.every((a) => a.extra?.source === "alertcondition")).toBe(
+      true,
+    );
     expect(alerts.every((a) => a.extra?.freq === "once_per_bar")).toBe(true);
     expect(alerts.every((a) => a.extra?.title === "always")).toBe(true);
   });
 });
 
-describe.skipIf(!pythonAvailable())("interpret alert freq vs Python Runtime.run", () => {
-  test("default once_per_bar matches Python fire count", () => {
-    matchPythonAlerts(`//@version=5
+describe.skipIf(!pythonAvailable())(
+  "interpret alert freq vs Python Runtime.run",
+  () => {
+    test("default once_per_bar matches Python fire count", () => {
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("x")
 alert("x")
 plot(close)`);
-  });
+    });
 
-  test("freq all alias strings match Python", () => {
-    matchPythonAlerts(`//@version=5
+    test("freq all alias strings match Python", () => {
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("x", "all")
 alert("x", "all")
 plot(close)`);
-    matchPythonAlerts(`//@version=5
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("x", "freq_all")
 alert("x", "freq_all")
 plot(close)`);
-    matchPythonAlerts(`//@version=5
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("x", freq="all")
 alert("x", freq="all")
 plot(close)`);
-  }, 20_000);
+    }, 20_000);
 
-  test("once_per_bar_close matches Python on confirmed bars", () => {
-    matchPythonAlerts(`//@version=5
+    test("once_per_bar_close matches Python on confirmed bars", () => {
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("x", "once_per_bar_close")
 alert("x", "once_per_bar_close")
 plot(close)`);
-  });
+    });
 
-  test("zero-arg alert() matches Python (no fire, no error)", () => {
-    matchPythonAlerts(`//@version=5
+    test("zero-arg alert() matches Python (no fire, no error)", () => {
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert()
 alert("x")
 plot(close)`);
-  });
+    });
 
-  test("alertcondition once_per_bar matches Python", () => {
-    const { ts, py } = matchPythonAlerts(`//@version=5
+    test("alertcondition once_per_bar matches Python", () => {
+      const { ts, py } = matchPythonAlerts(`//@version=5
 indicator("t")
 alertcondition(true, "always", "fire")
 plot(1)`);
-    expect(py.length).toBe(BARS.length);
-    expect(ts.every((a) => a.extra?.source === "alertcondition")).toBe(true);
-  });
+      expect(py.length).toBe(BARS.length);
+      expect(ts.every((a) => a.extra?.source === "alertcondition")).toBe(true);
+    });
 
-  test("distinct messages both fire under once_per_bar", () => {
-    matchPythonAlerts(`//@version=5
+    test("distinct messages both fire under once_per_bar", () => {
+      matchPythonAlerts(`//@version=5
 indicator("t")
 alert("a")
 alert("b")
 plot(close)`);
-  });
-});
+    });
+  },
+);

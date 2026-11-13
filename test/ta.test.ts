@@ -53,7 +53,9 @@ describe("ta.atr incremental", () => {
     const highs = [10, 12, 13, 15, 16];
     const lows = [8, 9, 10, 11, 12];
     const closes = [9, 11, 12, 14, 15];
-    const out = highs.map((h, i) => ta.atr("atr:0", h, lows[i]!, closes[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.atr("atr:0", h, lows[i]!, closes[i]!, 3),
+    );
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     expect(typeof out[2]).toBe("number");
@@ -85,7 +87,9 @@ describe("ta.kc incremental", () => {
     const highs = [10, 12, 13, 15, 16, 18];
     const lows = [8, 9, 10, 11, 12, 14];
     const closes = [9, 11, 12, 14, 15, 17];
-    const out = highs.map((h, i) => ta.kc("kc:0", h, lows[i]!, closes[i]!, 3, 2));
+    const out = highs.map((h, i) =>
+      ta.kc("kc:0", h, lows[i]!, closes[i]!, 3, 2),
+    );
     expect(out[0]!.mid).toBeNull();
     expect(out[1]!.mid).toBeNull();
     for (let i = 3; i < out.length; i++) {
@@ -106,7 +110,9 @@ describe("ta.supertrend incremental", () => {
     const highs = [10, 12, 13, 15, 16, 18];
     const lows = [8, 9, 10, 11, 12, 14];
     const closes = [9, 11, 12, 14, 15, 17];
-    const out = highs.map((h, i) => ta.supertrend("st:0", h, lows[i]!, closes[i]!, 3, 3));
+    const out = highs.map((h, i) =>
+      ta.supertrend("st:0", h, lows[i]!, closes[i]!, 3, 3),
+    );
     for (let i = 3; i < out.length; i++) {
       expect(typeof out[i]!.st).toBe("number");
       expect(Number.isFinite(out[i]!.st!)).toBe(true);
@@ -167,7 +173,8 @@ describe("ta.stdev incremental", () => {
     const out = [1, 2, 3, 4, 5].map((x) => ta.stdev("sd:0", x, 3));
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
-    for (let i = 2; i < out.length; i++) expect(out[i]).toBeCloseTo(Math.sqrt(2 / 3));
+    for (let i = 2; i < out.length; i++)
+      expect(out[i]).toBeCloseTo(Math.sqrt(2 / 3));
   });
 
   test("any na in window → na", () => {
@@ -361,7 +368,7 @@ describe("ta.roc incremental", () => {
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     expect(out[2]).toBeCloseTo(50);
-    expect(out[3]).toBeCloseTo((20 - 12) / 12 * 100);
+    expect(out[3]).toBeCloseTo(((20 - 12) / 12) * 100);
   });
 
   test("na if lookback missing", () => {
@@ -468,7 +475,9 @@ describe("ta.willr incremental", () => {
     const highs = [10, 12, 11];
     const lows = [8, 9, 8];
     const closes = [9, 11, 10];
-    const out = highs.map((h, i) => ta.willr("wr:0", h, lows[i]!, closes[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.willr("wr:0", h, lows[i]!, closes[i]!, 3),
+    );
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     // hh=12, ll=8, c=10 → -100*(12-10)/(12-8) = -50
@@ -494,7 +503,9 @@ describe("ta.stoch incremental", () => {
     const highs = [10, 12, 11];
     const lows = [8, 9, 8];
     const closes = [9, 11, 10];
-    const out = highs.map((h, i) => ta.stoch("stoch:0", closes[i]!, h, lows[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.stoch("stoch:0", closes[i]!, h, lows[i]!, 3),
+    );
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     // hh=12, ll=8, c=10 → 100*(10-8)/(12-8) = 50

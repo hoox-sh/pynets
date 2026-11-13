@@ -58,13 +58,17 @@ function runInterpret(source: string) {
   return new Runtime("TEST").run(source, BARS);
 }
 
-function assertCompileMatchesInterpret(source: string, expected?: Array<number | null>): void {
+function assertCompileMatchesInterpret(
+  source: string,
+  expected?: Array<number | null>,
+): void {
   const compiled = runCompile(source);
   const interpreted = runInterpret(source);
   expect(compiled.error).toBeUndefined();
   expect(interpreted.error).toBeUndefined();
   expect(compiled.mode).toBe("compile");
-  const compiledAllNa = compiled.plots.length === 0 || compiled.plots.every((v) => v == null);
+  const compiledAllNa =
+    compiled.plots.length === 0 || compiled.plots.every((v) => v == null);
   const interpretHasValues = interpreted.plots.some((v) => v != null);
   if (compiledAllNa && interpretHasValues) {
     throw new Error(

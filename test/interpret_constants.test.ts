@@ -47,12 +47,16 @@ function plots(src: string, bars = BARS): Array<number | null> {
 describe("interpret dotted namespace constants", () => {
   test("plot(order.ascending) → 1, order.descending → -1", () => {
     expect(plots(`indicator("t")\nplot(order.ascending)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(order.descending)`)).toEqual([-1, -1, -1]);
+    expect(plots(`indicator("t")\nplot(order.descending)`)).toEqual([
+      -1, -1, -1,
+    ]);
   });
 
   test("plot(dayofweek.sunday) → 1, dayofweek.saturday → 7", () => {
     expect(plots(`indicator("t")\nplot(dayofweek.sunday)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(dayofweek.saturday)`)).toEqual([7, 7, 7]);
+    expect(plots(`indicator("t")\nplot(dayofweek.saturday)`)).toEqual([
+      7, 7, 7,
+    ]);
   });
 
   test("plot(month.december) → 12", () => {
@@ -60,14 +64,24 @@ describe("interpret dotted namespace constants", () => {
   });
 
   test('plot(format.mintick == "mintick" ? 1 : 0) → 1', () => {
-    expect(plots(`indicator("t")\nplot(format.mintick == "mintick" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(format.mintick == "mintick" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
   });
 
   test("plot(barmerge.gaps_on ? 1 : 0) is 1 (Python True)", () => {
-    expect(plots(`indicator("t")\nplot(barmerge.gaps_on ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(barmerge.gaps_off ? 1 : 0)`)).toEqual([0, 0, 0]);
-    expect(plots(`indicator("t")\nplot(barmerge.lookahead_on ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(barmerge.lookahead_off ? 1 : 0)`)).toEqual([0, 0, 0]);
+    expect(plots(`indicator("t")\nplot(barmerge.gaps_on ? 1 : 0)`)).toEqual([
+      1, 1, 1,
+    ]);
+    expect(plots(`indicator("t")\nplot(barmerge.gaps_off ? 1 : 0)`)).toEqual([
+      0, 0, 0,
+    ]);
+    expect(
+      plots(`indicator("t")\nplot(barmerge.lookahead_on ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(barmerge.lookahead_off ? 1 : 0)`),
+    ).toEqual([0, 0, 0]);
   });
 
   test("barmerge.* constants are Python True/False booleans, not 1/0", () => {
@@ -82,7 +96,9 @@ describe("interpret dotted namespace constants", () => {
   });
 
   test('plot(shape.circle == "circle" ? 1 : 0)', () => {
-    expect(plots(`indicator("t")\nplot(shape.circle == "circle" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(shape.circle == "circle" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
   });
 
   test("math.phi / math.rphi / math.pi", () => {
@@ -93,41 +109,73 @@ describe("interpret dotted namespace constants", () => {
     expect(plots(`indicator("t")\nplot(math.pi)`)[0]).toBeCloseTo(Math.PI);
   });
 
-  test("size.tiny is 8; size.auto is \"auto\"", () => {
+  test('size.tiny is 8; size.auto is "auto"', () => {
     expect(plots(`indicator("t")\nplot(size.tiny)`)).toEqual([8, 8, 8]);
-    expect(plots(`indicator("t")\nplot(size.auto == "auto" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    expect(plots(`indicator("t")\nplot(size.auto == "auto" ? 1 : 0)`)).toEqual([
+      1, 1, 1,
+    ]);
   });
 
   test("text.formatting.bold / none", () => {
-    expect(plots(`indicator("t")\nplot(text.formatting.bold == "bold" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(text.formatting.none == "" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(text.formatting.bold_italic == "bold italic" ? 1 : 0)`)).toEqual([
-      1, 1, 1,
-    ]);
+    expect(
+      plots(`indicator("t")\nplot(text.formatting.bold == "bold" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(text.formatting.none == "" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(
+        `indicator("t")\nplot(text.formatting.bold_italic == "bold italic" ? 1 : 0)`,
+      ),
+    ).toEqual([1, 1, 1]);
   });
 
   test("hline.style_solid / location / xloc / display / position / extend", () => {
-    expect(plots(`indicator("t")\nplot(hline.style_solid == "solid" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(location.abovebar == "abovebar" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(xloc.bar_index == "bar_index" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(yloc.price == "price" ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(extend.both == "both" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(hline.style_solid == "solid" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(location.abovebar == "abovebar" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(xloc.bar_index == "bar_index" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(yloc.price == "price" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
+    expect(
+      plots(`indicator("t")\nplot(extend.both == "both" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
     // display.* is an integer bitfield per Python SoT (base.py): display.all === 15.
-    expect(plots(`indicator("t")\nplot(display.all == 15 ? 1 : 0)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(position.top_right == "top_right" ? 1 : 0)`)).toEqual([1, 1, 1]);
+    expect(plots(`indicator("t")\nplot(display.all == 15 ? 1 : 0)`)).toEqual([
+      1, 1, 1,
+    ]);
+    expect(
+      plots(`indicator("t")\nplot(position.top_right == "top_right" ? 1 : 0)`),
+    ).toEqual([1, 1, 1]);
   });
 
   test("display.* bitfield: pane + data_window === 3, all === 15", () => {
-    expect(plots(`indicator("t")\nplot(display.pane + display.data_window)`)).toEqual([3, 3, 3]);
+    expect(
+      plots(`indicator("t")\nplot(display.pane + display.data_window)`),
+    ).toEqual([3, 3, 3]);
     expect(plots(`indicator("t")\nplot(display.none)`)).toEqual([0, 0, 0]);
     expect(plots(`indicator("t")\nplot(display.pane)`)).toEqual([1, 1, 1]);
-    expect(plots(`indicator("t")\nplot(display.data_window)`)).toEqual([2, 2, 2]);
-    expect(plots(`indicator("t")\nplot(display.price_scale)`)).toEqual([4, 4, 4]);
-    expect(plots(`indicator("t")\nplot(display.status_line)`)).toEqual([8, 8, 8]);
-    expect(plots(`indicator("t")\nplot(display.all)`)).toEqual([15, 15, 15]);
-    expect(plots(`indicator("t")\nplot(display.pane | display.status_line == 9 ? 1 : 0)`)).toEqual([
-      1, 1, 1,
+    expect(plots(`indicator("t")\nplot(display.data_window)`)).toEqual([
+      2, 2, 2,
     ]);
+    expect(plots(`indicator("t")\nplot(display.price_scale)`)).toEqual([
+      4, 4, 4,
+    ]);
+    expect(plots(`indicator("t")\nplot(display.status_line)`)).toEqual([
+      8, 8, 8,
+    ]);
+    expect(plots(`indicator("t")\nplot(display.all)`)).toEqual([15, 15, 15]);
+    expect(
+      plots(
+        `indicator("t")\nplot(display.pane | display.status_line == 9 ? 1 : 0)`,
+      ),
+    ).toEqual([1, 1, 1]);
   });
 
   test("bid / ask are na", () => {

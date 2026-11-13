@@ -28,16 +28,22 @@ describe("LibraryRegistry", () => {
     const registry = new LibraryRegistry();
     const mod = new LibraryModule("Fib", { namespace: "Alice", version: 3 });
     registry.register(mod);
-    expect(registry.lookup({ namespace: "Alice", name: "Fib", version: 3 })).toBe(mod);
+    expect(
+      registry.lookup({ namespace: "Alice", name: "Fib", version: 3 }),
+    ).toBe(mod);
     expect(registry.lookup({ name: "Fib" })).toBe(mod);
-    expect(registry.lookup({ namespace: "Alice", name: "Other", version: 3 })).toBeNull();
+    expect(
+      registry.lookup({ namespace: "Alice", name: "Other", version: 3 }),
+    ).toBeNull();
   });
 
   test("path miss falls back to title", () => {
     const registry = new LibraryRegistry();
     const local = new LibraryModule("Point");
     registry.register(local);
-    expect(registry.lookup({ namespace: "user", name: "Point", version: 1 })).toBe(local);
+    expect(
+      registry.lookup({ namespace: "user", name: "Point", version: 1 }),
+    ).toBe(local);
     expect(registry.lookup({ name: "Point" })).toBe(local);
   });
 
@@ -52,14 +58,22 @@ describe("LibraryRegistry", () => {
 
   test("replace on re-register", () => {
     const registry = new LibraryRegistry();
-    const first = new LibraryModule("MathHelpers", { namespace: "user", version: 1 });
+    const first = new LibraryModule("MathHelpers", {
+      namespace: "user",
+      version: 1,
+    });
     first.exports.set("double", 1);
     registry.register(first);
-    const second = new LibraryModule("MathHelpers", { namespace: "user", version: 1 });
+    const second = new LibraryModule("MathHelpers", {
+      namespace: "user",
+      version: 1,
+    });
     second.exports.set("double", 2);
     registry.register(second);
     expect(registry.lookup({ name: "MathHelpers" })).toBe(second);
-    expect(registry.lookup({ namespace: "user", name: "MathHelpers", version: 1 })).toBe(second);
+    expect(
+      registry.lookup({ namespace: "user", name: "MathHelpers", version: 1 }),
+    ).toBe(second);
     expect(registry.lookup({ name: "MathHelpers" })?.get("double")).toBe(2);
     registry.clear();
     expect(registry.lookup({ name: "MathHelpers" })).toBeNull();
@@ -131,12 +145,17 @@ describe("stub polyfills", () => {
 
   test("aliases dim_x/dim_y/ix/iy", () => {
     expect(
-      applyStubExport("index_2d_to_1d", [], { dim_x: 10, dim_y: 5, ix: 2, iy: 3 }),
+      applyStubExport("index_2d_to_1d", [], {
+        dim_x: 10,
+        dim_y: 5,
+        ix: 2,
+        iy: 3,
+      }),
     ).toBe(13);
     expect(index_2d_to_1d({ dim_x: 10, dim_y: 5, ix: 2, iy: 3 })).toBe(13);
-    expect(applyStubExport("index_1d_to_2d", [], { dim_x: 10, dim_y: 5, i: 13 })).toEqual([
-      2, 3,
-    ]);
+    expect(
+      applyStubExport("index_1d_to_2d", [], { dim_x: 10, dim_y: 5, i: 13 }),
+    ).toEqual([2, 3]);
     expect(
       applyStubExport("index_2d_to_1d", [10], {
         dimension_y: 5,

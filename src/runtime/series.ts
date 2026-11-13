@@ -33,7 +33,8 @@ export class PineSeries {
 
   /** `offset` bars ago. `0` is current; negative / non-finite / OOB is `na`. */
   get(offset: number): Cell {
-    if (typeof offset !== "number" || !Number.isFinite(offset) || offset < 0) return NA;
+    if (typeof offset !== "number" || !Number.isFinite(offset) || offset < 0)
+      return NA;
     const n = this.data.length;
     if (n === 0) return NA;
     const idx = n - 1 - Math.trunc(offset);

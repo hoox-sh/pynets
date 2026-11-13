@@ -43,41 +43,75 @@ describe("compile timeframe.* static defaults (Python daily-chart table)", () =>
   const of = (v: number): Array<number> => [v, v, v, v];
 
   test("period defaults to 'D' and matches interpret", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.period == "D" ? 1 : 0)`)).toEqual(ones);
+    expect(
+      expectBackendParity(
+        `indicator("t")\nplot(timeframe.period == "D" ? 1 : 0)`,
+      ),
+    ).toEqual(ones);
   });
 
   test("main_period defaults to 'D' and matches interpret", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.main_period == "D" ? 1 : 0)`)).toEqual(ones);
+    expect(
+      expectBackendParity(
+        `indicator("t")\nplot(timeframe.main_period == "D" ? 1 : 0)`,
+      ),
+    ).toEqual(ones);
   });
 
   test("multiplier defaults to 1 and matches interpret", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.multiplier)`)).toEqual(of(1));
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.multiplier)`),
+    ).toEqual(of(1));
   });
 
   test("false flags match interpret: isintraday / isweekly / ismonthly", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isintraday ? 1 : 0)`)).toEqual(zeros);
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isweekly ? 1 : 0)`)).toEqual(zeros);
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.ismonthly ? 1 : 0)`)).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isintraday ? 1 : 0)`),
+    ).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isweekly ? 1 : 0)`),
+    ).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.ismonthly ? 1 : 0)`),
+    ).toEqual(zeros);
   });
 
   test("false flags match interpret: isseconds / isinseconds / isminutes / ishours", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isseconds ? 1 : 0)`)).toEqual(zeros);
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isinseconds ? 1 : 0)`)).toEqual(zeros);
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isminutes ? 1 : 0)`)).toEqual(zeros);
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.ishours ? 1 : 0)`)).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isseconds ? 1 : 0)`),
+    ).toEqual(zeros);
+    expect(
+      expectBackendParity(
+        `indicator("t")\nplot(timeframe.isinseconds ? 1 : 0)`,
+      ),
+    ).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isminutes ? 1 : 0)`),
+    ).toEqual(zeros);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.ishours ? 1 : 0)`),
+    ).toEqual(zeros);
   });
 
   test("isdaily defaults to true and matches interpret", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isdaily ? 1 : 0)`)).toEqual(ones);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isdaily ? 1 : 0)`),
+    ).toEqual(ones);
   });
 
   test("isdwm defaults to true and matches interpret", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.isdwm ? 1 : 0)`)).toEqual(ones);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.isdwm ? 1 : 0)`),
+    ).toEqual(ones);
   });
 
   test("unknown timeframe member is na on both backends", () => {
-    const compiled = runCompile(`indicator("t")\nplot(timeframe.no_such_member)`);
-    const interpreted = runInterpret(`indicator("t")\nplot(timeframe.no_such_member)`);
+    const compiled = runCompile(
+      `indicator("t")\nplot(timeframe.no_such_member)`,
+    );
+    const interpreted = runInterpret(
+      `indicator("t")\nplot(timeframe.no_such_member)`,
+    );
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual([null, null, null, null]);
@@ -95,24 +129,32 @@ describe("timeframe.in_seconds (Python no-timeframe → daily) — interpret/com
   const daily = [86_400, 86_400, 86_400, 86_400];
 
   test("no-arg call returns daily 86400 on both backends", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds())`)).toEqual(daily);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds())`),
+    ).toEqual(daily);
   });
 
   test("explicit na arg defaults to daily 86400 on both backends", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds(na))`)).toEqual(daily);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds(na))`),
+    ).toEqual(daily);
   });
 
   test("empty-string arg defaults to daily 86400 on both backends", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds(""))`)).toEqual(daily);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds(""))`),
+    ).toEqual(daily);
   });
 
   test("explicit 'D' parses to 86400 on both backends", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds("D"))`)).toEqual(daily);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds("D"))`),
+    ).toEqual(daily);
   });
 
   test("configured timeframe keeps its own duration ('5' → 300) on both backends", () => {
-    expect(expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds("5"))`)).toEqual([
-      300, 300, 300, 300,
-    ]);
+    expect(
+      expectBackendParity(`indicator("t")\nplot(timeframe.in_seconds("5"))`),
+    ).toEqual([300, 300, 300, 300]);
   });
 });

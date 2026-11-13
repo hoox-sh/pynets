@@ -170,7 +170,10 @@ describe("compile cache", () => {
 
 describe("Runtime mode", () => {
   test("mode=compile matches interpret SMA plots", () => {
-    const compiled = new Runtime("TEST", { mode: "compile" }).run(SMA_SRC, BARS);
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(
+      SMA_SRC,
+      BARS,
+    );
     const interpreted = new Runtime("TEST").run(SMA_SRC, BARS);
     expect(compiled.error).toBeUndefined();
     expect(compiled.mode).toBe("compile");

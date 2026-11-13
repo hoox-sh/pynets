@@ -21,7 +21,10 @@ describe("interpret TA surface", () => {
     expect(typeof swma.plots[7]).toBe("number");
     const cum = interpret(`indicator("t")\nplot(ta.cum(close))`, BARS);
     expect(cum.plots[7]).toBe(36);
-    const since = interpret(`indicator("t")\nplot(ta.barssince(close == 5))`, BARS);
+    const since = interpret(
+      `indicator("t")\nplot(ta.barssince(close == 5))`,
+      BARS,
+    );
     expect(since.plots[4]).toBe(0);
     expect(since.plots[7]).toBe(3);
   });

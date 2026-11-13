@@ -8,8 +8,22 @@ import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 
 const BARS = [
-  { open: 100, high: 101, low: 99, close: 100, volume: 10, time: 1_700_000_000_000 },
-  { open: 100, high: 102, low: 99, close: 101, volume: 11, time: 1_700_000_060_000 },
+  {
+    open: 100,
+    high: 101,
+    low: 99,
+    close: 100,
+    volume: 10,
+    time: 1_700_000_000_000,
+  },
+  {
+    open: 100,
+    high: 102,
+    low: 99,
+    close: 101,
+    volume: 11,
+    time: 1_700_000_060_000,
+  },
 ];
 
 const FLAGS = `indicator("t")

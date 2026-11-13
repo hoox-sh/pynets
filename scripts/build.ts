@@ -17,7 +17,11 @@ const entry = join(root, "src/index.ts");
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
-function bundle(outfile: string, target: "node" | "browser", minify: boolean): void {
+function bundle(
+  outfile: string,
+  target: "node" | "browser",
+  minify: boolean,
+): void {
   const args = [
     "build",
     entry,
@@ -31,10 +35,16 @@ function bundle(outfile: string, target: "node" | "browser", minify: boolean): v
     "bundle",
   ];
   if (minify) args.push("--minify");
-  const r = Bun.spawnSync(["bun", ...args], { cwd: root, stdout: "inherit", stderr: "inherit" });
+  const r = Bun.spawnSync(["bun", ...args], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   if (r.exitCode !== 0) throw new Error(`bun build failed (${target})`);
   const kb = (statSync(outfile).size / 1024).toFixed(0);
-  console.log(`${target.padEnd(8)} ${outfile.replace(root + "/", "")}  ${kb} kB`);
+  console.log(
+    `${target.padEnd(8)} ${outfile.replace(root + "/", "")}  ${kb} kB`,
+  );
 }
 
 const PUBLIC_DTS = `/**
@@ -391,4 +401,3 @@ bundle(join(dist, "index.js"), "node", false);
 bundle(join(dist, "browser.js"), "browser", true);
 writeFileSync(join(dist, "index.d.ts"), PUBLIC_DTS);
 console.log("types    dist/index.d.ts");
-

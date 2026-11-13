@@ -20,7 +20,10 @@ function parseOk(src: string): boolean {
 }
 
 function taHas(method: string): boolean {
-  return typeof (new TaEngine() as unknown as Record<string, unknown>)[method] === "function";
+  return (
+    typeof (new TaEngine() as unknown as Record<string, unknown>)[method] ===
+    "function"
+  );
 }
 
 function interpretHasFinite(src: string): boolean {
@@ -40,10 +43,12 @@ function highestReady(): boolean {
 
 function pickCrossSrc(): string | null {
   if (!taHas("crossover")) {
-    if (!interpretHasFinite(CROSS_SRC) && !interpretHasFinite(SMA_CROSS_SRC)) return null;
+    if (!interpretHasFinite(CROSS_SRC) && !interpretHasFinite(SMA_CROSS_SRC))
+      return null;
   }
   if (parseOk(CROSS_SRC) && interpretHasFinite(CROSS_SRC)) return CROSS_SRC;
-  if (parseOk(SMA_CROSS_SRC) && interpretHasFinite(SMA_CROSS_SRC)) return SMA_CROSS_SRC;
+  if (parseOk(SMA_CROSS_SRC) && interpretHasFinite(SMA_CROSS_SRC))
+    return SMA_CROSS_SRC;
   return null;
 }
 
@@ -55,11 +60,14 @@ describe("interpret extra TA", () => {
     expect(out.plots).toEqual([null, null, 3, 4, 5]);
   });
 
-  test.skipIf(CROSS_PICK == null)("ta.crossover produces boolean-like plots", () => {
-    const out = interpret(CROSS_PICK!, BARS);
-    expect(out.plots).toHaveLength(5);
-    for (const v of out.plots) {
-      expect(v === null || v === 0 || v === 1).toBe(true);
-    }
-  });
+  test.skipIf(CROSS_PICK == null)(
+    "ta.crossover produces boolean-like plots",
+    () => {
+      const out = interpret(CROSS_PICK!, BARS);
+      expect(out.plots).toHaveLength(5);
+      for (const v of out.plots) {
+        expect(v === null || v === 0 || v === 1).toBe(true);
+      }
+    },
+  );
 });

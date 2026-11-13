@@ -42,10 +42,13 @@ f(x) =>
 plot(f(1))
 plot(y, title="y")`;
 
-  test.skipIf(!parseEmitsFunctionDef(isolateSrc))("UDF locals do not leak into script env", () => {
-    const out = new Runtime("TEST").run(isolateSrc, BARS);
-    expect(out.error).toBeUndefined();
-    expect(out.plots[0]).toBe(2);
-    expect(out.series.y).toEqual([10, 10, 10, 10, 10]);
-  });
+  test.skipIf(!parseEmitsFunctionDef(isolateSrc))(
+    "UDF locals do not leak into script env",
+    () => {
+      const out = new Runtime("TEST").run(isolateSrc, BARS);
+      expect(out.error).toBeUndefined();
+      expect(out.plots[0]).toBe(2);
+      expect(out.series.y).toEqual([10, 10, 10, 10, 10]);
+    },
+  );
 });

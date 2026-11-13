@@ -43,7 +43,10 @@ function padOrTrunc(values: unknown[] | undefined, n: number): unknown[] {
 function looksLikeUdt(item: unknown): boolean {
   if (item == null || typeof item !== "object") return false;
   if (item instanceof UdtInstance) return true;
-  return !Array.isArray(item) && Object.prototype.hasOwnProperty.call(item, "__type__");
+  return (
+    !Array.isArray(item) &&
+    Object.prototype.hasOwnProperty.call(item, "__type__")
+  );
 }
 
 function udtFieldNames(item: object): string[] | null {
@@ -61,7 +64,8 @@ function readUdtField(item: object, name: string): unknown {
 }
 
 function udtFieldKey(item: unknown, sortField: unknown): unknown {
-  if (item == null || sortField == null || typeof item !== "object") return item;
+  if (item == null || sortField == null || typeof item !== "object")
+    return item;
   if (typeof sortField === "string") return readUdtField(item, sortField);
   if (typeof sortField === "number" && Number.isFinite(sortField)) {
     const names = udtFieldNames(item);
@@ -133,7 +137,8 @@ function modeOf(values: readonly unknown[]): unknown {
   let bestI = 0;
   let bestN = 0;
   for (const raw of values) {
-    const key = typeof raw === "number" && !Number.isFinite(raw) ? null : (raw ?? null);
+    const key =
+      typeof raw === "number" && !Number.isFinite(raw) ? null : (raw ?? null);
     let idx = -1;
     for (let i = 0; i < keys.length; i++) {
       if (keys[i] === key) {
@@ -158,7 +163,9 @@ function modeOf(values: readonly unknown[]): unknown {
 }
 
 /** Sample moments (Python `statistics.variance` / `stdev`, divisor n−1). */
-function sampleMoments(vals: readonly number[]): { variance: number; stdev: number } | null {
+function sampleMoments(
+  vals: readonly number[],
+): { variance: number; stdev: number } | null {
   const n = vals.length;
   if (n < 2) return null;
   let sum = 0;
@@ -179,7 +186,10 @@ function sampleMoments(vals: readonly number[]): { variance: number; stdev: numb
   return { variance, stdev };
 }
 
-function defaultMatrixSortField(rows: readonly unknown[][], column: number): unknown {
+function defaultMatrixSortField(
+  rows: readonly unknown[][],
+  column: number,
+): unknown {
   for (const row of rows) {
     const cell = row[column];
     if (cell == null) continue;
@@ -209,7 +219,12 @@ function cloneGrid(src: number[][]): number[][] {
   return out;
 }
 
-function eigen2x2(a: number, b: number, c: number, d: number): [number, number] {
+function eigen2x2(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): [number, number] {
   const tr = a + d;
   const det = a * d - b * c;
   const disc = tr * tr - 4 * det;
@@ -228,7 +243,9 @@ function wilkinsonShift(a: number, b: number, c: number, d: number): number {
 }
 
 /** One-sided Jacobi SVD: A (m×n) = U (m×n) Σ Vᵀ (n×n). */
-function jacobiSvd(A: number[][]): { u: number[][]; s: number[]; v: number[][] } | null {
+function jacobiSvd(
+  A: number[][],
+): { u: number[][]; s: number[]; v: number[][] } | null {
   const m = A.length;
   const n = A[0]!.length;
   const w = cloneGrid(A);
@@ -252,7 +269,11 @@ function jacobiSvd(A: number[][]): { u: number[][]; s: number[]; v: number[][] }
           beta += aq * aq;
           gamma += ap * aq;
         }
-        if (!Number.isFinite(alpha) || !Number.isFinite(beta) || !Number.isFinite(gamma)) {
+        if (
+          !Number.isFinite(alpha) ||
+          !Number.isFinite(beta) ||
+          !Number.isFinite(gamma)
+        ) {
           return null;
         }
         const thresh = 1e-15 * Math.sqrt(Math.max(alpha * beta, 0));
@@ -582,7 +603,11 @@ export class PineMatrix {
   }
 
   /** Replace grid + dims with clones of `snap` — same instance for aliases. */
-  restoreContents(snap: { cells: unknown[][]; nRows: number; nCols: number }): void {
+  restoreContents(snap: {
+    cells: unknown[][];
+    nRows: number;
+    nCols: number;
+  }): void {
     this.cells.length = 0;
     for (const row of snap.cells) this.cells.push(row.map(cloneValue));
     this.nRows = snap.nRows;
@@ -1000,7 +1025,9 @@ export class PineMatrix {
     }
     const col = padOrTrunc(values, this.nRows);
     const at =
-      index === undefined ? this.nCols : Math.min(Math.trunc(index), this.nCols);
+      index === undefined
+        ? this.nCols
+        : Math.min(Math.trunc(index), this.nCols);
     for (let i = 0; i < this.nRows; i++) this.cells[i]!.splice(at, 0, col[i]!);
     this.nCols += 1;
   }
@@ -1048,13 +1075,19 @@ export class PineMatrix {
       for (let j = 0; j < c; j++) out.set(i, j, this.cells[i]![j]!);
     }
     for (let i = 0; i < other.nRows; i++) {
-      for (let j = 0; j < c; j++) out.set(this.nRows + i, j, other.cells[i]![j]!);
+      for (let j = 0; j < c; j++)
+        out.set(this.nRows + i, j, other.cells[i]![j]!);
     }
     return out;
   }
 
   /** Half-open `[fromRow, toRow) × [fromCol, toCol)`. Invalid range → `na`. */
-  submatrix(fromRow: number, toRow: number, fromCol: number, toCol: number): PineMatrix | null {
+  submatrix(
+    fromRow: number,
+    toRow: number,
+    fromCol: number,
+    toCol: number,
+  ): PineMatrix | null {
     if (
       !Number.isFinite(fromRow) ||
       !Number.isFinite(toRow) ||
@@ -1108,7 +1141,11 @@ export class PineMatrix {
   }
 
   /** Row indices that would sort by *column*; `na` indices last. */
-  sortIndices(column = 0, order: "asc" | "desc" = "asc", sortField?: unknown): number[] {
+  sortIndices(
+    column = 0,
+    order: "asc" | "desc" = "asc",
+    sortField?: unknown,
+  ): number[] {
     if (this.nRows === 0) return [];
     const c = resolveIndex(column, this.nCols);
     if (c === null) return [];
@@ -1370,7 +1407,8 @@ export class PineMatrix {
 
   /** Moore–Penrose pseudoinverse via one-sided Jacobi SVD. Empty-shape → transpose-empty; non-finite → `na`. */
   pinv(): PineMatrix | null {
-    if (this.nRows === 0 || this.nCols === 0) return new PineMatrix(this.nCols, this.nRows);
+    if (this.nRows === 0 || this.nCols === 0)
+      return new PineMatrix(this.nCols, this.nRows);
     const src = this.asFiniteGrid();
     if (src === null) return null;
     const svd = jacobiSvd(src);
@@ -1477,7 +1515,10 @@ export class PineMatrix {
   }
 
   /** In-range line, or `null` when the index is OOB / non-finite. */
-  private lineAt(axis: "row" | "col", index: number): readonly unknown[] | null {
+  private lineAt(
+    axis: "row" | "col",
+    index: number,
+  ): readonly unknown[] | null {
     if (axis === "row") {
       const i = resolveIndex(index, this.nRows);
       return i === null ? null : this.cells[i]!;

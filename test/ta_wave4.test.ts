@@ -111,8 +111,12 @@ describe("ta.kcw incremental", () => {
     const highs = [10, 12, 13, 15, 16, 18];
     const lows = [8, 9, 10, 11, 12, 14];
     const closes = [9, 11, 12, 14, 15, 17];
-    const kc = highs.map((h, i) => bands.kc("kc:0", h, lows[i]!, closes[i]!, 3, 2));
-    const width = highs.map((h, i) => widthTa.kcw("kcw:0", h, lows[i]!, closes[i]!, 3, 2));
+    const kc = highs.map((h, i) =>
+      bands.kc("kc:0", h, lows[i]!, closes[i]!, 3, 2),
+    );
+    const width = highs.map((h, i) =>
+      widthTa.kcw("kcw:0", h, lows[i]!, closes[i]!, 3, 2),
+    );
     expect(width[0]).toBeNull();
     expect(width[1]).toBeNull();
     for (let i = 3; i < width.length; i++) {
@@ -177,7 +181,9 @@ describe("ta.variance incremental", () => {
     expect(ta.variance("var:1", 1, 1)).toBeNull();
     expect(ta.variance("var:0p", 1, 0)).toBeNull();
     const naTa = new TaEngine();
-    const poisoned = ([1, 2, null, 4] as Cell[]).map((x) => naTa.variance("var:na", x, 3));
+    const poisoned = ([1, 2, null, 4] as Cell[]).map((x) =>
+      naTa.variance("var:na", x, 3),
+    );
     expect(poisoned[2]).toBeNull();
     expect(poisoned[3]).toBeNull();
   });
@@ -218,7 +224,9 @@ describe("ta.mode incremental", () => {
   test("needs full window; all-na window is na", () => {
     const ta = new TaEngine();
     expect(ta.mode("mode:w", 1, 3)).toBeNull();
-    const out = ([null, null, null] as Cell[]).map((x) => ta.mode("mode:na", x, 3));
+    const out = ([null, null, null] as Cell[]).map((x) =>
+      ta.mode("mode:na", x, 3),
+    );
     expect(out[2]).toBeNull();
   });
 });
@@ -251,7 +259,9 @@ describe("ta.percentileNearest / percentileLinear incremental", () => {
     expect(src.map((x) => ta.percentileNearest("pn:25", x, 5, 25))[4]).toBe(2);
     expect(src.map((x) => ta.percentileNearest("pn:75", x, 5, 75))[4]).toBe(4);
     expect(src.map((x) => ta.percentileNearest("pn:0", x, 5, 0))[4]).toBe(1);
-    expect(src.map((x) => ta.percentileNearest("pn:100", x, 5, 100))[4]).toBe(5);
+    expect(src.map((x) => ta.percentileNearest("pn:100", x, 5, 100))[4]).toBe(
+      5,
+    );
   });
 
   test("linear interpolation on [1..5]", () => {
@@ -261,14 +271,18 @@ describe("ta.percentileNearest / percentileLinear incremental", () => {
     expect(src.map((x) => ta.percentileLinear("pl:25", x, 5, 25))[4]).toBe(2);
     expect(src.map((x) => ta.percentileLinear("pl:0", x, 5, 0))[4]).toBe(1);
     expect(src.map((x) => ta.percentileLinear("pl:100", x, 5, 100))[4]).toBe(5);
-    expect(src.map((x) => ta.percentileLinear("pl:12.5", x, 5, 12.5))[4]).toBeCloseTo(1.5);
+    expect(
+      src.map((x) => ta.percentileLinear("pl:12.5", x, 5, 12.5))[4],
+    ).toBeCloseTo(1.5);
   });
 
   test("needs full window; all-na and bad period/percentage are na", () => {
     const ta = new TaEngine();
     expect(ta.percentileNearest("pn:w", 1, 3, 50)).toBeNull();
     expect(
-      ([null, null, null] as Cell[]).map((x) => ta.percentileLinear("pl:na", x, 3, 50))[2],
+      ([null, null, null] as Cell[]).map((x) =>
+        ta.percentileLinear("pl:na", x, 3, 50),
+      )[2],
     ).toBeNull();
     expect(ta.percentileNearest("pn:p", 1, 0, 50)).toBeNull();
     expect(ta.percentileLinear("pl:pct", 1, 3, Number.NaN)).toBeNull();
@@ -296,7 +310,15 @@ describe("ta.barssince incremental", () => {
   test("truthy resets to 0; else increment; never true is na", () => {
     const ta = new TaEngine();
     const cond: Cell[] = [0, 0, 1, 0, 0, 1, 0];
-    expect(cond.map((c) => ta.barssince("bs:0", c))).toEqual([null, null, 0, 1, 2, 0, 1]);
+    expect(cond.map((c) => ta.barssince("bs:0", c))).toEqual([
+      null,
+      null,
+      0,
+      1,
+      2,
+      0,
+      1,
+    ]);
   });
 
   test("null is not truthy; non-zero is", () => {

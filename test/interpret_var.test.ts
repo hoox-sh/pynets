@@ -29,7 +29,9 @@ function parseSupportsVarReassign(src: string): boolean {
     if (tree.kind !== "Script") return false;
     const body = (tree as Script).body;
     const kinds = body.map((s) => s.kind);
-    const hasVar = body.some((s) => s.kind === "Assign" && s.mode?.kind === "Var");
+    const hasVar = body.some(
+      (s) => s.kind === "Assign" && s.mode?.kind === "Var",
+    );
     return hasVar && kinds.includes("ReAssign");
   } catch {
     return false;
@@ -80,10 +82,13 @@ describe("interpret var / :=", () => {
   });
 
   const parsedSrc = `indicator("t")\nvar y = 1\nplot(y)\ny := y + 1`;
-  test.skipIf(!parseSupportsVarReassign(parsedSrc))("parse var y = 1 / y := y+1 plots 1,2,3", () => {
-    const out = interpret(parsedSrc, THREE_BARS);
-    expect(out.plots).toEqual([1, 2, 3]);
-  });
+  test.skipIf(!parseSupportsVarReassign(parsedSrc))(
+    "parse var y = 1 / y := y+1 plots 1,2,3",
+    () => {
+      const out = interpret(parsedSrc, THREE_BARS);
+      expect(out.plots).toEqual([1, 2, 3]);
+    },
+  );
 
   const parsedSameBar = `indicator("t")\nvar y = 1\ny := y + 1\nplot(y)`;
   test.skipIf(!parseSupportsVarReassign(parsedSameBar))(

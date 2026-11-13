@@ -8,7 +8,11 @@ import { UdtInstance, UdtType } from "../udt.ts";
 
 const types = new Map<string, UdtType>();
 
-export function udtRegister(name: string, fields: string[], defaults?: Record<string, unknown>): void {
+export function udtRegister(
+  name: string,
+  fields: string[],
+  defaults?: Record<string, unknown>,
+): void {
   types.set(
     name,
     new UdtType(
@@ -18,11 +22,17 @@ export function udtRegister(name: string, fields: string[], defaults?: Record<st
   );
 }
 
-export function udtNew(name: string, overrides?: Record<string, unknown>): UdtInstance | Record<string, unknown> {
+export function udtNew(
+  name: string,
+  overrides?: Record<string, unknown>,
+): UdtInstance | Record<string, unknown> {
   let t = types.get(name);
   if (t == null) {
     const fields = overrides != null ? Object.keys(overrides) : [];
-    t = new UdtType(name, fields.map((f) => ({ name: f, default: null })));
+    t = new UdtType(
+      name,
+      fields.map((f) => ({ name: f, default: null })),
+    );
     types.set(name, t);
   }
   return t.newInstance(overrides);

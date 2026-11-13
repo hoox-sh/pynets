@@ -11,13 +11,15 @@ const BARS = [
   { open: 103, high: 102, low: 92, close: 94, volume: 3 },
 ];
 
-const KLINGER_BARS = [100, 101, 102, 101, 103, 104, 102, 105].map((close, i) => ({
-  open: close,
-  high: close + 2,
-  low: close - 2,
-  close,
-  volume: 10 * (i + 1),
-}));
+const KLINGER_BARS = [100, 101, 102, 101, 103, 104, 102, 105].map(
+  (close, i) => ({
+    open: close,
+    high: close + 2,
+    low: close - 2,
+    close,
+    volume: 10 * (i + 1),
+  }),
+);
 
 function both(source: string, bars = BARS) {
   return {
@@ -36,7 +38,9 @@ describe("compile vs interpret volume TA", () => {
   });
 
   test("ta.wad(high, low, close, volume) matches attribute", () => {
-    const { compiled, interpreted } = both(`indicator("t")\nplot(ta.wad(high, low, close, volume))`);
+    const { compiled, interpreted } = both(
+      `indicator("t")\nplot(ta.wad(high, low, close, volume))`,
+    );
     expect(compiled.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);
     expect(compiled.plots).toEqual([0, 16, -8]);
@@ -97,7 +101,11 @@ describe("compile vs interpret obv / pvt / vpt / nvi / pvi", () => {
     const { compiled, interpreted } = both(`indicator("t")\nplot(ta.nvi)`);
     expect(compiled.error).toBeUndefined();
     // vol 10→2 decreases: 1000*(1 + (103-95)/95); vol 2→3 increases: no update.
-    expect(compiled.plots).toEqual([1000, 1000 * (1 + 8 / 95), 1000 * (1 + 8 / 95)]);
+    expect(compiled.plots).toEqual([
+      1000,
+      1000 * (1 + 8 / 95),
+      1000 * (1 + 8 / 95),
+    ]);
     expect(compiled.plots).toEqual(interpreted.plots);
   });
 
@@ -116,12 +124,19 @@ describe("compile vs interpret obv / pvt / vpt / nvi / pvi", () => {
     expect(pvi.compiled.error).toBeUndefined();
     expect(nvi.compiled.plots).toEqual(nvi.interpreted.plots);
     expect(pvi.compiled.plots).toEqual(pvi.interpreted.plots);
-    expect(nvi.compiled.plots).toEqual([1000, 1000 * (1 + 8 / 95), 1000 * (1 + 8 / 95)]);
+    expect(nvi.compiled.plots).toEqual([
+      1000,
+      1000 * (1 + 8 / 95),
+      1000 * (1 + 8 / 95),
+    ]);
     expect(pvi.compiled.plots).toEqual([1000, 1000, 1000 * (1 - 9 / 103)]);
   });
 
   test("ta.nvi(high, volume) honors explicit args in interpret (not ctx.close)", () => {
-    const r = new Runtime("TEST").run(`indicator("t")\nplot(ta.nvi(high, volume))`, BARS);
+    const r = new Runtime("TEST").run(
+      `indicator("t")\nplot(ta.nvi(high, volume))`,
+      BARS,
+    );
     expect(r.error).toBeUndefined();
     // high: 100→105→102, volume 10→2→3. Bar1: vol decreases → 1000*(1+(105-100)/100).
     // Bar2: vol increases → unchanged.
@@ -135,7 +150,10 @@ describe("compile vs interpret obv / pvt / vpt / nvi / pvi", () => {
   });
 
   test("ta.pvi(high, volume) honors explicit args in interpret (not ctx.close)", () => {
-    const r = new Runtime("TEST").run(`indicator("t")\nplot(ta.pvi(high, volume))`, BARS);
+    const r = new Runtime("TEST").run(
+      `indicator("t")\nplot(ta.pvi(high, volume))`,
+      BARS,
+    );
     expect(r.error).toBeUndefined();
     // Bar1: vol decreases → unchanged 1000. Bar2: vol increases → 1000*(1+(102-105)/105).
     expect(r.plots).toEqual([1000, 1000, 1000 * (1 + (102 - 105) / 105)]);

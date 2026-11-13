@@ -28,7 +28,10 @@ export class UdtType {
     readonly name: string,
     fields: UdtField[],
   ) {
-    this.fields = fields.map((f) => ({ name: f.name, default: f.default ?? null }));
+    this.fields = fields.map((f) => ({
+      name: f.name,
+      default: f.default ?? null,
+    }));
   }
 
   addMethod(name: string, method: UdtMethod): void {
@@ -55,7 +58,8 @@ export class UdtType {
     const inst = new UdtInstance(this);
     if (overrides) {
       for (const field of this.fields) {
-        if (Object.hasOwn(overrides, field.name)) inst.set(field.name, overrides[field.name]);
+        if (Object.hasOwn(overrides, field.name))
+          inst.set(field.name, overrides[field.name]);
       }
     }
     return inst;
@@ -70,7 +74,8 @@ export class UdtInstance {
   constructor(type: UdtType) {
     this.type = type;
     this.typeName = type.name;
-    for (const field of type.fields) this.values.set(field.name, field.default ?? null);
+    for (const field of type.fields)
+      this.values.set(field.name, field.default ?? null);
   }
 
   get(field: string): unknown {
@@ -115,7 +120,11 @@ export class EnumMember {
   ) {}
 
   equals(other: unknown): boolean {
-    return other instanceof EnumMember && other.enumName === this.enumName && other.name === this.name;
+    return (
+      other instanceof EnumMember &&
+      other.enumName === this.enumName &&
+      other.name === this.name
+    );
   }
 
   toString(): string {

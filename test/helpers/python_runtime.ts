@@ -12,7 +12,8 @@
  */
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 
-export const PYNE_ROOT = process.env.PYNESCRIPT_ROOT ?? "/home/jango/Git/pynescript";
+export const PYNE_ROOT =
+  process.env.PYNESCRIPT_ROOT ?? "/home/jango/Git/pynescript";
 
 function resolveInterpreter(): string {
   const venv = `${PYNE_ROOT}/.venv/bin/python`;
@@ -46,11 +47,14 @@ export function pythonBin(): string {
 /** True when `from pynescript.runtime import Runtime` works. */
 export function pythonAvailable(): boolean {
   try {
-    const proc = Bun.spawnSync([pythonBin(), "-c", "from pynescript.runtime import Runtime"], {
-      cwd: PYNE_ROOT,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const proc = Bun.spawnSync(
+      [pythonBin(), "-c", "from pynescript.runtime import Runtime"],
+      {
+        cwd: PYNE_ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     return proc.exitCode === 0;
   } catch {
     return false;

@@ -24,10 +24,15 @@ function run(src: string) {
 }
 
 function nums(values: Array<number | null> | undefined): Array<number | null> {
-  return (values ?? []).map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
+  return (values ?? []).map((v) =>
+    typeof v === "number" && Number.isFinite(v) ? v : null,
+  );
 }
 
-function pythonRun(src: string): { plots: Array<number | null>; series: Record<string, Array<number | null>> } {
+function pythonRun(src: string): {
+  plots: Array<number | null>;
+  series: Record<string, Array<number | null>>;
+} {
   const payload = JSON.stringify({ src, bars: BARS, symbol: "TEST" });
   const proc = Bun.spawnSync(
     [
@@ -205,9 +210,11 @@ plot(array.size(footprint.rows(fp)), "n")`);
   });
 });
 
-describe.skipIf(!pythonAvailable())("interpret footprint vs Python Runtime.run", () => {
-  test("seeded buy/sell/delta and row prices match Python", () => {
-    const src = `indicator("t")
+describe.skipIf(!pythonAvailable())(
+  "interpret footprint vs Python Runtime.run",
+  () => {
+    test("seeded buy/sell/delta and row prices match Python", () => {
+      const src = `indicator("t")
 request.seed(42)
 fp = request.footprint(5, 70)
 plot(footprint.buy_volume(fp), "b")
@@ -220,53 +227,54 @@ plot(volume_row.up_price(poc), "pu")
 plot(volume_row.down_price(poc), "pd")
 plot(volume_row.has_buy_imbalance(poc) ? 1 : 0, "hb")
 plot(volume_row.has_sell_imbalance(poc) ? 1 : 0, "hs")`;
-    const py = pythonRun(src);
-    const ts = run(src);
-    expect(ts.error).toBeUndefined();
-    for (const key of Object.keys(py.series)) {
-      const a = nums(ts.series[key]);
-      const e = nums(py.series[key]);
-      expect(a.length).toBe(e.length);
-      for (let i = 0; i < e.length; i++) {
-        if (e[i] == null) {
-          expect(a[i]).toBeNull();
-          continue;
+      const py = pythonRun(src);
+      const ts = run(src);
+      expect(ts.error).toBeUndefined();
+      for (const key of Object.keys(py.series)) {
+        const a = nums(ts.series[key]);
+        const e = nums(py.series[key]);
+        expect(a.length).toBe(e.length);
+        for (let i = 0; i < e.length; i++) {
+          if (e[i] == null) {
+            expect(a[i]).toBeNull();
+            continue;
+          }
+          expect(a[i]).toBeCloseTo(e[i]!, 8);
         }
-        expect(a[i]).toBeCloseTo(e[i]!, 8);
       }
-    }
-  });
+    });
 
-  test("both hosts return finite buy_volume for request.footprint()", () => {
-    const src = `indicator("t")
+    test("both hosts return finite buy_volume for request.footprint()", () => {
+      const src = `indicator("t")
 fp = request.footprint(10, 70)
 plot(footprint.buy_volume(fp), "b")
 plot(array.size(footprint.rows(fp)), "n")`;
-    const py = pythonRun(src);
-    const ts = run(src);
-    expect(ts.error).toBeUndefined();
-    expect(nums(ts.series.n)).toEqual(nums(py.series.n));
-    expect(nums(py.series.n)).toEqual([10, 10, 10, 10, 10]);
-    for (let i = 0; i < BARS.length; i++) {
-      expect(Number.isFinite(py.series.b![i]!)).toBe(true);
-      expect(Number.isFinite(ts.series.b![i]!)).toBe(true);
-    }
-  });
+      const py = pythonRun(src);
+      const ts = run(src);
+      expect(ts.error).toBeUndefined();
+      expect(nums(ts.series.n)).toEqual(nums(py.series.n));
+      expect(nums(py.series.n)).toEqual([10, 10, 10, 10, 10]);
+      for (let i = 0; i < BARS.length; i++) {
+        expect(Number.isFinite(py.series.b![i]!)).toBe(true);
+        expect(Number.isFinite(ts.series.b![i]!)).toBe(true);
+      }
+    });
 
-  test("sentinel scripts match Python plots", () => {
-    const src = `indicator("t")
+    test("sentinel scripts match Python plots", () => {
+      const src = `indicator("t")
 plot(footprint.buy_volume(na), "b")
 plot(array.size(footprint.rows(na)), "r")
 plot(volume_row.up_price(na), "u")
 plot(na(footprint.poc(na)) ? 1 : 0, "p")
 plot(volume_row.has_buy_imbalance(na) ? 1 : 0, "h")`;
-    const py = pythonRun(src);
-    const ts = run(src);
-    expect(ts.error).toBeUndefined();
-    expect(nums(ts.series.b)).toEqual(nums(py.series.b));
-    expect(nums(ts.series.r)).toEqual(nums(py.series.r));
-    expect(nums(ts.series.u)).toEqual(nums(py.series.u));
-    expect(nums(ts.series.p)).toEqual(nums(py.series.p));
-    expect(nums(ts.series.h)).toEqual(nums(py.series.h));
-  });
-});
+      const py = pythonRun(src);
+      const ts = run(src);
+      expect(ts.error).toBeUndefined();
+      expect(nums(ts.series.b)).toEqual(nums(py.series.b));
+      expect(nums(ts.series.r)).toEqual(nums(py.series.r));
+      expect(nums(ts.series.u)).toEqual(nums(py.series.u));
+      expect(nums(ts.series.p)).toEqual(nums(py.series.p));
+      expect(nums(ts.series.h)).toEqual(nums(py.series.h));
+    });
+  },
+);

@@ -45,7 +45,9 @@ describe("ta.mfi incremental", () => {
 
   test("period 3 needs 4 typical prices then matches Python", () => {
     const ta = new TaEngine();
-    const out = highs.map((h, i) => ta.mfi("mfi:0", h, lows[i]!, closes[i]!, vols[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.mfi("mfi:0", h, lows[i]!, closes[i]!, vols[i]!, 3),
+    );
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
     expect(out[2]).toBeNull();
@@ -88,7 +90,9 @@ describe("ta.mfi incremental", () => {
   test("missing volume counts as 0; period<=0 is na", () => {
     const ta = new TaEngine();
     expect(ta.mfi("mfi:p", 10, 8, 9, 100, 0)).toBeNull();
-    const out = [10, 11, 12].map((h) => ta.mfi("mfi:v", h, h - 2, h - 1, null, 2));
+    const out = [10, 11, 12].map((h) =>
+      ta.mfi("mfi:v", h, h - 2, h - 1, null, 2),
+    );
     expect(out[2]).toBe(50);
   });
 });
@@ -140,7 +144,9 @@ describe("ta.dmi / ta.adx incremental", () => {
 
   test("adx period 3 is 0 until DX RMA seeds, then Python values", () => {
     const ta = new TaEngine();
-    const out = highs.map((h, i) => ta.adx("adx:0", h, lows[i]!, closes[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.adx("adx:0", h, lows[i]!, closes[i]!, 3),
+    );
     expect(out.slice(0, 5)).toEqual([0, 0, 0, 0, 0]);
     expect(out[5]).toBeCloseTo(68.79120879120879);
     expect(out[6]).toBeCloseTo(73.69585740719761);
@@ -149,8 +155,12 @@ describe("ta.dmi / ta.adx incremental", () => {
   test("dmi 0-first +DI/−DI; ADX matches standalone adx", () => {
     const ta = new TaEngine();
     const adxOnly = new TaEngine();
-    const out = highs.map((h, i) => ta.dmi("dmi:0", h, lows[i]!, closes[i]!, 3, 3));
-    const adx = highs.map((h, i) => adxOnly.adx("adx:0", h, lows[i]!, closes[i]!, 3));
+    const out = highs.map((h, i) =>
+      ta.dmi("dmi:0", h, lows[i]!, closes[i]!, 3, 3),
+    );
+    const adx = highs.map((h, i) =>
+      adxOnly.adx("adx:0", h, lows[i]!, closes[i]!, 3),
+    );
     expect(out[0]).toEqual({ plus: null, minus: null, adx: 0 });
     expect(out[1]).toEqual({ plus: null, minus: null, adx: 0 });
     expect(out[2]).toEqual({ plus: null, minus: null, adx: 0 });
@@ -172,7 +182,11 @@ describe("ta.dmi / ta.adx incremental", () => {
 
   test("invalid diLength is all-na; invalid adx period is 0", () => {
     const ta = new TaEngine();
-    expect(ta.dmi("dmi:bad", 10, 8, 9, 0, 3)).toEqual({ plus: null, minus: null, adx: null });
+    expect(ta.dmi("dmi:bad", 10, 8, 9, 0, 3)).toEqual({
+      plus: null,
+      minus: null,
+      adx: null,
+    });
     expect(ta.adx("adx:bad", 10, 8, 9, 0)).toBe(0);
     expect(ta.adx("adx:bad", 10, 8, 9, -1)).toBe(0);
   });
@@ -212,7 +226,9 @@ describe("ta.correlation incremental", () => {
     expect(out[4]).toBeCloseTo(1);
 
     const z = new TaEngine();
-    const zero = [5, 5, 5, 5, 5].map((x, i) => z.correlation("corr:z", x, i + 1, 3));
+    const zero = [5, 5, 5, 5, 5].map((x, i) =>
+      z.correlation("corr:z", x, i + 1, 3),
+    );
     expect(zero).toEqual([null, null, null, null, null]);
 
     const short = new TaEngine();

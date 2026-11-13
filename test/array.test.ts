@@ -324,7 +324,9 @@ describe("PineArray remaining array.* methods", () => {
   });
 
   test("standardize is (x - mean) / sample stdev", () => {
-    expect(PineArray.from(1, 2, 3).standardize()?.toValues()).toEqual([-1, 0, 1]);
+    expect(PineArray.from(1, 2, 3).standardize()?.toValues()).toEqual([
+      -1, 0, 1,
+    ]);
     const z = PineArray.from(1, 2, 3, 4, 5).standardize()?.toValues() ?? [];
     expect(z).toHaveLength(5);
     const mean = (z as number[]).reduce((s, x) => s + x, 0) / z.length;
@@ -338,9 +340,15 @@ describe("PineArray remaining array.* methods", () => {
   });
 
   test("sortIndices asc / desc; na last", () => {
-    expect(PineArray.from(3, 1, 4, 1, 5).sortIndices()).toEqual([1, 3, 0, 2, 4]);
-    expect(PineArray.from(5, 4, 3, 2, 1).sortIndices()).toEqual([4, 3, 2, 1, 0]);
-    expect(PineArray.from(3, 1, 4, 1, 5).sortIndices("desc")).toEqual([4, 2, 0, 1, 3]);
+    expect(PineArray.from(3, 1, 4, 1, 5).sortIndices()).toEqual([
+      1, 3, 0, 2, 4,
+    ]);
+    expect(PineArray.from(5, 4, 3, 2, 1).sortIndices()).toEqual([
+      4, 3, 2, 1, 0,
+    ]);
+    expect(PineArray.from(3, 1, 4, 1, 5).sortIndices("desc")).toEqual([
+      4, 2, 0, 1, 3,
+    ]);
     expect(PineArray.from(2, null, 1).sortIndices()).toEqual([2, 0, 1]);
     expect(new PineArray().sortIndices()).toEqual([]);
   });
@@ -400,7 +408,7 @@ describe("PineArray UDT cells + sort_field", () => {
     expect(a.binarySearch(5)).toBe(2);
   });
 
-  test("sort_field string name \"x\"", () => {
+  test('sort_field string name "x"', () => {
     const T = pointType();
     const a = PineArray.from(pt(T, 5, 50), pt(T, 1, 10), pt(T, 3, 30));
     a.sort("asc", "x");
@@ -411,7 +419,13 @@ describe("PineArray UDT cells + sort_field", () => {
 
   test("binary_search leftmost / rightmost on duplicate field values", () => {
     const T = pointType();
-    const a = PineArray.from(pt(T, 1, 10), pt(T, 2, 20), pt(T, 2, 21), pt(T, 2, 22), pt(T, 3, 30));
+    const a = PineArray.from(
+      pt(T, 1, 10),
+      pt(T, 2, 20),
+      pt(T, 2, 21),
+      pt(T, 2, 22),
+      pt(T, 3, 30),
+    );
     expect(a.binarySearchLeftmost(2, "x")).toBe(1);
     expect(a.binarySearchRightmost(2, "x")).toBe(3);
     expect(a.binarySearchLeftmost(9, "x")).toBe(-1);

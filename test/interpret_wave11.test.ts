@@ -62,7 +62,11 @@ for job in jobs:
     }
 print(json.dumps(out))
 `;
-  const proc = Bun.spawn([PY, "-c", code], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([PY, "-c", code], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   proc.stdin.write(payload);
   proc.stdin.end();
   const stdout = await new Response(proc.stdout).text();
@@ -71,10 +75,17 @@ print(json.dumps(out))
   if (codeExit !== 0) {
     throw new Error(stderr || stdout || `python exit ${codeExit}`);
   }
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
   if (actual.length !== expected.length) {
     throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
@@ -92,7 +103,10 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
   const out = new Runtime("TEST").run(src, bars, { mode: "interpret" });
   return { error: out.error, series: (out.series ?? {}) as SeriesMap };
 }
@@ -100,35 +114,68 @@ function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: str
 const bars = makeBars(40);
 
 const cases: Array<{ id: string; body: string }> = [
-  { id: "sma_weighted", body: `plot(ta.sma_weighted(close, 10), "lin")\nplot(ta.sma_weighted(close, 10, "quadratic"), "quad")\nplot(ta.sma_weighted(close, 10, "sqrt"), "sqrt")` },
+  {
+    id: "sma_weighted",
+    body: `plot(ta.sma_weighted(close, 10), "lin")\nplot(ta.sma_weighted(close, 10, "quadratic"), "quad")\nplot(ta.sma_weighted(close, 10, "sqrt"), "sqrt")`,
+  },
   { id: "apo", body: `plot(ta.apo(close, 5, 10), "v")` },
-  { id: "atr_normalized", body: `plot(ta.atr_normalized(high, low, close, 14), "v")` },
+  {
+    id: "atr_normalized",
+    body: `plot(ta.atr_normalized(high, low, close, 14), "v")`,
+  },
   { id: "beta", body: `plot(ta.beta(close, open, 10), "v")` },
   { id: "r_squared", body: `plot(ta.r_squared(close, open, 10), "v")` },
   { id: "comovement", body: `plot(ta.comovement(close, open, 10), "v")` },
   { id: "skewness", body: `plot(ta.skewness(close, 10), "v")` },
   { id: "kurtosis", body: `plot(ta.kurtosis(close, 10), "v")` },
-  { id: "vwm", body: `plot(ta.volume_weighted_momentum(close, volume, 10), "v")` },
+  {
+    id: "vwm",
+    body: `plot(ta.volume_weighted_momentum(close, volume, 10), "v")`,
+  },
   { id: "parkinson", body: `plot(ta.parkinson(high, low), "v")` },
   { id: "parkinson_scalar", body: `plot(ta.parkinson(high[0], low[0]), "v")` },
-  { id: "garman_klass", body: `plot(ta.garman_klass(high, low, close, open), "v")` },
-  { id: "garman_klass_scalar", body: `plot(ta.garman_klass(high[0], low[0], close[0], open[0]), "v")` },
+  {
+    id: "garman_klass",
+    body: `plot(ta.garman_klass(high, low, close, open), "v")`,
+  },
+  {
+    id: "garman_klass_scalar",
+    body: `plot(ta.garman_klass(high[0], low[0], close[0], open[0]), "v")`,
+  },
   {
     id: "mean_reversion",
     body: `plot(ta.mean_reversion_score(close, ta.sma(close, 10), ta.stdev(close, 10), 10), "v")`,
   },
-  { id: "market_condition", body: `mc = ta.market_condition(close, ta.atr(14), 10, 10)\nplot(mc == "trending_up" ? 1 : mc == "trending_down" ? -1 : mc == "volatile" ? 2 : 0, "v")` },
-  { id: "order_flow", body: `plot(ta.order_flow_imbalance(high, low, close, volume, 10), "v")` },
-  { id: "liquidity", body: `plot(ta.liquidity_score(volume, ta.atr(14), high - low, 10), "v")` },
-  { id: "fear_greed", body: `plot(ta.fear_greed_index(ta.rsi(close, 14), 2, 1, 0.5), "v")` },
+  {
+    id: "market_condition",
+    body: `mc = ta.market_condition(close, ta.atr(14), 10, 10)\nplot(mc == "trending_up" ? 1 : mc == "trending_down" ? -1 : mc == "volatile" ? 2 : 0, "v")`,
+  },
+  {
+    id: "order_flow",
+    body: `plot(ta.order_flow_imbalance(high, low, close, volume, 10), "v")`,
+  },
+  {
+    id: "liquidity",
+    body: `plot(ta.liquidity_score(volume, ta.atr(14), high - low, 10), "v")`,
+  },
+  {
+    id: "fear_greed",
+    body: `plot(ta.fear_greed_index(ta.rsi(close, 14), 2, 1, 0.5), "v")`,
+  },
   { id: "crowd", body: `plot(ta.crowd_sentiment(0.6, 0.5, 0.7), "v")` },
-  { id: "smart_money", body: `plot(ta.smart_money_flow(close - close[1], volume, 5, 3), "v")` },
+  {
+    id: "smart_money",
+    body: `plot(ta.smart_money_flow(close - close[1], volume, 5, 3), "v")`,
+  },
   {
     id: "trend_confirmation",
     body: `plot(ta.trend_confirmation_score(ta.mom(close, 5), 0.5, 0.8, ta.rsi(close, 14), 0.7, 0.2), "v")`,
   },
   { id: "max_loss", body: `plot(ta.max_loss_level(close, 10000, 2), "v")` },
-  { id: "profit_lock", body: `plot(ta.profit_lock_level(close, close + 1, 0.1, 1), "v")` },
+  {
+    id: "profit_lock",
+    body: `plot(ta.profit_lock_level(close, close + 1, 0.1, 1), "v")`,
+  },
 ];
 
 const py: Record<string, { error: string | null; series: SeriesMap }> = {};
@@ -147,25 +194,30 @@ function check(id: string, body: string): void {
   }
 }
 
-describe.skipIf(!pythonAvailable())("interpret wave11 vs Python Runtime.run", () => {
-  beforeAll(async () => {
-    const jobs = cases.map((c) => ({ id: c.id, src: script(c.body), bars }));
-    Object.assign(py, await pythonRuns(jobs));
-  });
-
-  for (const c of cases) {
-    test(`ta.${c.id}`, () => {
-      check(c.id, c.body);
+describe.skipIf(!pythonAvailable())(
+  "interpret wave11 vs Python Runtime.run",
+  () => {
+    beforeAll(async () => {
+      const jobs = cases.map((c) => ({ id: c.id, src: script(c.body), bars }));
+      Object.assign(py, await pythonRuns(jobs));
     });
-  }
-});
+
+    for (const c of cases) {
+      test(`ta.${c.id}`, () => {
+        check(c.id, c.body);
+      });
+    }
+  },
+);
 
 describe("compile wave11 vs interpret", () => {
   for (const c of cases) {
     test(`ta.${c.id}`, () => {
       const src = script(c.body);
       const compiled = new Runtime("TEST").run(src, bars, { mode: "compile" });
-      const interpreted = new Runtime("TEST").run(src, bars, { mode: "interpret" });
+      const interpreted = new Runtime("TEST").run(src, bars, {
+        mode: "interpret",
+      });
       expect(compiled.error, c.id).toBeUndefined();
       expect(interpreted.error, c.id).toBeUndefined();
       expect(compiled.series).toEqual(interpreted.series);

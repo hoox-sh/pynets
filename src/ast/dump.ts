@@ -14,13 +14,24 @@ function dumpValue(value: unknown, annotate: boolean): string {
   if (Array.isArray(value)) {
     return `[${value.map((v) => dumpValue(v, annotate)).join(", ")}]`;
   }
-  if (typeof value === "object" && value !== null && "kind" in (value as object)) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in (value as object)
+  ) {
     return dump(value as AST, { annotate_fields: annotate });
   }
   return String(value);
 }
 
-const SKIP = new Set(["kind", "lineno", "col_offset", "end_lineno", "end_col_offset", "kind_lit"]);
+const SKIP = new Set([
+  "kind",
+  "lineno",
+  "col_offset",
+  "end_lineno",
+  "end_col_offset",
+  "kind_lit",
+]);
 
 export function dump(
   node: AST,
@@ -31,13 +42,18 @@ export function dump(
   const fields: string[] = [];
   for (const [key, value] of Object.entries(rec)) {
     if (SKIP.has(key)) continue;
-    if (key === "annotations" && Array.isArray(value) && value.length === 0) continue;
+    if (key === "annotations" && Array.isArray(value) && value.length === 0)
+      continue;
     if (value === undefined) continue;
     const rendered = dumpValue(value, annotate);
     fields.push(annotate ? `${key}=${rendered}` : rendered);
   }
   if (node.kind === "Constant" && rec.kind_lit) {
-    fields.push(annotate ? `kind=${dumpValue(rec.kind_lit, annotate)}` : dumpValue(rec.kind_lit, annotate));
+    fields.push(
+      annotate
+        ? `kind=${dumpValue(rec.kind_lit, annotate)}`
+        : dumpValue(rec.kind_lit, annotate),
+    );
   }
   return `${node.kind}(${fields.join(", ")})`;
 }

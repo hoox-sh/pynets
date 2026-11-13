@@ -62,19 +62,32 @@ for job in jobs:
     }
 print(json.dumps(out))
 `;
-  const proc = Bun.spawn([PY, "-c", code], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([PY, "-c", code], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   proc.stdin.write(payload);
   proc.stdin.end();
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   const codeExit = await proc.exited;
-  if (codeExit !== 0) throw new Error(stderr || stdout || `python exit ${codeExit}`);
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  if (codeExit !== 0)
+    throw new Error(stderr || stdout || `python exit ${codeExit}`);
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
-function expectMatch(actual: Array<number | null> | undefined, expected: Array<number | null>, label: string): void {
+function expectMatch(
+  actual: Array<number | null> | undefined,
+  expected: Array<number | null>,
+  label: string,
+): void {
   if (actual == null) throw new Error(`${label}: missing series`);
-  if (actual.length !== expected.length) throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
+  if (actual.length !== expected.length)
+    throw new Error(`${label}: length ${actual.length} != ${expected.length}`);
   for (let i = 0; i < expected.length; i++) {
     const a = actual[i];
     const e = expected[i] ?? null;
@@ -82,11 +95,15 @@ function expectMatch(actual: Array<number | null> | undefined, expected: Array<n
       if (a != null) throw new Error(`${label}[${i}] expected null, got ${a}`);
       continue;
     }
-    if (a == null || Math.abs(a - e) > 1e-6) throw new Error(`${label}[${i}] expected ${e}, got ${a}`);
+    if (a == null || Math.abs(a - e) > 1e-6)
+      throw new Error(`${label}[${i}] expected ${e}, got ${a}`);
   }
 }
 
-function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: string; series: SeriesMap } {
+function tsSeries(
+  src: string,
+  bars: ReturnType<typeof makeBars>,
+): { error?: string; series: SeriesMap } {
   const out = new Runtime("TEST").run(src, bars, { mode: "interpret" });
   return { error: out.error, series: (out.series ?? {}) as SeriesMap };
 }
@@ -94,17 +111,44 @@ function tsSeries(src: string, bars: ReturnType<typeof makeBars>): { error?: str
 const bars = makeBars(40);
 
 const cases: Array<{ id: string; body: string }> = [
-  { id: "position_sizing", body: `plot(ta.position_sizing(10000, 2, 100, 95), "v")` },
+  {
+    id: "position_sizing",
+    body: `plot(ta.position_sizing(10000, 2, 100, 95), "v")`,
+  },
   { id: "kelly", body: `plot(ta.kelly_criterion(0.6, 2, 1), "v")` },
   { id: "rr_ratio", body: `plot(ta.risk_reward_ratio(100, 95, 110), "v")` },
-  { id: "rr_asym", body: `x = ta.risk_reward_asymmetry(100, 95, 110, 0.6)\nplot(x.ratio, "r")\nplot(x.expected_value, "ev")\nplot(x.kelly_percent, "k")\nplot(x.is_favorable, "f")` },
-  { id: "trend_strength", body: `plot(ta.trend_strength(close, ta.adx(14), ta.rsi(close, 14)), "v")` },
-  { id: "breakeven", body: `x = ta.breakeven_level(100, 10, 5, 0.5, 1)\nplot(x.breakeven_price, "b")\nplot(x.total_cost, "c")\nplot(x.move_required_percent, "m")` },
-  { id: "pss", body: `x = ta.position_sizing_score(2, 0.5, 0.8, 0.3)\nplot(x.score, "s")\nplot(x.position_size_ratio, "r")\nplot(x.kelly_fraction, "k")\nplot(x.correlation_adjustment, "c")` },
-  { id: "trail_exit", body: `x = ta.trailing_exit_level(100, 105, 10, 1, 1.5)\nplot(x.trail_stop, "t")\nplot(x.protected_profit, "p")\nplot(x.risk_reward_current, "r")` },
-  { id: "mti", body: `x = ta.market_timing_index(70, 60, 50, 80)\nplot(x.score, "s")\nplot(x.timing_index, "t")\nplot(x.confidence, "c")\nplot(x.regime == "trending" ? 1 : 0, "r")` },
-  { id: "ras", body: `x = ta.regime_adaptive_signal(0.8, "high", "trending", 10)\nplot(x.strength, "s")\nplot(x.confidence, "c")\nplot(x.regime_fit, "f")\nplot(x.signal == "buy" ? 1 : 0, "b")` },
-  { id: "strategy_score", body: `plot(ta.strategy_score(ta.rsi(close, 14), 0.02, true, 60), "v")` },
+  {
+    id: "rr_asym",
+    body: `x = ta.risk_reward_asymmetry(100, 95, 110, 0.6)\nplot(x.ratio, "r")\nplot(x.expected_value, "ev")\nplot(x.kelly_percent, "k")\nplot(x.is_favorable, "f")`,
+  },
+  {
+    id: "trend_strength",
+    body: `plot(ta.trend_strength(close, ta.adx(14), ta.rsi(close, 14)), "v")`,
+  },
+  {
+    id: "breakeven",
+    body: `x = ta.breakeven_level(100, 10, 5, 0.5, 1)\nplot(x.breakeven_price, "b")\nplot(x.total_cost, "c")\nplot(x.move_required_percent, "m")`,
+  },
+  {
+    id: "pss",
+    body: `x = ta.position_sizing_score(2, 0.5, 0.8, 0.3)\nplot(x.score, "s")\nplot(x.position_size_ratio, "r")\nplot(x.kelly_fraction, "k")\nplot(x.correlation_adjustment, "c")`,
+  },
+  {
+    id: "trail_exit",
+    body: `x = ta.trailing_exit_level(100, 105, 10, 1, 1.5)\nplot(x.trail_stop, "t")\nplot(x.protected_profit, "p")\nplot(x.risk_reward_current, "r")`,
+  },
+  {
+    id: "mti",
+    body: `x = ta.market_timing_index(70, 60, 50, 80)\nplot(x.score, "s")\nplot(x.timing_index, "t")\nplot(x.confidence, "c")\nplot(x.regime == "trending" ? 1 : 0, "r")`,
+  },
+  {
+    id: "ras",
+    body: `x = ta.regime_adaptive_signal(0.8, "high", "trending", 10)\nplot(x.strength, "s")\nplot(x.confidence, "c")\nplot(x.regime_fit, "f")\nplot(x.signal == "buy" ? 1 : 0, "b")`,
+  },
+  {
+    id: "strategy_score",
+    body: `plot(ta.strategy_score(ta.rsi(close, 14), 0.02, true, 60), "v")`,
+  },
 ];
 
 const py: Record<string, { error: string | null; series: SeriesMap }> = {};
@@ -118,25 +162,36 @@ function check(id: string, body: string): void {
   expect(ts.error, id).toBeUndefined();
   const keys = Object.keys(ref.series);
   expect(keys.length, id).toBeGreaterThan(0);
-  for (const key of keys) expectMatch(ts.series[key], ref.series[key]!, `${id}.${key}`);
+  for (const key of keys)
+    expectMatch(ts.series[key], ref.series[key]!, `${id}.${key}`);
 }
 
-describe.skipIf(!pythonAvailable())("interpret wave12 vs Python Runtime.run", () => {
-  beforeAll(async () => {
-    Object.assign(py, await pythonRuns(cases.map((c) => ({ id: c.id, src: script(c.body), bars }))));
-  });
+describe.skipIf(!pythonAvailable())(
+  "interpret wave12 vs Python Runtime.run",
+  () => {
+    beforeAll(async () => {
+      Object.assign(
+        py,
+        await pythonRuns(
+          cases.map((c) => ({ id: c.id, src: script(c.body), bars })),
+        ),
+      );
+    });
 
-  for (const c of cases) {
-    test(`ta.${c.id}`, () => check(c.id, c.body));
-  }
-});
+    for (const c of cases) {
+      test(`ta.${c.id}`, () => check(c.id, c.body));
+    }
+  },
+);
 
 describe("compile wave12 vs interpret", () => {
   for (const c of cases) {
     test(`ta.${c.id}`, () => {
       const src = script(c.body);
       const compiled = new Runtime("TEST").run(src, bars, { mode: "compile" });
-      const interpreted = new Runtime("TEST").run(src, bars, { mode: "interpret" });
+      const interpreted = new Runtime("TEST").run(src, bars, {
+        mode: "interpret",
+      });
       expect(compiled.error, c.id).toBeUndefined();
       expect(interpreted.error, c.id).toBeUndefined();
       expect(compiled.series).toEqual(interpreted.series);

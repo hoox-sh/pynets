@@ -47,7 +47,7 @@ describe("runtimeError", () => {
 });
 
 describe("formatLogParts", () => {
-  test("na → \"na\"", () => {
+  test('na → "na"', () => {
     expect(formatLogParts([null])).toBe("na");
     expect(formatLogParts([undefined])).toBe("na");
     expect(formatLogParts([Number.NaN])).toBe("na");

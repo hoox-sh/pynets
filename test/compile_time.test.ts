@@ -69,25 +69,31 @@ function isFiniteNum(v: number | null | undefined): v is number {
 const tfSrc = parseOk(TF_SECONDS_ARG_SRC) ? TF_SECONDS_ARG_SRC : TF_SECONDS_SRC;
 
 describe("compile vs interpret time", () => {
-  test.skipIf(!parseOk(YEAR_SRC))("plot(year(time)) compile last is 2024 and matches interpret", () => {
-    const compiled = runCompile(YEAR_SRC);
-    const interpreted = runInterpret(YEAR_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(interpreted.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(lastPlot(compiled.plots)).toBe(2024);
-    expect(compiled.plots).toEqual(interpreted.plots);
-  });
+  test.skipIf(!parseOk(YEAR_SRC))(
+    "plot(year(time)) compile last is 2024 and matches interpret",
+    () => {
+      const compiled = runCompile(YEAR_SRC);
+      const interpreted = runInterpret(YEAR_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(lastPlot(compiled.plots)).toBe(2024);
+      expect(compiled.plots).toEqual(interpreted.plots);
+    },
+  );
 
-  test.skipIf(!parseOk(MONTH_SRC))("plot(month(time)) compile last is 1 (January)", () => {
-    const compiled = runCompile(MONTH_SRC);
-    const interpreted = runInterpret(MONTH_SRC);
-    expect(compiled.error).toBeUndefined();
-    expect(interpreted.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-    expect(lastPlot(compiled.plots)).toBe(1);
-    expect(compiled.plots).toEqual(interpreted.plots);
-  });
+  test.skipIf(!parseOk(MONTH_SRC))(
+    "plot(month(time)) compile last is 1 (January)",
+    () => {
+      const compiled = runCompile(MONTH_SRC);
+      const interpreted = runInterpret(MONTH_SRC);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+      expect(lastPlot(compiled.plots)).toBe(1);
+      expect(compiled.plots).toEqual(interpreted.plots);
+    },
+  );
 
   test.skipIf(!parseOk(TIMESTAMP_SRC))(
     "timestamp(2024, 1, 15, 0, 0, 0) compile has no error / finite if interpret finite",
@@ -96,18 +102,22 @@ describe("compile vs interpret time", () => {
       const interpreted = runInterpret(TIMESTAMP_SRC);
       expect(compiled.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
-      const interpretLast = interpreted.error == null ? lastPlot(interpreted.plots) : null;
+      const interpretLast =
+        interpreted.error == null ? lastPlot(interpreted.plots) : null;
       if (isFiniteNum(interpretLast)) {
         expect(isFiniteNum(lastPlot(compiled.plots))).toBe(true);
       }
     },
   );
 
-  test.skipIf(!parseOk(tfSrc))("timeframe.in_seconds compile has no error", () => {
-    const compiled = runCompile(tfSrc);
-    expect(compiled.error).toBeUndefined();
-    expect(compiled.mode).toBe("compile");
-  });
+  test.skipIf(!parseOk(tfSrc))(
+    "timeframe.in_seconds compile has no error",
+    () => {
+      const compiled = runCompile(tfSrc);
+      expect(compiled.error).toBeUndefined();
+      expect(compiled.mode).toBe("compile");
+    },
+  );
 
   test("calendar calls treat unix-second bar times as milliseconds", () => {
     // Python `utility._timestamp_to_ms` SoT via interpret; compile must not
@@ -122,7 +132,9 @@ plot(hour(time), "h")
 plot(hour(), "hc")
 plot(weekofyear(time), "w")`;
     const compiled = new Runtime("TEST", { mode: "compile" }).run(src, secBars);
-    const interpreted = new Runtime("TEST").run(src, secBars, { mode: "interpret" });
+    const interpreted = new Runtime("TEST").run(src, secBars, {
+      mode: "interpret",
+    });
     expect(compiled.error).toBeUndefined();
     expect(interpreted.error).toBeUndefined();
     expect(compiled.plots).toEqual(interpreted.plots);

@@ -54,7 +54,9 @@ function recordIncludesHi(rec: unknown): boolean {
   if (typeof rec === "string") return rec.includes("hi");
   if (typeof rec !== "object") return String(rec).includes("hi");
   const r = rec as { message?: unknown; msg?: unknown; text?: unknown };
-  return [r.message, r.msg, r.text, JSON.stringify(rec)].some((x) => String(x ?? "").includes("hi"));
+  return [r.message, r.msg, r.text, JSON.stringify(rec)].some((x) =>
+    String(x ?? "").includes("hi"),
+  );
 }
 
 describe("compile log / ticker.standard / alertcondition", () => {
@@ -77,7 +79,9 @@ describe("compile log / ticker.standard / alertcondition", () => {
       expect(compiled.error).toBeUndefined();
       expect(compiled.mode).toBe("compile");
       const closes = BARS.map((b) => b.close);
-      const hasFinite = compiled.plots.some((v) => v != null && Number.isFinite(v));
+      const hasFinite = compiled.plots.some(
+        (v) => v != null && Number.isFinite(v),
+      );
       if (hasFinite) {
         expect(compiled.plots).toEqual(closes);
       }

@@ -94,7 +94,10 @@ export class PineMap {
   }
 
   /** Replace entries with clones of `snap` — same instance for aliases. */
-  restoreContents(snap: { data: Array<[string, Cell]>; order: string[] }): void {
+  restoreContents(snap: {
+    data: Array<[string, Cell]>;
+    order: string[];
+  }): void {
     this.data.clear();
     this.order.length = 0;
     for (const [k, v] of snap.data) this.data.set(k, cloneValue(v) as Cell);

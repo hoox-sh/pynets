@@ -75,7 +75,9 @@ describe("compile bare ta.<attr> whitelist", () => {
   });
 
   test("explicit-arg ta calls are unaffected by the whitelist gate", () => {
-    const { compiled, interpreted } = both(`indicator("t")\nplot(ta.rsi(close, 2))`);
+    const { compiled, interpreted } = both(
+      `indicator("t")\nplot(ta.rsi(close, 2))`,
+    );
     expect(compiled.error).toBeUndefined();
     expect(compiled.plots[2]).not.toBeNull();
     expect(compiled.plots).toEqual(interpreted.plots);

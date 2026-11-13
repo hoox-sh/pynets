@@ -33,7 +33,9 @@ const BARS40 = bars(40);
 const HOURLY = bars(24, 3_600_000);
 
 function expectPlots(src: string, ohlcv: Bar[] = BARS40): void {
-  expect(compileToResult(src, ohlcv).plots).toEqual(interpret(src, ohlcv).plots);
+  expect(compileToResult(src, ohlcv).plots).toEqual(
+    interpret(src, ohlcv).plots,
+  );
 }
 
 describe("compile vs interpret gap", () => {
@@ -80,7 +82,9 @@ plot(matrix.sum_row(m, 0))`);
     const srcMath = `indicator("t")\nplot(math.round_to_mintick(1.26))`;
     expectPlots(srcBare);
     expectPlots(srcMath);
-    expect(compileToResult(srcBare, BARS40).plots).toEqual(compileToResult(srcMath, BARS40).plots);
+    expect(compileToResult(srcBare, BARS40).plots).toEqual(
+      compileToResult(srcMath, BARS40).plots,
+    );
   });
 
   test("array.newint", () => {
@@ -121,6 +125,8 @@ plot(h)`);
     expectPlots(`indicator("t")
 b = array.newbox(2, 7)
 plot(array.get(b, 1))`);
-    expectPlots(`indicator("t")\nplot(syminfo.prefix("NASDAQ:AAPL") == "NASDAQ" ? 1 : 0)`);
+    expectPlots(
+      `indicator("t")\nplot(syminfo.prefix("NASDAQ:AAPL") == "NASDAQ" ? 1 : 0)`,
+    );
   });
 });

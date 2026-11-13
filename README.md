@@ -29,7 +29,10 @@ const tree = parse(src);
 unparse(tree);
 
 const out = new Runtime("AAPL").run(src, [
-  { close: 1 }, { close: 2 }, { close: 3 }, { close: 4 },
+  { close: 1 },
+  { close: 2 },
+  { close: 3 },
+  { close: 4 },
 ]);
 // out.plots, out.series, out.count
 // new Runtime("AAPL", { mode: "compile" }) — JS bar-loop emit (not Numba)
@@ -72,31 +75,31 @@ The CLI still needs Bun on `PATH`. This is not a Cloudflare Worker package.
 
 Most TypeScript Pine ports rewrite the language. PyneTS does not. It is the library-shaped port of **PYNE**: the same ANTLR grammar, the same ASDL field names, the same interpret contract.
 
-| | Typical JS Pine runtime | **PyneTS** |
-|---|---|---|
-| Grammar | Hand-rolled or a forked copy | **Shared PYNE `.g4`**, TS ANTLR target — not forked here |
-| AST | Custom / Zod (`Identifier`, `Literal`) | **ASDL names** (`kind`, `lineno`, `col_offset`) |
-| Semantics | “Looks like Pine” | **Python Runtime wins** — every builtin is ported against `pynescript` |
-| `na` | `NaN`, `undefined`, or thrown | **`null`**. `na == na` is true. Non-finite in/out is `na` |
-| Lookback | Off-by-one or OOB crash | `close[1]` is previous; OOB / negative → `na` |
-| Foreign data | Silently reuse the chart | `request.security` **without data is `na`** — we do not invent bars |
-| Strategy | Events only, or a stats demo | **Fills, ledger, `strategy.risk.*`, OCA** |
-| Matrix | Add/multiply if you are lucky | **`inv` / `pinv` / eigen / rank / kron** |
-| Libraries | Unresolved `import` dies | **In-process registry** + soft stubs |
-| Arrays | Push/get | **Near-full `array.*`** including search, percentiles, stdev |
-| Host API | Ad-hoc | **`Runtime.run` / `stream` / `runProvider`** — same envelope as Python |
-| CLI | None or a toy | **`check` / `format` / `run` / `dump` / `info`** — pipes stay JSON |
+|              | Typical JS Pine runtime                | **PyneTS**                                                             |
+| ------------ | -------------------------------------- | ---------------------------------------------------------------------- |
+| Grammar      | Hand-rolled or a forked copy           | **Shared PYNE `.g4`**, TS ANTLR target — not forked here               |
+| AST          | Custom / Zod (`Identifier`, `Literal`) | **ASDL names** (`kind`, `lineno`, `col_offset`)                        |
+| Semantics    | “Looks like Pine”                      | **Python Runtime wins** — every builtin is ported against `pynescript` |
+| `na`         | `NaN`, `undefined`, or thrown          | **`null`**. `na == na` is true. Non-finite in/out is `na`              |
+| Lookback     | Off-by-one or OOB crash                | `close[1]` is previous; OOB / negative → `na`                          |
+| Foreign data | Silently reuse the chart               | `request.security` **without data is `na`** — we do not invent bars    |
+| Strategy     | Events only, or a stats demo           | **Fills, ledger, `strategy.risk.*`, OCA**                              |
+| Matrix       | Add/multiply if you are lucky          | **`inv` / `pinv` / eigen / rank / kron**                               |
+| Libraries    | Unresolved `import` dies               | **In-process registry** + soft stubs                                   |
+| Arrays       | Push/get                               | **Near-full `array.*`** including search, percentiles, stdev           |
+| Host API     | Ad-hoc                                 | **`Runtime.run` / `stream` / `runProvider`** — same envelope as Python |
+| CLI          | None or a toy                          | **`check` / `format` / `run` / `dump` / `info`** — pipes stay JSON     |
 
 Family map — library vs edge host, same SoT:
 
-| | [pynescript](https://github.com/hoox-sh/pyne) | [pyne-worker](https://github.com/hoox-sh/pyne-worker) | [pyne-agent-worker](https://github.com/hoox-sh/pyne-agent-worker) | **PyneTS** |
-|---|---|---|---|---|
-| Role | SoT library | Production **Python** Cloudflare Worker | NL **authoring** (Workers AI™) | TS / Bun library + CLI |
-| Engine | interpret + Numba compile | Vendors `pynescript.runtime` | Writes source; optional `/run` validate | interpret + **JS compile** |
-| Grammar | `*.g4` | Same Python engine (not a fork) | — | **same `.g4`**, TS ANTLR target |
-| How you call it | `Runtime.run` | `POST /run` | `POST /v1/chat` | `Runtime.run` (`interpret` / `compile` / `auto`) |
-| Extra | LSP, Pro API | R2 OHLCV, 1m cron, alerts, trade-worker | AXIS plugin | Local TTY (`check` / `format` / `run` / `dump`) |
-| Docs | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs) | [pyne-worker](https://hoox.sh/pyne/docs/pyne-worker) | [agent](https://hoox.sh/pyne/docs/agent) | [pynets](https://hoox.sh/pyne/docs/pynets) |
+|                 | [pynescript](https://github.com/hoox-sh/pyne)  | [pyne-worker](https://github.com/hoox-sh/pyne-worker) | [pyne-agent-worker](https://github.com/hoox-sh/pyne-agent-worker) | **PyneTS**                                       |
+| --------------- | ---------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
+| Role            | SoT library                                    | Production **Python** Cloudflare Worker               | NL **authoring** (Workers AI™)                                    | TS / Bun library + CLI                           |
+| Engine          | interpret + Numba compile                      | Vendors `pynescript.runtime`                          | Writes source; optional `/run` validate                           | interpret + **JS compile**                       |
+| Grammar         | `*.g4`                                         | Same Python engine (not a fork)                       | —                                                                 | **same `.g4`**, TS ANTLR target                  |
+| How you call it | `Runtime.run`                                  | `POST /run`                                           | `POST /v1/chat`                                                   | `Runtime.run` (`interpret` / `compile` / `auto`) |
+| Extra           | LSP, Pro API                                   | R2 OHLCV, 1m cron, alerts, trade-worker               | AXIS plugin                                                       | Local TTY (`check` / `format` / `run` / `dump`)  |
+| Docs            | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs) | [pyne-worker](https://hoox.sh/pyne/docs/pyne-worker)  | [agent](https://hoox.sh/pyne/docs/agent)                          | [pynets](https://hoox.sh/pyne/docs/pynets)       |
 
 [pyne-worker](https://github.com/hoox-sh/pyne-worker) is the edge evaluate host of the **Python** engine. [pyne-agent-worker](https://github.com/hoox-sh/pyne-agent-worker) writes scripts. PyneTS is the TypeScript library you import and the CLI you run on a laptop. They share the PYNE contract; this repo is not a Worker.
 
@@ -175,7 +178,9 @@ Push-driven re-eval:
 
 ```ts
 const stream = rt.stream(source);
-stream.on("bar", (out) => { /* one result per push */ });
+stream.on("bar", (out) => {
+  /* one result per push */
+});
 stream.push({ close: 1 });
 stream.push({ close: 2 });
 
@@ -202,19 +207,24 @@ rt.run(src, bars, { realtimeBars: 5, realtimeTicks: 2 });
 Hosts feed OHLCV. PyneTS will not invent a foreign market.
 
 ```ts
-import { MemoryProvider, StaticMapProvider, JsonBarProvider } from "@hoox-sh/pynets";
+import {
+  MemoryProvider,
+  StaticMapProvider,
+  JsonBarProvider,
+} from "@hoox-sh/pynets";
 
 await rt.runProvider(source, new MemoryProvider(bars), { limit: 500 });
 
 // In-process symbol map (tests, fixtures, your own cache)
 const map = new StaticMapProvider({
-  "AAPL": bars,
+  AAPL: bars,
   "AAPL:60": htfBars,
 });
 
 // Generic JSON GET — inject fetch, no vendor URLs baked in
 const http = new JsonBarProvider({
-  url: ({ symbol, timeframe, limit }) => `https://you.example/ohlcv?s=${symbol}&tf=${timeframe}&n=${limit}`,
+  url: ({ symbol, timeframe, limit }) =>
+    `https://you.example/ohlcv?s=${symbol}&tf=${timeframe}&n=${limit}`,
   fetch: globalThis.fetch,
 });
 ```
@@ -274,16 +284,16 @@ Put `--rich` / `--plain` **after** the command so `bun run` does not swallow the
 
 `run` prints a sparkline + last-value row per plot, a strategy events table when present, and drawings/alerts when present. `--plain` is machine JSON.
 
-| Flag | Effect |
-| --- | --- |
-| `--bars N` | Synthetic bar count for `run` (default 20, max 100000) |
-| `--commission N` | Broker commission fraction (`0.001` = 0.1%) |
-| `--slippage N` | Slippage in price units |
-| `--pyramiding N` | Max same-direction adds |
-| `--json` | Machine-readable `run` / `info` |
-| `--full` | Full AST dump (no 80-line cap on `--rich`) |
-| `--plain` | Disable styling |
-| `--rich` | Force panels / sparklines |
+| Flag             | Effect                                                 |
+| ---------------- | ------------------------------------------------------ |
+| `--bars N`       | Synthetic bar count for `run` (default 20, max 100000) |
+| `--commission N` | Broker commission fraction (`0.001` = 0.1%)            |
+| `--slippage N`   | Slippage in price units                                |
+| `--pyramiding N` | Max same-direction adds                                |
+| `--json`         | Machine-readable `run` / `info`                        |
+| `--full`         | Full AST dump (no 80-line cap on `--rich`)             |
+| `--plain`        | Disable styling                                        |
+| `--rich`         | Force panels / sparklines                              |
 
 ---
 
@@ -291,10 +301,19 @@ Put `--rich` / `--plain` **after** the command so `bun run` does not swallow the
 
 ```ts
 import {
-  parse, unparse, dump, tokenize, PinescriptSyntaxError,
-  Runtime, RuntimeStream,
-  PineArray, PineMap, PineMatrix,
-  MemoryProvider, StaticMapProvider, JsonBarProvider,
+  parse,
+  unparse,
+  dump,
+  tokenize,
+  PinescriptSyntaxError,
+  Runtime,
+  RuntimeStream,
+  PineArray,
+  PineMap,
+  PineMatrix,
+  MemoryProvider,
+  StaticMapProvider,
+  JsonBarProvider,
   LibraryRegistry,
 } from "@hoox-sh/pynets";
 ```

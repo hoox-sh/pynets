@@ -39,7 +39,10 @@ type RunWithOpts = (
   options?: unknown,
 ) => RuntimeResult;
 
-function plotsEq(plots: Array<number | null> | undefined, expected: Array<number | null>): boolean {
+function plotsEq(
+  plots: Array<number | null> | undefined,
+  expected: Array<number | null>,
+): boolean {
   return JSON.stringify(plots) === JSON.stringify(expected);
 }
 
@@ -50,7 +53,8 @@ function runWithInputs(inputs: Record<string, unknown>): RuntimeResult | null {
   for (const extra of extras) {
     try {
       const out = run(SRC, BARS, extra);
-      if (out != null && out.error == null && plotsEq(out.plots, SMA2)) return out;
+      if (out != null && out.error == null && plotsEq(out.plots, SMA2))
+        return out;
     } catch {
       // try next call shape
     }
@@ -63,15 +67,21 @@ function inputsOverrideWired(): boolean {
 }
 
 describe("interpret input.int", () => {
-  test.skipIf(!inputDefaultWired())("input.int(3) drives ta.sma period 3", () => {
-    const out = interpret(SRC, BARS);
-    expect(out.plots).toEqual(SMA3);
-  });
+  test.skipIf(!inputDefaultWired())(
+    "input.int(3) drives ta.sma period 3",
+    () => {
+      const out = interpret(SRC, BARS);
+      expect(out.plots).toEqual(SMA3);
+    },
+  );
 
-  test.skipIf(!inputsOverrideWired())("Runtime inputs override changes sma length", () => {
-    const out = runWithInputs({ len: 2 });
-    expect(out).not.toBeNull();
-    expect(out!.error).toBeUndefined();
-    expect(out!.plots).toEqual(SMA2);
-  });
+  test.skipIf(!inputsOverrideWired())(
+    "Runtime inputs override changes sma length",
+    () => {
+      const out = runWithInputs({ len: 2 });
+      expect(out).not.toBeNull();
+      expect(out!.error).toBeUndefined();
+      expect(out!.plots).toEqual(SMA2);
+    },
+  );
 });

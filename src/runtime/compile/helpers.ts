@@ -62,7 +62,11 @@ export function pineGtE(a: unknown, b: unknown): boolean {
   return (a as number) >= (b as number);
 }
 
-function bin(a: unknown, b: unknown, op: (x: number, y: number) => number): number | null {
+function bin(
+  a: unknown,
+  b: unknown,
+  op: (x: number, y: number) => number,
+): number | null {
   const x = naNum(a);
   const y = naNum(b);
   if (x == null || y == null) return NA;
@@ -106,7 +110,11 @@ export function nz(v: unknown, fallback: unknown = 0): number | null {
 }
 
 /** History: arr[bar - offset]. OOB / negative offset → na. [0] is current. */
-export function histGet(arr: Array<number | null>, bar: number, offset: unknown): number | null {
+export function histGet(
+  arr: Array<number | null>,
+  bar: number,
+  offset: unknown,
+): number | null {
   const off = naNum(offset);
   if (off == null || off < 0 || !Number.isFinite(off)) return NA;
   const i = bar - Math.trunc(off);
@@ -114,7 +122,11 @@ export function histGet(arr: Array<number | null>, bar: number, offset: unknown)
   return naNum(arr[i]);
 }
 
-export function histStore(arr: Array<number | null>, bar: number, value: unknown): void {
+export function histStore(
+  arr: Array<number | null>,
+  bar: number,
+  value: unknown,
+): void {
   if (bar < 0 || bar >= arr.length) return;
   arr[bar] = naNum(value);
 }

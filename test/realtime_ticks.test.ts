@@ -111,8 +111,15 @@ const cases: Array<{ id: string; body: string; opts: RtOpts }> = [
 
 const py: Record<string, { error: string | null; series: SeriesMap }> = {};
 
-async function pythonRuns(): Promise<Record<string, { error: string | null; series: SeriesMap }>> {
-  const jobs = cases.map((c) => ({ id: c.id, src: script(c.body), bars, opts: c.opts }));
+async function pythonRuns(): Promise<
+  Record<string, { error: string | null; series: SeriesMap }>
+> {
+  const jobs = cases.map((c) => ({
+    id: c.id,
+    src: script(c.body),
+    bars,
+    opts: c.opts,
+  }));
   const code = `
 import json, sys
 from pynescript.runtime import Runtime
@@ -149,8 +156,12 @@ print(json.dumps(out))
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   const codeExit = await proc.exited;
-  if (codeExit !== 0) throw new Error(stderr || stdout || `python exit ${codeExit}`);
-  return JSON.parse(stdout) as Record<string, { error: string | null; series: SeriesMap }>;
+  if (codeExit !== 0)
+    throw new Error(stderr || stdout || `python exit ${codeExit}`);
+  return JSON.parse(stdout) as Record<
+    string,
+    { error: string | null; series: SeriesMap }
+  >;
 }
 
 function expectMatch(
@@ -175,26 +186,29 @@ function expectMatch(
   }
 }
 
-describe.skipIf(!pythonAvailable())("realtime ticks vs Python Runtime.run", () => {
-  beforeAll(async () => {
-    Object.assign(py, await pythonRuns());
-  });
-
-  for (const c of cases) {
-    test(`rt.${c.id}`, () => {
-      const out = new Runtime("TEST").run(script(c.body), bars, {
-        mode: "interpret",
-        ...tsOpts(c.opts),
-      });
-      expect(out.error, c.id).toBeUndefined();
-      const ref = py[c.id]!;
-      expect(ref.error, c.id).toBeNull();
-      for (const key of Object.keys(ref.series)) {
-        expectMatch(out.series[key], ref.series[key]!, `${c.id}.${key}`);
-      }
+describe.skipIf(!pythonAvailable())(
+  "realtime ticks vs Python Runtime.run",
+  () => {
+    beforeAll(async () => {
+      Object.assign(py, await pythonRuns());
     });
-  }
-});
+
+    for (const c of cases) {
+      test(`rt.${c.id}`, () => {
+        const out = new Runtime("TEST").run(script(c.body), bars, {
+          mode: "interpret",
+          ...tsOpts(c.opts),
+        });
+        expect(out.error, c.id).toBeUndefined();
+        const ref = py[c.id]!;
+        expect(ref.error, c.id).toBeNull();
+        for (const key of Object.keys(ref.series)) {
+          expectMatch(out.series[key], ref.series[key]!, `${c.id}.${key}`);
+        }
+      });
+    }
+  },
+);
 
 describe("realtime tick unit semantics", () => {
   test("alert freq fires per tick like Python", () => {
@@ -206,7 +220,9 @@ describe("realtime tick unit semantics", () => {
         bars3,
         { mode: "interpret", realtimeLastBar: true, realtimeTicks: 3 },
       );
-      counts[freq] = (out.drawings ?? []).filter((d) => d.kind === "alert").length;
+      counts[freq] = (out.drawings ?? []).filter(
+        (d) => d.kind === "alert",
+      ).length;
     }
     // Python: all → 3 history + 3 ticks; once_per_bar → one per bar;
     // once_per_bar_close → final tick of the last bar only counts once.
@@ -217,17 +233,44 @@ describe("realtime tick unit semantics", () => {
 
   test("resolveRealtimeWindow precedence matches Python _resolve_realtime_first", () => {
     expect(resolveRealtimeWindow(4, {})).toEqual({ first: null, ticks: 1 });
-    expect(resolveRealtimeWindow(4, { realtimeTicks: 3 })).toEqual({ first: 3, ticks: 3 });
-    expect(resolveRealtimeWindow(4, { realtimeLastBar: true })).toEqual({ first: 3, ticks: 1 });
-    expect(resolveRealtimeWindow(4, { realtimeBars: 2 })).toEqual({ first: 2, ticks: 1 });
-    expect(resolveRealtimeWindow(4, { realtimeBars: 10 })).toEqual({ first: 0, ticks: 1 });
-    expect(resolveRealtimeWindow(4, { realtimeFromBar: 1 })).toEqual({ first: 1, ticks: 1 });
-    expect(resolveRealtimeWindow(4, { realtimeFromBar: 9 })).toEqual({ first: null, ticks: 1 });
+    expect(resolveRealtimeWindow(4, { realtimeTicks: 3 })).toEqual({
+      first: 3,
+      ticks: 3,
+    });
+    expect(resolveRealtimeWindow(4, { realtimeLastBar: true })).toEqual({
+      first: 3,
+      ticks: 1,
+    });
+    expect(resolveRealtimeWindow(4, { realtimeBars: 2 })).toEqual({
+      first: 2,
+      ticks: 1,
+    });
+    expect(resolveRealtimeWindow(4, { realtimeBars: 10 })).toEqual({
+      first: 0,
+      ticks: 1,
+    });
+    expect(resolveRealtimeWindow(4, { realtimeFromBar: 1 })).toEqual({
+      first: 1,
+      ticks: 1,
+    });
+    expect(resolveRealtimeWindow(4, { realtimeFromBar: 9 })).toEqual({
+      first: null,
+      ticks: 1,
+    });
     // from_bar wins over bars/last-bar flags
-    expect(resolveRealtimeWindow(4, { realtimeFromBar: 2, realtimeBars: 3, realtimeTicks: 2 })).toEqual({
+    expect(
+      resolveRealtimeWindow(4, {
+        realtimeFromBar: 2,
+        realtimeBars: 3,
+        realtimeTicks: 2,
+      }),
+    ).toEqual({
       first: 2,
       ticks: 2,
     });
-    expect(resolveRealtimeWindow(0, { realtimeLastBar: true })).toEqual({ first: null, ticks: 1 });
+    expect(resolveRealtimeWindow(0, { realtimeLastBar: true })).toEqual({
+      first: null,
+      ticks: 1,
+    });
   });
 });

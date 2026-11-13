@@ -240,7 +240,11 @@ describe("ta.adx / ta.dmi incremental", () => {
 
   test("dmi returns plus/minus/adx; invalid diLength is all na", () => {
     const ta = new TaEngine();
-    expect(ta.dmi("dmi:0", 10, 8, 9, 0, 3)).toEqual({ plus: null, minus: null, adx: null });
+    expect(ta.dmi("dmi:0", 10, 8, 9, 0, 3)).toEqual({
+      plus: null,
+      minus: null,
+      adx: null,
+    });
     const r = ta.dmi("dmi:1", 10, 8, 9, 3, 3);
     expect(r.plus === null || typeof r.plus === "number").toBe(true);
   });

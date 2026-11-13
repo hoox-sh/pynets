@@ -39,20 +39,29 @@ function runPlots(src: string): Array<number | null> | null {
 }
 
 function hasFinite(plots: Array<number | null> | null): boolean {
-  return plots != null && plots.some((v) => typeof v === "number" && Number.isFinite(v));
+  return (
+    plots != null &&
+    plots.some((v) => typeof v === "number" && Number.isFinite(v))
+  );
 }
 
-const REQUEST_SRC = parseOk(SYM_SRC) && hasFinite(runPlots(SYM_SRC)) ? SYM_SRC : FALLBACK_SRC;
+const REQUEST_SRC =
+  parseOk(SYM_SRC) && hasFinite(runPlots(SYM_SRC)) ? SYM_SRC : FALLBACK_SRC;
 const REQUEST_PLOTS = runPlots(REQUEST_SRC);
 
 describe("interpret request.security HTF", () => {
   test.skipIf(!parseOk(REQUEST_SRC) || !hasFinite(REQUEST_PLOTS))(
     'request.security(sym, "60", close) same symbol',
     () => {
-      const out = new Runtime("TEST", { timeframe: "1" }).run(REQUEST_SRC, BARS);
+      const out = new Runtime("TEST", { timeframe: "1" }).run(
+        REQUEST_SRC,
+        BARS,
+      );
       expect(out.error).toBeUndefined();
       expect(out.plots).toHaveLength(BARS.length);
-      const finite = out.plots.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      const finite = out.plots.filter(
+        (v): v is number => typeof v === "number" && Number.isFinite(v),
+      );
       expect(finite.length).toBeGreaterThan(0);
       const closes = BARS.map((b) => b.close);
       const lo = Math.min(...closes);

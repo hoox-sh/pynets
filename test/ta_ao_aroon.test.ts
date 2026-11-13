@@ -53,7 +53,10 @@ describe("ta.aroon incremental", () => {
   test("default 14 first finite at bar 14", () => {
     const ta = new TaEngine();
     for (let i = 0; i < 14; i++) {
-      expect(ta.aroon("ar:def", 10 + i, 9 + i)).toEqual({ down: null, up: null });
+      expect(ta.aroon("ar:def", 10 + i, 9 + i)).toEqual({
+        down: null,
+        up: null,
+      });
     }
     const last = ta.aroon("ar:def", 30, 8);
     expect(typeof last.up).toBe("number");

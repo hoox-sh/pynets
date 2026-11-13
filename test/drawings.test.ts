@@ -51,7 +51,12 @@ describe("DrawingBook", () => {
       text: "bye",
       extra: { x: 8, y: 9 },
     });
-    expect(book.get(box)?.extra).toEqual({ left: 1, top: 10, right: 3, bottom: 0 });
+    expect(book.get(box)?.extra).toEqual({
+      left: 1,
+      top: 10,
+      right: 3,
+      bottom: 0,
+    });
     expect(book.get(line)).toBe(book.items[0]);
   });
 
@@ -91,7 +96,9 @@ describe("DrawingBook", () => {
     expect(book.all("polyline")).toEqual([{ kind: "polyline", bar: 3 }]);
     expect(book.all("linefill")).toHaveLength(1);
     book.alert(5, "ping");
-    expect(book.all("alert")).toEqual([{ kind: "alert", bar: 5, text: "ping" }]);
+    expect(book.all("alert")).toEqual([
+      { kind: "alert", bar: 5, text: "ping" },
+    ]);
     expect(book.lineNew(6)).toBe(5);
   });
 
@@ -231,8 +238,19 @@ describe("DrawingBook", () => {
     book.boxSetCorners(box, 1, 10, 3, 0);
     book.boxSetCorners(line, 9, 9, 9, 9);
     book.boxSetCorners(99, 1, 2, 3, 4);
-    book.boxSetCorners(box, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN);
-    expect(book.get(box)?.extra).toEqual({ left: 1, top: 10, right: 3, bottom: 0 });
+    book.boxSetCorners(
+      box,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NaN,
+    );
+    expect(book.get(box)?.extra).toEqual({
+      left: 1,
+      top: 10,
+      right: 3,
+      bottom: 0,
+    });
     expect(book.get(line)?.extra).toBeUndefined();
     expect(book.get(99)).toBeUndefined();
   });
@@ -296,10 +314,16 @@ describe("DrawingBook", () => {
 
   test("bad args do not throw", () => {
     const book = new DrawingBook();
-    expect(() => book.lineNew(Number.NaN, "nope" as unknown as Record<string, unknown>)).not.toThrow();
-    expect(() => book.labelNew(Number.POSITIVE_INFINITY, { x: 1 } as unknown as string)).not.toThrow();
+    expect(() =>
+      book.lineNew(Number.NaN, "nope" as unknown as Record<string, unknown>),
+    ).not.toThrow();
+    expect(() =>
+      book.labelNew(Number.POSITIVE_INFINITY, { x: 1 } as unknown as string),
+    ).not.toThrow();
     expect(() => book.boxNew(undefined as unknown as number)).not.toThrow();
-    expect(() => book.alert(Number.NaN, null as unknown as string)).not.toThrow();
+    expect(() =>
+      book.alert(Number.NaN, null as unknown as string),
+    ).not.toThrow();
     expect(() => book.lineSetXy(99, Number.NaN, 1, 2, 3)).not.toThrow();
     expect(() => book.labelSetText(99, "nope")).not.toThrow();
     expect(() => book.boxSet(99, undefined)).not.toThrow();

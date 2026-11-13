@@ -50,10 +50,14 @@ describe("lexer square-bracket wrap parity (Sept 2026 release notes)", () => {
     for (const n of [1, 2, 3]) {
       const pad = " ".repeat(n);
       expect(() =>
-        parse(`//@version=5\nindicator("t")\nx = close[1 +\n${pad}2]\nplot(x)\n`),
+        parse(
+          `//@version=5\nindicator("t")\nx = close[1 +\n${pad}2]\nplot(x)\n`,
+        ),
       ).not.toThrow();
       expect(() =>
-        parse(`//@version=5\nindicator("t")\n[a, b] = [close,\n${pad}open]\nplot(a)\n`),
+        parse(
+          `//@version=5\nindicator("t")\n[a, b] = [close,\n${pad}open]\nplot(a)\n`,
+        ),
       ).not.toThrow();
     }
   });
@@ -65,7 +69,11 @@ describe("lexer square-bracket wrap parity (Sept 2026 release notes)", () => {
   });
 
   test("unbalanced bracket does not poison later parses", () => {
-    expect(() => parse('//@version=5\nindicator("t")\nplot(close[1)\n')).toThrow();
-    expect(() => parse('//@version=5\nindicator("t")\nplot(close)\n')).not.toThrow();
+    expect(() =>
+      parse('//@version=5\nindicator("t")\nplot(close[1)\n'),
+    ).toThrow();
+    expect(() =>
+      parse('//@version=5\nindicator("t")\nplot(close)\n'),
+    ).not.toThrow();
   });
 });

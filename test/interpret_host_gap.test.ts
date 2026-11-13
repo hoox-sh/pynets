@@ -8,7 +8,12 @@ import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
 
 const PY = pythonBin();
 
-type PyAlert = { message?: string; bar_index?: number; source?: string; title?: string };
+type PyAlert = {
+  message?: string;
+  bar_index?: number;
+  source?: string;
+  title?: string;
+};
 type PyOut = {
   plots: Array<number | null>;
   series: Record<string, Array<number | null>>;
@@ -52,14 +57,20 @@ function matchPython(src: string, bars: OHLCVBar[], symbol = "TEST"): PyOut {
   expect(out.error).toBeUndefined();
   expect(nums(out.plots)).toEqual(nums(py.plots));
   for (const [key, series] of Object.entries(py.series)) {
-    if (key.endsWith(".open") || key.endsWith(".high") || key.endsWith(".low")) continue;
+    if (key.endsWith(".open") || key.endsWith(".high") || key.endsWith(".low"))
+      continue;
     expect(nums(out.series[key])).toEqual(nums(series));
   }
   return py;
 }
 
 function alertEvents(out: {
-  drawings?: Array<{ kind?: string; bar?: number; text?: string; extra?: Record<string, unknown> }>;
+  drawings?: Array<{
+    kind?: string;
+    bar?: number;
+    text?: string;
+    extra?: Record<string, unknown>;
+  }>;
 }) {
   return (out.drawings ?? []).filter((d) => d.kind === "alert");
 }
@@ -120,7 +131,9 @@ plot(close, "c")`;
     expect(alerts.length).toBe(py.alerts.length);
     expect(alerts.map((a) => a.bar)).toEqual(py.alerts.map((a) => a.bar_index));
     expect(alerts.every((a) => a.text === "msg")).toBe(true);
-    expect(alerts.every((a) => a.extra?.source === "alertcondition")).toBe(true);
+    expect(alerts.every((a) => a.extra?.source === "alertcondition")).toBe(
+      true,
+    );
   });
 
   test("alertcondition(true) fires once per bar", () => {

@@ -38,34 +38,40 @@ function runPlots(src: string): Array<number | null> | null {
 }
 
 function plotsAreClose(plots: Array<number | null> | null): boolean {
-  return plots != null && JSON.stringify(plots) === JSON.stringify([1, 2, 3, 4, 5]);
+  return (
+    plots != null && JSON.stringify(plots) === JSON.stringify([1, 2, 3, 4, 5])
+  );
 }
 
 function namesExist(): boolean {
-  return parseOk(SYM_SRC) && dumpHasNames(SYM_SRC, "syminfo", "ticker", "timeframe", "period");
+  return (
+    parseOk(SYM_SRC) &&
+    dumpHasNames(SYM_SRC, "syminfo", "ticker", "timeframe", "period")
+  );
 }
 
-const REQUEST_SRC = namesExist() && plotsAreClose(runPlots(SYM_SRC)) ? SYM_SRC : FALLBACK_SRC;
+const REQUEST_SRC =
+  namesExist() && plotsAreClose(runPlots(SYM_SRC)) ? SYM_SRC : FALLBACK_SRC;
 const REQUEST_PLOTS = runPlots(REQUEST_SRC);
 
 describe("interpret request.security", () => {
-  test.skipIf(!parseOk(REQUEST_SRC) || REQUEST_PLOTS == null || !REQUEST_PLOTS.some((v) => v != null))(
-    "request.security same-symbol close passthrough",
-    () => {
-      const out = new Runtime("TEST").run(REQUEST_SRC, BARS);
-      expect(out.error).toBeUndefined();
-      expect(out.plots).toEqual([1, 2, 3, 4, 5]);
-    },
-  );
+  test.skipIf(
+    !parseOk(REQUEST_SRC) ||
+      REQUEST_PLOTS == null ||
+      !REQUEST_PLOTS.some((v) => v != null),
+  )("request.security same-symbol close passthrough", () => {
+    const out = new Runtime("TEST").run(REQUEST_SRC, BARS);
+    expect(out.error).toBeUndefined();
+    expect(out.plots).toEqual([1, 2, 3, 4, 5]);
+  });
 
-  test.skipIf(!parseOk(`indicator("t")\nplot(request.security("MSFT", "", close))`))(
-    "foreign request.security is na",
-    () => {
-      const src = `indicator("t")
+  test.skipIf(
+    !parseOk(`indicator("t")\nplot(request.security("MSFT", "", close))`),
+  )("foreign request.security is na", () => {
+    const src = `indicator("t")
 plot(request.security("MSFT", "", close))`;
-      const out = new Runtime("TEST").run(src, BARS);
-      expect(out.error).toBeUndefined();
-      expect(out.plots).toEqual([null, null, null, null, null]);
-    },
-  );
+    const out = new Runtime("TEST").run(src, BARS);
+    expect(out.error).toBeUndefined();
+    expect(out.plots).toEqual([null, null, null, null, null]);
+  });
 });
