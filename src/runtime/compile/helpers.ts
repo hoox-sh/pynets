@@ -5,6 +5,8 @@
  * na-safe arithmetic / compare / history for the JS compile backend.
  * Python analog: pynescript.compiler.numba_builtins (object-mode subset).
  */
+import { PineArray } from "../array.ts";
+
 export const NA = null;
 
 export function isNaCell(v: unknown): boolean {
@@ -119,7 +121,17 @@ export function histGet(
   if (off == null || off < 0 || !Number.isFinite(off)) return NA;
   const i = bar - Math.trunc(off);
   if (i < 0 || i >= arr.length) return NA;
-  return naNum(arr[i]);
+  const v = arr[i] as unknown;
+  // PineArray stored via hold() (e.g. array.from result): offset 0 → last
+  // element, offset > 0 → na (matches Python _pine_array_ids behavior).
+  if (v instanceof PineArray) {
+    if (off === 0) {
+      const size = v.size();
+      return size > 0 ? v.get(size - 1) : NA;
+    }
+    return NA;
+  }
+  return naNum(v);
 }
 
 export function histStore(

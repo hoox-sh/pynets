@@ -67,6 +67,53 @@ const REQUEST_FNS = new Set([
 /** Last `request.seed` value (Python stores it on evaluator context). */
 let lastSeed: number | null = null;
 
+/**
+ * Optional per-bar cache for `request.security`.
+ * Keyed by `(symbol, timeframe)`; invalidated when `barIndex` changes.
+ * Call `securityCache.reset(barIndex)` at the start of each bar.
+ */
+export interface SecurityCache {
+  get(key: string): Cell | null;
+  set(key: string, value: Cell): void;
+  reset(barIndex: number): void;
+  size(): number;
+}
+
+function createSecurityCache(): SecurityCache {
+  let currentBar = -1;
+  const map = new Map<string, { value: Cell; bar: number }>();
+  return {
+    get(key: string): Cell | null {
+      const entry = map.get(key);
+      if (entry == null) return null;
+      return entry.value;
+    },
+    set(key: string, value: Cell): void {
+      map.set(key, { value, bar: currentBar });
+    },
+    reset(barIndex: number): void {
+      if (barIndex !== currentBar) {
+        currentBar = barIndex;
+        map.clear();
+      }
+    },
+    size(): number {
+      return map.size;
+    },
+  };
+}
+
+let securityCache: SecurityCache | null = null;
+
+export function getSecurityCache(): SecurityCache {
+  if (securityCache == null) securityCache = createSecurityCache();
+  return securityCache;
+}
+
+export function resetSecurityCache(barIndex: number): void {
+  getSecurityCache().reset(barIndex);
+}
+
 const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 1440;
 const MINUTES_PER_WEEK = 10080;
@@ -156,6 +203,34 @@ export function resolveSecurity(
   if (reqMin != null && hostMin != null && reqMin > hostMin) {
     return value;
   }
+  return value;
+}
+
+/**
+ * Cached version of `resolveSecurity`. Results are cached per (symbol, timeframe)
+ * and invalidated when `barIndex` changes. Use this from the interpret host
+ * to avoid recomputing the same security request every bar.
+ */
+export function resolveSecurityCached(
+  cache: SecurityCache,
+  hostSymbol: string,
+  hostTimeframe: string | null,
+  args: SecurityArgs,
+  sameSymbolValue: Cell,
+): Cell {
+  const a = args ?? {};
+  if (!sameSymbol(a.symbol, hostSymbol ?? "")) return null;
+  const value = finiteCell(sameSymbolValue);
+  const reqMin = timeframeMinutes(a.timeframe);
+  const hostMin = timeframeMinutes(hostTimeframe);
+  // HTF last-cache (req minutes > host): passthrough; host forward-fills.
+  if (reqMin != null && hostMin != null && reqMin > hostMin) {
+    return value;
+  }
+  const key = `${a.symbol ?? ""}|${a.timeframe ?? ""}`;
+  const cached = cache.get(key);
+  if (cached !== null) return cached;
+  cache.set(key, value);
   return value;
 }
 

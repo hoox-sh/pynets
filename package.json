@@ -49,6 +49,18 @@
       "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./parse": {
+      "bun": "./src/ast/helper.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./runtime": {
+      "bun": "./src/runtime/interpret.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "bin": {

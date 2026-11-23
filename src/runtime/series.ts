@@ -5,15 +5,34 @@
  * Pine series lookback polarity matches Python `PineSeries` / TradingView:
  *   get(0) = current bar, get(1) = previous bar, OOB / negative → na (null).
  */
+
 export const NA = null;
 export type Na = null;
 export type Cell = number | Na;
 
+export interface PineSeriesOptions {
+  /** Maximum number of cells to retain; older cells are evicted (FIFO). */
+  maxSize?: number;
+}
+
 export class PineSeries {
   private readonly data: Cell[] = [];
+  private readonly maxSize: number | null;
+
+  constructor(opts?: PineSeriesOptions) {
+    this.maxSize = opts?.maxSize ?? null;
+  }
 
   push(value: Cell): void {
     this.data.push(value);
+    this.evict();
+  }
+
+  private evict(): void {
+    if (this.maxSize == null) return;
+    while (this.data.length > this.maxSize) {
+      this.data.shift(); // O(n) but only when maxSize is set
+    }
   }
 
   setCurrent(value: Cell): void {

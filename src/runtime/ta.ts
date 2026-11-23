@@ -13,7 +13,7 @@ import { cloneValue } from "./clone.ts";
 
 interface SmaState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
   sum: number;
   count: number;
 }
@@ -56,18 +56,18 @@ interface TrState {
 
 interface HighestLowestState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface AroonState {
   length: number;
-  highs: Cell[];
-  lows: Cell[];
+  highs: RingBuffer;
+  lows: RingBuffer;
 }
 
 interface StdevState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
   sum: number;
   sumsq: number;
   count: number;
@@ -75,18 +75,18 @@ interface StdevState {
 
 interface ChangeState {
   length: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface WmaState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface VwmaState {
   period: number;
-  srcWindow: Cell[];
-  volWindow: Cell[];
+  srcWindow: RingBuffer;
+  volWindow: RingBuffer;
   sumPv: number;
   sumV: number;
   naCount: number;
@@ -101,7 +101,7 @@ interface CrossState {
 interface LinregState {
   period: number;
   offset: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface VwapState {
@@ -121,14 +121,14 @@ interface AlmaState {
   period: number;
   offset: number;
   sigma: number;
-  window: Cell[];
+  window: RingBuffer;
   weights: number[];
   wsum: number;
 }
 
 interface CmoState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
   up: number;
   down: number;
 }
@@ -137,8 +137,8 @@ interface KamaState {
   period: number;
   fast: number;
   slow: number;
-  prices: number[];
-  diffs: number[];
+  prices: RingBuffer;
+  diffs: RingBuffer;
   vol: number;
   kama: number | null;
   seeded: boolean;
@@ -158,14 +158,14 @@ interface AccdistState {
 interface PivotState {
   left: number;
   right: number;
-  window: Cell[];
+  window: RingBuffer;
   n: number;
 }
 
 interface MfiState {
   period: number;
-  tps: Cell[];
-  mfs: Cell[];
+  tps: RingBuffer;
+  mfs: RingBuffer;
 }
 
 interface SarState {
@@ -196,20 +196,20 @@ interface DmiState {
 
 interface CorrState {
   length: number;
-  a: Cell[];
-  b: Cell[];
+  a: RingBuffer;
+  b: RingBuffer;
 }
 
 interface SwmaState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
   weights: number[];
   wsum: number;
 }
 
 interface WindowState {
   period: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface TsiState {
@@ -237,7 +237,7 @@ interface ValueWhenState {
 interface PercentileState {
   period: number;
   percentage: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface PvtState {
@@ -288,24 +288,24 @@ interface UoState {
 
 interface RciState {
   length: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface DpoState {
   length: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface KstState {
   key: string;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface StochRsiState {
   rsiLen: number;
   stochLen: number;
-  prices: number[];
-  rsiRing: number[];
+  prices: RingBuffer;
+  rsiRing: RingBuffer;
   bars: number;
   validRsi: number;
   signal: number | null;
@@ -313,7 +313,7 @@ interface StochRsiState {
 
 interface BbPctState {
   length: number;
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface EmvState {
@@ -326,13 +326,13 @@ interface EmvState {
 
 interface FractalState {
   period: number;
-  highs: Cell[];
-  lows: Cell[];
+  highs: RingBuffer;
+  lows: RingBuffer;
   bars: number;
 }
 
 interface ZigzagState {
-  samples: Cell[];
+  samples: RingBuffer;
 }
 
 interface EngulfingState {
@@ -354,22 +354,22 @@ interface DoubleTopBottomState {
 }
 
 interface RsiDivergenceState {
-  window: Cell[];
+  window: RingBuffer;
   count: number;
 }
 
 interface CumulativeDeltaState {
-  closes: Cell[];
-  volumes: Cell[];
+  closes: RingBuffer;
+  volumes: RingBuffer;
   count: number;
 }
 
 interface VolumeMomentumState {
-  window: number[];
+  window: RingBuffer;
 }
 
 interface VolumeThrustState {
-  closes: Cell[];
+  closes: RingBuffer;
   volume: Cell;
   sma: Cell;
   nClose: number;
@@ -378,41 +378,41 @@ interface VolumeThrustState {
 }
 
 interface StochSmoothState {
-  highs: Cell[];
-  lows: Cell[];
+  highs: RingBuffer;
+  lows: RingBuffer;
 }
 
 interface SmaWeightedState {
-  window: Cell[];
+  window: RingBuffer;
   weights: number[];
   wsum: number;
 }
 
 interface PairWindowState {
-  a: Cell[];
-  b: Cell[];
+  a: RingBuffer;
+  b: RingBuffer;
 }
 
 interface SingleWindowState {
-  window: Cell[];
+  window: RingBuffer;
 }
 
 interface MarketConditionState {
-  window: Cell[];
+  window: RingBuffer;
   atr: Cell;
 }
 
 interface OrderFlowState {
-  highs: Cell[];
-  lows: Cell[];
-  closes: Cell[];
-  volumes: Cell[];
+  highs: RingBuffer;
+  lows: RingBuffer;
+  closes: RingBuffer;
+  volumes: RingBuffer;
 }
 
 interface LiquidityState {
-  volume: Cell[];
-  volatility: Cell[];
-  spread: Cell[];
+  volume: RingBuffer;
+  volatility: RingBuffer;
+  spread: RingBuffer;
 }
 
 interface MeanReversionState {
@@ -421,8 +421,8 @@ interface MeanReversionState {
 }
 
 interface VolumeWeightedMomentumState {
-  prices: Cell[];
-  volumes: Cell[];
+  prices: RingBuffer;
+  volumes: RingBuffer;
 }
 
 export type PivotPoints = {
@@ -452,6 +452,78 @@ function taRec(
 function pushCap<T>(window: T[], value: T, cap: number): void {
   if (window.length === cap) window.shift();
   window.push(value);
+}
+
+/**
+ * Fixed-capacity ring buffer with O(1) push and indexed access (oldest first).
+ * Replaces `Array.shift()` + `push()` patterns in TA windows to eliminate
+ * O(n) element movement per bar per call site.
+ */
+class RingBuffer {
+  private readonly data: Cell[];
+  private head = 0; // index of oldest element
+  private count = 0; // number of valid entries
+  private readonly cap: number;
+
+  constructor(capacity: number) {
+    this.cap = capacity;
+    this.data = new Array(capacity).fill(null);
+  }
+
+  /** Push a value, evicting the oldest if full. Returns the evicted value (or null). */
+  push(v: Cell): Cell | null {
+    const tail = (this.head + this.count) % this.cap;
+    const evicted = this.count === this.cap ? this.data[tail] : null;
+    this.data[tail] = v;
+    if (this.count < this.cap) {
+      this.count++;
+    } else {
+      this.head = (this.head + 1) % this.cap;
+    }
+    return evicted;
+  }
+
+  /** Get the i-th oldest element (0 = oldest). */
+  get(i: number): Cell | null {
+    if (i < 0 || i >= this.count) return null;
+    return this.data[(this.head + i) % this.cap];
+  }
+
+  get length(): number {
+    return this.count;
+  }
+
+  get isFull(): boolean {
+    return this.count === this.cap;
+  }
+
+  [Symbol.iterator](): Iterator<Cell, undefined> {
+    let i = 0;
+    const self = this;
+    return {
+      next(): IteratorResult<Cell, undefined> {
+        if (i < self.count) return { value: self.get(i++), done: false };
+        return { value: undefined, done: true };
+      },
+    };
+  }
+
+  /** Check if any entry is null (for functions that require a full finite window). */
+  includesNull(): boolean {
+    for (let i = 0; i < this.count; i++) {
+      if (this.get(i) === null) return true;
+    }
+    return false;
+  }
+
+  /** Deep clone for realtime tick snapshots (duck-type `clone()` in clone.ts). */
+  clone(): RingBuffer {
+    const out = new RingBuffer(this.cap);
+    out.head = this.head;
+    out.count = this.count;
+    for (let i = 0; i < this.cap; i++) out.data[i] = this.data[i];
+    return out;
+  }
 }
 
 function finiteOut(value: number): Cell {
@@ -614,24 +686,47 @@ export class TaEngine {
   private readonly historySites = new Map<string, Cell[]>();
   private readonly momentumFilterSites = new Map<
     string,
-    { momentum: Cell[]; volume: Cell[] }
+    { momentum: RingBuffer; volume: RingBuffer }
   >();
   private readonly volatilityRegimeSites = new Map<string, Cell[]>();
 
+  /** Sites modified since the last snapshot (for efficient realtime tick rollback). */
+  private readonly dirtySites = new Set<string>();
+
+  /** Mark a call site as modified during the current bar/tick. */
+  markDirty(site: string): void {
+    this.dirtySites.add(site);
+  }
+
+  /** Clear dirty tracking (call at the start of each bar). */
+  clearDirty(): void {
+    this.dirtySites.clear();
+  }
+
   /**
-   * Snapshot every per-site window (Python `_snapshot_ta_state`).
+   * Snapshot only dirty per-site windows (Python `_snapshot_ta_state`).
    * Intermediate realtime ticks push one sample per call site; without
    * rollback the same bar would be counted N times.
    */
   snapshot(): Array<[string, Map<string, unknown>]> {
     const out: Array<[string, Map<string, unknown>]> = [];
+    const dirty = [...this.dirtySites];
+    this.dirtySites.clear();
+    if (dirty.length === 0) return out;
     for (const [key, value] of Object.entries(
       this as unknown as Record<string, unknown>,
     )) {
       if (!(value instanceof Map)) continue;
       const copy = new Map<string, unknown>();
-      for (const [site, state] of value) copy.set(site, cloneValue(state));
-      out.push([key, copy]);
+      let anyDirty = false;
+      for (const site of dirty) {
+        const state = value.get(site);
+        if (state !== undefined) {
+          copy.set(site, cloneValue(state));
+          anyDirty = true;
+        }
+      }
+      if (anyDirty) out.push([key, copy]);
     }
     return out;
   }
@@ -642,7 +737,6 @@ export class TaEngine {
     for (const [key, copy] of snap) {
       const live = self[key];
       if (!(live instanceof Map)) continue;
-      live.clear();
       for (const [site, state] of copy) live.set(site, cloneValue(state));
     }
   }
@@ -653,19 +747,17 @@ export class TaEngine {
 
     let st = this.smaSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], sum: 0, count: 0 };
+      st = { period: n, window: new RingBuffer(n), sum: 0, count: 0 };
       this.smaSites.set(site, st);
     }
+    this.markDirty(site);
 
     const x = finiteCell(source);
-    if (st.window.length === n) {
-      const old = st.window.shift()!;
-      if (old !== null) {
-        st.sum -= old;
-        st.count -= 1;
-      }
+    const evicted = st.window.push(x);
+    if (evicted !== null) {
+      st.sum -= evicted;
+      st.count -= 1;
     }
-    st.window.push(x);
     if (x !== null) {
       st.sum += x;
       st.count += 1;
@@ -685,6 +777,7 @@ export class TaEngine {
       st = { period: n, ema: null, seeded: false, seedBuf: [] };
       this.emaSites.set(site, st);
     }
+    this.markDirty(site);
     const x = finiteCell(source);
     const alpha = 2 / (n + 1);
     if (!st.seeded) {
@@ -767,6 +860,7 @@ export class TaEngine {
       };
       this.rsiSites.set(site, st);
     }
+    this.markDirty(site);
 
     const x = finiteCell(source);
     // NA source: emit na and leave Wilder state untouched.
@@ -877,10 +971,9 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.highestSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.highestSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let best: number | null = null;
@@ -896,10 +989,9 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.lowestSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.lowestSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let best: number | null = null;
@@ -915,19 +1007,16 @@ export class TaEngine {
     if (n === null || n <= 1) return null;
     let st = this.stdevSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], sum: 0, sumsq: 0, count: 0 };
+      st = { period: n, window: new RingBuffer(n), sum: 0, sumsq: 0, count: 0 };
       this.stdevSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (st.window.length === n) {
-      const old = st.window.shift()!;
-      if (old !== null) {
-        st.sum -= old;
-        st.sumsq -= old * old;
-        st.count -= 1;
-      }
+    const evicted = st.window.push(x);
+    if (evicted !== null) {
+      st.sum -= evicted;
+      st.sumsq -= evicted * evicted;
+      st.count -= 1;
     }
-    st.window.push(x);
     if (x !== null) {
       st.sum += x;
       st.sumsq += x * x;
@@ -947,14 +1036,13 @@ export class TaEngine {
     if (n === 0) return x === null ? null : 0;
     let st = this.changeSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, window: [] };
+      st = { length: n, window: new RingBuffer(n + 1) };
       this.changeSites.set(site, st);
     }
-    if (st.window.length === n + 1) st.window.shift();
     st.window.push(x);
     if (st.window.length <= n) return null;
-    const curr = st.window[st.window.length - 1]!;
-    const prev = st.window[0]!;
+    const curr = st.window.get(st.window.length - 1)!;
+    const prev = st.window.get(0)!;
     if (curr === null || prev === null) return null;
     return curr - prev;
   }
@@ -965,15 +1053,14 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.wmaSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.wmaSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let acc = 0;
     for (let i = 0; i < n; i++) {
-      const v = st.window[i];
+      const v = st.window.get(i);
       if (v == null) return null;
       acc += v * (i + 1);
     }
@@ -1038,19 +1125,16 @@ export class TaEngine {
 
     let st = this.sumSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], sum: 0, count: 0 };
+      st = { period: n, window: new RingBuffer(n), sum: 0, count: 0 };
       this.sumSites.set(site, st);
     }
 
     const x = finiteCell(source);
-    if (st.window.length === n) {
-      const old = st.window.shift()!;
-      if (old !== null) {
-        st.sum -= old;
-        st.count -= 1;
-      }
+    const evicted = st.window.push(x);
+    if (evicted !== null) {
+      st.sum -= evicted;
+      st.count -= 1;
     }
-    st.window.push(x);
     if (x !== null) {
       st.sum += x;
       st.count += 1;
@@ -1068,14 +1152,13 @@ export class TaEngine {
     if (n <= 0) return null;
     let st = this.rocSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, window: [] };
+      st = { length: n, window: new RingBuffer(n + 1) };
       this.rocSites.set(site, st);
     }
-    if (st.window.length === n + 1) st.window.shift();
     st.window.push(x);
     if (st.window.length <= n) return null;
-    const curr = st.window[st.window.length - 1]!;
-    const prev = st.window[0]!;
+    const curr = st.window.get(st.window.length - 1)!;
+    const prev = st.window.get(0)!;
     if (curr === null || prev === null || prev === 0) return null;
     return (100 * (curr - prev)) / prev;
   }
@@ -1093,8 +1176,8 @@ export class TaEngine {
     if (st === undefined || st.period !== n) {
       st = {
         period: n,
-        srcWindow: [],
-        volWindow: [],
+        srcWindow: new RingBuffer(n),
+        volWindow: new RingBuffer(n),
         sumPv: 0,
         sumV: 0,
         naCount: 0,
@@ -1103,9 +1186,10 @@ export class TaEngine {
     }
     const s = finiteCell(source);
     const v = finiteCell(volume);
-    if (st.srcWindow.length === n) {
-      const oldS = st.srcWindow.shift()!;
-      const oldV = st.volWindow.shift()!;
+    // Evict old values and adjust running sums before pushing new ones.
+    if (st.srcWindow.isFull && st.volWindow.isFull) {
+      const oldS = st.srcWindow.get(0)!; // oldest, about to be evicted
+      const oldV = st.volWindow.get(0)!;
       if (oldS === null || oldV === null) st.naCount -= 1;
       else {
         st.sumPv -= oldS * oldV;
@@ -1129,10 +1213,9 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.cciSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.cciSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(typicalPrice));
     if (st.window.length < n) return null;
     let acc = 0;
@@ -1145,7 +1228,7 @@ export class TaEngine {
     for (const v of st.window) mad += Math.abs(v! - sma);
     const meanDev = mad / n;
     if (meanDev === 0) return null;
-    return (st.window[n - 1]! - sma) / (0.015 * meanDev);
+    return (st.window.get(n - 1)! - sma) / (0.015 * meanDev);
   }
 
   /** Williams %R: -100*(hh-c)/(hh-ll). na if incomplete window or hh==ll. */
@@ -1189,10 +1272,9 @@ export class TaEngine {
     const off = Number.isFinite(offset) ? Math.trunc(offset) : 0;
     let st = this.linregSites.get(site);
     if (st === undefined || st.period !== n || st.offset !== off) {
-      st = { period: n, offset: off, window: [] };
+      st = { period: n, offset: off, window: new RingBuffer(n) };
       this.linregSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let sumY = 0;
@@ -1206,7 +1288,8 @@ export class TaEngine {
     let den = 0;
     for (let i = 0; i < n; i++) {
       const dx = i - meanX;
-      num += dx * (st.window[i]! - meanY);
+      const v = st.window.get(i)!;
+      num += dx * (v - meanY);
       den += dx * dx;
     }
     if (den === 0) return meanY;
@@ -1357,16 +1440,15 @@ export class TaEngine {
     if (n === null) return null;
     let st = sites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       sites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let bestI = -1;
     let best: number | null = null;
     for (let i = 0; i < st.window.length; i++) {
-      const v = st.window[i];
+      const v = st.window.get(i);
       if (v === null) continue;
       // Strict compare so ties keep the oldest bar (Python `_highestbars`).
       if (best === null || (highest ? v > best : v < best)) {
@@ -1407,15 +1489,21 @@ export class TaEngine {
         weights.push(w);
         wsum += w;
       }
-      st = { period: n, offset: off, sigma: sig, window: [], weights, wsum };
+      st = {
+        period: n,
+        offset: off,
+        sigma: sig,
+        window: new RingBuffer(n),
+        weights,
+        wsum,
+      };
       this.almaSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n || st.wsum === 0) return null;
     let total = 0;
     for (let i = 0; i < n; i++) {
-      const v = st.window[i];
+      const v = st.window.get(i);
       if (v == null) return null;
       total += v * st.weights[i]!;
     }
@@ -1428,23 +1516,23 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.cmoSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], up: 0, down: 0 };
+      st = { period: n, window: new RingBuffer(n + 1), up: 0, down: 0 };
       this.cmoSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (st.window.length === n + 1) {
-      const old = st.window[0]!;
-      const nxt = st.window[1]!;
+    // When window is full, remove the oldest contribution before pushing.
+    if (st.window.isFull) {
+      const old = st.window.get(0)!;
+      const nxt = st.window.get(1)!;
       if (old !== null && nxt !== null) {
         const d = nxt - old;
         if (d > 0) st.up -= d;
         else st.down -= -d;
       }
-      st.window.shift();
     }
-    const prev =
-      st.window.length === 0 ? null : st.window[st.window.length - 1]!;
     st.window.push(x);
+    const prev =
+      st.window.length > 1 ? st.window.get(st.window.length - 2)! : null;
     if (prev !== null && x !== null) {
       const d = x - prev;
       if (d > 0) st.up += d;
@@ -1475,8 +1563,8 @@ export class TaEngine {
         period: n,
         fast: f,
         slow: sl,
-        prices: [],
-        diffs: [],
+        prices: new RingBuffer(n + 1),
+        diffs: new RingBuffer(n),
         vol: 0,
         kama: null,
         seeded: false,
@@ -1487,14 +1575,13 @@ export class TaEngine {
     const x = finiteCell(source);
     if (x === null) return null;
     const prev =
-      st.prices.length === 0 ? null : st.prices[st.prices.length - 1]!;
-    if (st.prices.length === n + 1) st.prices.shift();
+      st.prices.length === 0 ? null : st.prices.get(st.prices.length - 1)!;
     st.prices.push(x);
     st.bars += 1;
     if (prev !== null) {
       const d = Math.abs(x - prev);
-      if (st.diffs.length === n) st.vol -= st.diffs.shift()!;
-      st.diffs.push(d);
+      const evicted = st.diffs.push(d);
+      if (evicted !== null) st.vol -= evicted;
       st.vol += d;
     }
     if (!st.seeded) {
@@ -1503,7 +1590,7 @@ export class TaEngine {
       st.seeded = true;
       return null;
     }
-    const oldest = st.prices[0]!;
+    const oldest = st.prices.get(0)!;
     const change = Math.abs(x - oldest);
     const volatility = st.vol;
     let sc: number;
@@ -1574,18 +1661,17 @@ export class TaEngine {
     const R = Math.trunc(right);
     let st = sites.get(site);
     if (st === undefined || st.left !== L || st.right !== R) {
-      st = { left: L, right: R, window: [], n: 0 };
+      st = { left: L, right: R, window: new RingBuffer(L + 1), n: 0 };
       sites.set(site, st);
     }
     const need = L + 1;
-    if (st.window.length === need) st.window.shift();
     st.window.push(finiteCell(source));
     st.n += 1;
     if (st.n <= L + R || st.window.length < need) return null;
-    const current = st.window[st.window.length - 1];
+    const current = st.window.get(st.window.length - 1);
     if (current === null) return null;
     for (let i = 1; i <= L; i++) {
-      const leftVal = st.window[st.window.length - 1 - i];
+      const leftVal = st.window.get(st.window.length - 1 - i);
       if (leftVal === null) continue;
       if (high ? leftVal >= current : leftVal <= current) return null;
     }
@@ -1623,16 +1709,16 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.mfiSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, tps: [], mfs: [] };
+      st = {
+        period: n,
+        tps: new RingBuffer(n + 1),
+        mfs: new RingBuffer(n + 1),
+      };
       this.mfiSites.set(site, st);
     }
     const h = finiteCell(high);
     const l = finiteCell(low);
     const c = finiteCell(close);
-    if (st.tps.length === n + 1) {
-      st.tps.shift();
-      st.mfs.shift();
-    }
     if (h === null || l === null || c === null) {
       st.tps.push(null);
       st.mfs.push(null);
@@ -1648,9 +1734,9 @@ export class TaEngine {
     let neg = 0;
     const startK = st.tps.length - n;
     for (let k = startK; k < st.tps.length; k++) {
-      const tpCur = st.tps[k]!;
-      const tpPrev = st.tps[k - 1]!;
-      const mf = st.mfs[k]!;
+      const tpCur = st.tps.get(k)!;
+      const tpPrev = st.tps.get(k - 1)!;
+      const mf = st.mfs.get(k)!;
       if (tpCur === null || tpPrev === null || mf === null) return null;
       if (tpCur > tpPrev) pos += mf;
       else if (tpCur < tpPrev) neg += mf;
@@ -1876,12 +1962,8 @@ export class TaEngine {
     if (n === null || n < 2) return null;
     let st = this.correlationSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, a: [], b: [] };
+      st = { length: n, a: new RingBuffer(n), b: new RingBuffer(n) };
       this.correlationSites.set(site, st);
-    }
-    if (st.a.length === n) {
-      st.a.shift();
-      st.b.shift();
     }
     st.a.push(finiteCell(a));
     st.b.push(finiteCell(b));
@@ -1890,8 +1972,8 @@ export class TaEngine {
     const xs: number[] = [];
     const ys: number[] = [];
     for (let i = 0; i < n; i++) {
-      const x = st.a[i]!;
-      const y = st.b[i]!;
+      const x = st.a.get(i)!;
+      const y = st.b.get(i)!;
       if (x !== null && y !== null) {
         xs.push(x);
         ys.push(y);
@@ -2225,15 +2307,14 @@ export class TaEngine {
         weights.push(w);
         wsum += w;
       }
-      st = { period: n, window: [], weights, wsum };
+      st = { period: n, window: new RingBuffer(n), weights, wsum };
       this.swmaSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n || st.wsum === 0) return null;
     let acc = 0;
     for (let i = 0; i < n; i++) {
-      const v = st.window[i];
+      const v = st.window.get(i);
       if (v == null) return null;
       acc += v * st.weights[i]!;
     }
@@ -2246,16 +2327,15 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.cogSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.cogSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     let num = 0;
     let den = 0;
     for (let i = 0; i < n; i++) {
-      const v = st.window[n - 1 - i];
+      const v = st.window.get(n - 1 - i);
       if (v === null) continue;
       num += (i + 1) * v;
       den += v;
@@ -2343,18 +2423,15 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.devSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], sum: 0, count: 0 };
+      st = { period: n, window: new RingBuffer(n), sum: 0, count: 0 };
       this.devSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (st.window.length === n) {
-      const old = st.window.shift()!;
-      if (old !== null) {
-        st.sum -= old;
-        st.count -= 1;
-      }
+    const evicted = st.window.push(x);
+    if (evicted !== null) {
+      st.sum -= evicted;
+      st.count -= 1;
     }
-    st.window.push(x);
     if (x !== null) {
       st.sum += x;
       st.count += 1;
@@ -2375,19 +2452,16 @@ export class TaEngine {
     if (n === null || n <= 1) return null;
     let st = this.varianceSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [], sum: 0, sumsq: 0, count: 0 };
+      st = { period: n, window: new RingBuffer(n), sum: 0, sumsq: 0, count: 0 };
       this.varianceSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (st.window.length === n) {
-      const old = st.window.shift()!;
-      if (old !== null) {
-        st.sum -= old;
-        st.sumsq -= old * old;
-        st.count -= 1;
-      }
+    const evicted = st.window.push(x);
+    if (evicted !== null) {
+      st.sum -= evicted;
+      st.sumsq -= evicted * evicted;
+      st.count -= 1;
     }
-    st.window.push(x);
     if (x !== null) {
       st.sum += x;
       st.sumsq += x * x;
@@ -2405,10 +2479,9 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.medianSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.medianSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     const valid: number[] = [];
@@ -2428,10 +2501,9 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.modeSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.modeSites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     const counts = new Map<number, number>();
@@ -2455,11 +2527,10 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.percentrankSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, window: [] };
+      st = { period: n, window: new RingBuffer(n) };
       this.percentrankSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (st.window.length === n) st.window.shift();
     st.window.push(x);
     if (st.window.length < n) return null;
     const valid: number[] = [];
@@ -2521,10 +2592,9 @@ export class TaEngine {
     if (n === null || !Number.isFinite(percentage)) return null;
     let st = sites.get(site);
     if (st === undefined || st.period !== n || st.percentage !== percentage) {
-      st = { period: n, percentage, window: [] };
+      st = { period: n, percentage, window: new RingBuffer(n) };
       sites.set(site, st);
     }
-    if (st.window.length === n) st.window.shift();
     st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     const sorted: number[] = [];
@@ -2647,12 +2717,12 @@ export class TaEngine {
     const window = n + 1;
     let st = this.aroonSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, highs: [], lows: [] };
+      st = {
+        length: n,
+        highs: new RingBuffer(window),
+        lows: new RingBuffer(window),
+      };
       this.aroonSites.set(site, st);
-    }
-    if (st.highs.length === window) {
-      st.highs.shift();
-      st.lows.shift();
     }
     st.highs.push(finiteCell(high));
     st.lows.push(finiteCell(low));
@@ -2662,8 +2732,8 @@ export class TaEngine {
     let hhK = 0;
     let llK = 0;
     for (let k = 0; k < window; k++) {
-      const hv = st.highs[k]!;
-      const lv = st.lows[k]!;
+      const hv = st.highs.get(k)!;
+      const lv = st.lows.get(k)!;
       if (hv === null || lv === null) return na;
       if (hh === null || hv > hh) {
         hh = hv;
@@ -2753,10 +2823,10 @@ export class TaEngine {
     }
     let st = this.rciSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, window: [] };
+      st = { length: n, window: new RingBuffer(n) };
       this.rciSites.set(site, st);
     }
-    pushCap(st.window, finiteCell(source), n);
+    st.window.push(finiteCell(source));
     if (st.window.length < n) return null;
     const vals: number[] = [];
     for (const v of st.window) {
@@ -2774,21 +2844,21 @@ export class TaEngine {
     const keep = Math.max(n, disp);
     let st = this.dpoSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, window: [] };
+      st = { length: n, window: new RingBuffer(keep) };
       this.dpoSites.set(site, st);
     }
     const x = finiteCell(close);
-    pushCap(st.window, x, keep);
+    st.window.push(x);
     if (st.window.length < n || st.window.length < disp) return null;
     const smaStart = st.window.length - n;
     if (x === null) return null;
     let sum = 0;
     for (let i = smaStart; i < st.window.length; i++) {
-      const v = st.window[i]!;
+      const v = st.window.get(i)!;
       if (v === null) return null;
       sum += v;
     }
-    const displaced = st.window[st.window.length - disp];
+    const displaced = st.window.get(st.window.length - disp);
     if (displaced === null || displaced === undefined) return null;
     return finiteOut(displaced - sum / n);
   }
@@ -2818,15 +2888,15 @@ export class TaEngine {
     const key = ns.join(",");
     let st = this.kstSites.get(site);
     if (st === undefined || st.key !== key) {
-      st = { key, window: [] };
+      st = { key, window: new RingBuffer(keep) };
       this.kstSites.set(site, st);
     }
     const x = finiteCell(close);
-    pushCap(st.window, x, keep);
+    st.window.push(x);
     if (st.window.length < keep || x === null) return null;
     const rocs: number[] = [];
     for (const length of ns) {
-      const base = st.window[st.window.length - length];
+      const base = st.window.get(st.window.length - length);
       if (base === null || base === undefined) return null;
       if (base === 0) rocs.push(0);
       else rocs.push(((x - base) / base) * 100);
@@ -2856,8 +2926,8 @@ export class TaEngine {
       st = {
         rsiLen,
         stochLen,
-        prices: [],
-        rsiRing: [],
+        prices: new RingBuffer(rsiLen),
+        rsiRing: new RingBuffer(stochLen),
         bars: 0,
         validRsi: 0,
         signal: null,
@@ -2866,14 +2936,14 @@ export class TaEngine {
     }
     const x = finiteCell(close);
     if (x === null) return taRec({ stochrsi: null, signal: st.signal });
-    pushCap(st.prices, x, rsiLen);
+    st.prices.push(x);
     st.bars += 1;
     if (st.bars <= rsiLen) return empty;
     if (st.prices.length < rsiLen) return empty;
     let gains = 0;
     let losses = 0;
     for (let j = 1; j < st.prices.length; j++) {
-      const d = st.prices[j]! - st.prices[j - 1]!;
+      const d = st.prices.get(j)! - st.prices.get(j - 1)!;
       if (d > 0) gains += d;
       else losses += -d;
     }
@@ -2881,12 +2951,13 @@ export class TaEngine {
     const avgLoss = losses / rsiLen;
     const rs = avgLoss !== 0 ? avgGain / avgLoss : 100;
     const rsiVal = 100 - 100 / (1 + rs);
-    pushCap(st.rsiRing, rsiVal, stochLen);
+    st.rsiRing.push(rsiVal);
     st.validRsi += 1;
     if (st.validRsi < stochLen || st.rsiRing.length < stochLen) return empty;
-    let rsiHigh = st.rsiRing[0]!;
+    let rsiHigh = st.rsiRing.get(0)!;
     let rsiLow = rsiHigh;
     for (const v of st.rsiRing) {
+      if (v === null) continue;
       if (v > rsiHigh) rsiHigh = v;
       if (v < rsiLow) rsiLow = v;
     }
@@ -2947,10 +3018,10 @@ export class TaEngine {
     const m = Number.isFinite(mult) ? mult : 2;
     let st = this.bbPctSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, window: [] };
+      st = { length: n, window: new RingBuffer(n) };
       this.bbPctSites.set(site, st);
     }
-    pushCap(st.window, finiteCell(close), n);
+    st.window.push(finiteCell(close));
     if (st.window.length < n) return null;
     let sum = 0;
     for (const v of st.window) {
@@ -2967,7 +3038,7 @@ export class TaEngine {
     const upper = sma + std * m;
     const lower = sma - std * m;
     if (upper === lower) return 50;
-    const last = st.window[st.window.length - 1]!;
+    const last = st.window.get(st.window.length - 1)!;
     let pct = ((last - lower) / (upper - lower)) * 100;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
@@ -3033,15 +3104,20 @@ export class TaEngine {
     const need = n * 2 + 1;
     let st = this.fractalSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, highs: [], lows: [], bars: 0 };
+      st = {
+        period: n,
+        highs: new RingBuffer(win),
+        lows: new RingBuffer(win),
+        bars: 0,
+      };
       this.fractalSites.set(site, st);
     }
     st.bars += 1;
-    pushCap(st.highs, finiteCell(high), win);
-    pushCap(st.lows, finiteCell(low), win);
+    st.highs.push(finiteCell(high));
+    st.lows.push(finiteCell(low));
     if (st.bars < need || st.highs.length < win) return none;
-    const ch = st.highs[st.highs.length - 1]!;
-    const cl = st.lows[st.lows.length - 1]!;
+    const ch = st.highs.get(st.highs.length - 1)!;
+    const cl = st.lows.get(st.lows.length - 1)!;
     if (ch === null || cl === null) return none;
     let maxH = ch;
     let minL = cl;
@@ -3082,14 +3158,14 @@ export class TaEngine {
     const th = Number.isFinite(threshold) ? threshold : 5;
     let st = this.zigzagSites.get(site);
     if (st === undefined) {
-      st = { samples: [] };
+      st = { samples: new RingBuffer(2) };
       this.zigzagSites.set(site, st);
     }
     const x = finiteCell(source);
-    if (x !== null) pushCap(st.samples, x, 2);
+    if (x !== null) st.samples.push(x);
     if (st.samples.length < 2) return { high: null, low: null, dir: 0 };
-    const oldest = st.samples[0]!;
-    const newest = st.samples[1]!;
+    const oldest = st.samples.get(0)!;
+    const newest = st.samples.get(1)!;
     const recentHigh = Math.max(oldest, newest);
     const recentLow = Math.min(oldest, newest);
     const pct =
@@ -3238,14 +3314,14 @@ export class TaEngine {
     const key = `${site}:${p}:${k}:${d}`;
     let st = this.stochSmoothSites.get(key);
     if (st === undefined) {
-      st = { highs: [], lows: [] };
+      st = { highs: new RingBuffer(p), lows: new RingBuffer(p) };
       this.stochSmoothSites.set(key, st);
     }
-    pushCap(st.highs, finiteCell(high), p);
-    pushCap(st.lows, finiteCell(low), p);
+    st.highs.push(finiteCell(high));
+    st.lows.push(finiteCell(low));
     const c = finiteCell(close);
     let stoch: Cell = null;
-    if (c !== null && !st.highs.includes(null) && !st.lows.includes(null)) {
+    if (c !== null && !st.highs.includesNull() && !st.lows.includesNull()) {
       let hh = -Infinity;
       let ll = Infinity;
       for (const v of st.highs) {
@@ -3522,11 +3598,11 @@ export class TaEngine {
     if (p === null || p < 1) return 0;
     let st = this.rsiDivergenceSites.get(`${site}:${p}`);
     if (st === undefined) {
-      st = { window: [], count: 0 };
+      st = { window: new RingBuffer(p + 1), count: 0 };
       this.rsiDivergenceSites.set(`${site}:${p}`, st);
     }
     const x = finiteCell(value);
-    pushCap(st.window, x, p + 1);
+    st.window.push(x);
     st.count += 1;
     if (st.count <= p) return 0;
     const vals: number[] = [];
@@ -3555,24 +3631,28 @@ export class TaEngine {
     if (n === null || n <= 0) return 0;
     let st = this.cumDeltaSites.get(`${site}:${n}`);
     if (st === undefined) {
-      st = { closes: [], volumes: [], count: 0 };
+      st = {
+        closes: new RingBuffer(n + 1),
+        volumes: new RingBuffer(n),
+        count: 0,
+      };
       this.cumDeltaSites.set(`${site}:${n}`, st);
     }
     const c = finiteCell(close);
     const v = volume !== null && Number.isFinite(volume) ? volume : 0;
-    pushCap(st.closes, c, n + 1);
-    pushCap(st.volumes, v, n);
+    st.closes.push(c);
+    st.volumes.push(v);
     st.count += 1;
     if (st.count < n) return 0;
     let delta = 0;
     const offset = st.closes.length - st.volumes.length;
     for (let j = 0; j < st.volumes.length; j++) {
       const idx = offset + j;
-      const cRaw = st.closes[idx] ?? null;
+      const cRaw = st.closes.get(idx) ?? null;
       const cur = cRaw ?? 0;
-      const prevRaw = idx === 0 ? null : (st.closes[idx - 1] ?? null);
+      const prevRaw = idx === 0 ? null : (st.closes.get(idx - 1) ?? null);
       const prev = prevRaw ?? cur;
-      const vol = st.volumes[j]!;
+      const vol = st.volumes.get(j)!;
       if (cur > prev) delta += vol;
       else if (cur < prev) delta -= vol;
     }
@@ -3585,16 +3665,15 @@ export class TaEngine {
     if (n === null || n <= 0) return 0;
     let st = this.volMomSites.get(`${site}:${n}`);
     if (st === undefined) {
-      st = { window: [] };
+      st = { window: new RingBuffer(n + 1) };
       this.volMomSites.set(`${site}:${n}`, st);
     }
-    if (volume !== null && Number.isFinite(volume))
-      pushCap(st.window, volume, n + 1);
+    if (volume !== null && Number.isFinite(volume)) st.window.push(volume);
     if (st.window.length < n + 1) return 0;
     let oldSum = 0;
-    for (let i = 0; i < n; i++) oldSum += st.window[i]!;
+    for (let i = 0; i < n; i++) oldSum += st.window.get(i)!;
     let newSum = 0;
-    for (let i = 1; i <= n; i++) newSum += st.window[i]!;
+    for (let i = 1; i <= n; i++) newSum += st.window.get(i)!;
     const oldVol = oldSum / n;
     const newVol = newSum / n;
     if (oldVol === 0) return 0;
@@ -3623,14 +3702,18 @@ export class TaEngine {
         else if (kind === "sqrt") weights.push((i + 1) ** 0.5);
         else weights.push(i + 1);
       }
-      st = { window: [], weights, wsum: weights.reduce((a, b) => a + b, 0) };
+      st = {
+        window: new RingBuffer(n),
+        weights,
+        wsum: weights.reduce((a, b) => a + b, 0),
+      };
       this.smaWeightedSites.set(key, st);
     }
-    pushCap(st.window, finiteCell(source), n);
-    if (st.window.length < n || st.window.includes(null) || st.wsum <= 0)
+    st.window.push(finiteCell(source));
+    if (st.window.length < n || st.window.includesNull() || st.wsum <= 0)
       return null;
     let total = 0;
-    for (let i = 0; i < n; i++) total += st.window[i]! * st.weights[i]!;
+    for (let i = 0; i < n; i++) total += st.window.get(i)! * st.weights[i]!;
     return finiteOut(total / st.wsum);
   }
 
@@ -3671,17 +3754,17 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = sites.get(key);
     if (st === undefined) {
-      st = { a: [], b: [] };
+      st = { a: new RingBuffer(n), b: new RingBuffer(n) };
       sites.set(key, st);
     }
-    pushCap(st.a, finiteCell(a), n);
-    pushCap(st.b, finiteCell(b), n);
+    st.a.push(finiteCell(a));
+    st.b.push(finiteCell(b));
     if (st.a.length < n || st.b.length < n) return null;
     const left: number[] = [];
     const right: number[] = [];
     for (let i = 0; i < n; i++) {
-      const av = st.a[i]!;
-      const bv = st.b[i]!;
+      const av = st.a.get(i)!;
+      const bv = st.b.get(i)!;
       if (av === null || bv === null) return null;
       left.push(av);
       right.push(bv);
@@ -3764,12 +3847,12 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.skewnessSites.get(key);
     if (st === undefined) {
-      st = { window: [] };
+      st = { window: new RingBuffer(n) };
       this.skewnessSites.set(key, st);
     }
-    pushCap(st.window, finiteCell(source), n);
-    if (st.window.length < n || st.window.includes(null)) return null;
-    const vals = st.window as number[];
+    st.window.push(finiteCell(source));
+    if (st.window.length < n || st.window.includesNull()) return null;
+    const vals = Array.from(st.window) as number[];
     let mean = 0;
     for (const v of vals) mean += v;
     mean /= n;
@@ -3790,12 +3873,12 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.kurtosisSites.get(key);
     if (st === undefined) {
-      st = { window: [] };
+      st = { window: new RingBuffer(n) };
       this.kurtosisSites.set(key, st);
     }
-    pushCap(st.window, finiteCell(source), n);
-    if (st.window.length < n || st.window.includes(null)) return null;
-    const vals = st.window as number[];
+    st.window.push(finiteCell(source));
+    if (st.window.length < n || st.window.includesNull()) return null;
+    const vals = Array.from(st.window) as number[];
     let mean = 0;
     for (const v of vals) mean += v;
     mean /= n;
@@ -3822,11 +3905,11 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.vwmSites.get(key);
     if (st === undefined) {
-      st = { prices: [], volumes: [] };
+      st = { prices: new RingBuffer(n + 1), volumes: new RingBuffer(n) };
       this.vwmSites.set(key, st);
     }
-    pushCap(st.prices, finiteCell(source), n + 1);
-    pushCap(st.volumes, finiteCell(volume), n);
+    st.prices.push(finiteCell(source));
+    st.volumes.push(finiteCell(volume));
     if (st.volumes.length < n) return null;
     const ps = st.prices;
     const vs = st.volumes;
@@ -3836,10 +3919,10 @@ export class TaEngine {
       const pEnd = ps.length - 1 - i;
       const pPrev = pEnd - 1;
       if (pPrev < 0) break;
-      const pv = ps[pEnd] ?? null;
-      const pp = ps[pPrev] ?? null;
+      const pv = ps.get(pEnd) ?? null;
+      const pp = ps.get(pPrev) ?? null;
       if (pv === null || pp === null) return null;
-      const vol = vs[vs.length - 1 - i] ?? 0;
+      const vol = vs.get(vs.length - 1 - i) ?? 0;
       momentumSum += (pv - pp) * vol;
       volumeSum += vol;
     }
@@ -3918,17 +4001,17 @@ export class TaEngine {
     const key = `${site}:${smaN}:${stdevN}`;
     let st = this.marketConditionSites.get(key);
     if (st === undefined) {
-      st = { window: [], atr: null };
+      st = { window: new RingBuffer(win), atr: null };
       this.marketConditionSites.set(key, st);
     }
-    pushCap(st.window, finiteCell(close), win);
+    st.window.push(finiteCell(close));
     st.atr = finiteCell(atr);
     if (st.window.length < win) return "ranging";
-    const cLast = st.window[st.window.length - 1] ?? null;
+    const cLast = st.window.get(st.window.length - 1) ?? null;
     const currentClose = cLast ?? 0;
     const currentAtr = st.atr ?? 1;
-    const currentSma = smaOf(st.window, smaN) ?? currentClose;
-    const stdevVal = stdevOf(st.window, stdevN);
+    const currentSma = smaOf(Array.from(st.window), smaN) ?? currentClose;
+    const stdevVal = stdevOf(Array.from(st.window), stdevN);
     if (stdevVal !== null && stdevVal > currentAtr * 1.5) return "volatile";
     if (currentClose > currentSma && currentAtr > 0.5) return "trending_up";
     if (currentClose < currentSma && currentAtr > 0.5) return "trending_down";
@@ -3949,21 +4032,26 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.orderFlowSites.get(key);
     if (st === undefined) {
-      st = { highs: [], lows: [], closes: [], volumes: [] };
+      st = {
+        highs: new RingBuffer(n),
+        lows: new RingBuffer(n),
+        closes: new RingBuffer(n),
+        volumes: new RingBuffer(n),
+      };
       this.orderFlowSites.set(key, st);
     }
-    pushCap(st.highs, finiteCell(high), n);
-    pushCap(st.lows, finiteCell(low), n);
-    pushCap(st.closes, finiteCell(close), n);
-    pushCap(st.volumes, finiteCell(volume), n);
+    st.highs.push(finiteCell(high));
+    st.lows.push(finiteCell(low));
+    st.closes.push(finiteCell(close));
+    st.volumes.push(finiteCell(volume));
     if (st.highs.length < n || st.lows.length < n) return 0;
     let buy = 0;
     let sell = 0;
     for (let i = 0; i < n; i++) {
-      const h = st.highs[i] ?? 0;
-      const l = st.lows[i] ?? 0;
-      const c = st.closes[i] ?? 0;
-      const v = st.volumes[i] ?? 0;
+      const h = st.highs.get(i) ?? 0;
+      const l = st.lows.get(i) ?? 0;
+      const c = st.closes.get(i) ?? 0;
+      const v = st.volumes.get(i) ?? 0;
       if (h > l) {
         const mid = (h + l) / 2;
         if (c > mid) buy += v;
@@ -3988,12 +4076,16 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.liquiditySites.get(key);
     if (st === undefined) {
-      st = { volume: [], volatility: [], spread: [] };
+      st = {
+        volume: new RingBuffer(n),
+        volatility: new RingBuffer(n),
+        spread: new RingBuffer(n),
+      };
       this.liquiditySites.set(key, st);
     }
-    pushCap(st.volume, finiteCell(volume), n);
-    pushCap(st.volatility, finiteCell(volatility), n);
-    pushCap(st.spread, finiteCell(spread), n);
+    st.volume.push(finiteCell(volume));
+    st.volatility.push(finiteCell(volatility));
+    st.spread.push(finiteCell(spread));
     if (
       st.volume.length < n ||
       st.volatility.length < n ||
@@ -4537,11 +4629,11 @@ export class TaEngine {
     if (n <= 0) return 0;
     let st = this.momentumFilterSites.get(`${site}:${n}`);
     if (st === undefined) {
-      st = { momentum: [], volume: [] };
+      st = { momentum: new RingBuffer(n), volume: new RingBuffer(n) };
       this.momentumFilterSites.set(`${site}:${n}`, st);
     }
-    pushCap(st.momentum, finiteCell(momentum), n);
-    pushCap(st.volume, finiteCell(volume), n);
+    st.momentum.push(finiteCell(momentum));
+    st.volume.push(finiteCell(volume));
     if (st.momentum.length < n || st.volume.length < n) return 0;
     let volSum = 0;
     for (const v of st.volume) if (v !== null) volSum += v;
@@ -4549,8 +4641,8 @@ export class TaEngine {
     let numerator = 0;
     let paired = false;
     for (let i = 0; i < n; i++) {
-      const m = st.momentum[i];
-      const v = st.volume[i];
+      const m = st.momentum.get(i);
+      const v = st.volume.get(i);
       if (m !== null && v !== null) {
         numerator += m * v;
         paired = true;
@@ -5355,7 +5447,7 @@ export class TaEngine {
     let st = this.volThrustSites.get(site);
     if (st === undefined) {
       st = {
-        closes: [],
+        closes: new RingBuffer(2),
         volume: null,
         sma: null,
         nClose: 0,
@@ -5365,7 +5457,7 @@ export class TaEngine {
       this.volThrustSites.set(site, st);
     }
     if (!(close === null && st.nClose === 0)) {
-      pushCap(st.closes, finiteCell(close), 2);
+      st.closes.push(finiteCell(close));
       st.nClose += 1;
     }
     if (!(volume === null && st.nVolume === 0)) {
@@ -5377,9 +5469,9 @@ export class TaEngine {
       st.nSma += 1;
     }
     if (st.nClose < 1 || st.nVolume < 1 || st.nSma < 1) return 0;
-    const cVal = st.closes[st.closes.length - 1] ?? 100;
+    const cVal = st.closes.get(st.closes.length - 1) ?? 100;
     const cPrev =
-      st.closes.length > 1 ? (st.closes[st.closes.length - 2] ?? 100) : 100;
+      st.closes.length > 1 ? (st.closes.get(st.closes.length - 2) ?? 100) : 100;
     const vVal = st.volume ?? 1000;
     const vsVal = st.sma ?? 1000;
     const spike = vVal > vsVal * (1 + sens);

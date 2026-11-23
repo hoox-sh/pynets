@@ -37,6 +37,10 @@ import type {
   stmt,
 } from "../ast/nodes.ts";
 import { PineArray } from "./array.ts";
+import { MATH_CONSTANTS } from "./constants.ts";
+import type { ConstantValue } from "./constants.ts";
+export type { ConstantValue };
+export { MATH_CONSTANTS };
 import {
   asColor,
   colorByName,
@@ -242,6 +246,12 @@ export interface RuntimeOptions {
   mode?: RuntimeMode;
   /** Wall-clock budget in seconds. Interpret only; checked every 32 bars. */
   timeout_seconds?: number | null;
+  /** Maximum number of bars to process (protects against memory exhaustion). */
+  maxBars?: number;
+  /** Safety cap for while loop iterations per bar. */
+  whileCap?: number;
+  /** Safety cap for for-to / for-in iterations per bar. */
+  forCap?: number;
   /** Visit the last bar as a forming realtime bar (`barstate.isrealtime`). */
   realtimeLastBar?: boolean;
   /** Visits per realtime bar (Python `realtime_ticks`; >1 implies a last-bar window). */
@@ -324,9 +334,228 @@ type Value =
 
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
-const WHILE_CAP = 10_000;
-/** Python for-to / for-in safety cap (visit_ForTo / visit_ForIn). */
-const FOR_CAP = 1_000_000;
+
+/**
+ * Dispatch map for high-frequency `ta.*` builtins.
+ * Handlers receive (node, env, site) and return a Value or undefined to fall through.
+ */
+/**
+ * Dispatch map for high-frequency `ta.*` builtins.
+ * Handlers receive (node, env, site) and return a `Cell` or `undefined` to fall through.
+ */
+const TA_DISPATCH: Map<
+  string,
+  (node: Call, env: Env, site: string) => Cell | undefined
+> = new Map<string, (node: Call, env: Env, site: string) => Cell | undefined>();
+
+TA_DISPATCH.set("ta.sma", (node, env, site) =>
+  env.ta.sma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("sma", (node, env, site) =>
+  env.ta.sma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.ema", (node, env, site) =>
+  env.ta.ema(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ema", (node, env, site) =>
+  env.ta.ema(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.rsi", (node, env, site) =>
+  env.ta.rsi(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("rsi", (node, env, site) =>
+  env.ta.rsi(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.rma", (node, env, site) =>
+  env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("rma", (node, env, site) =>
+  env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.tr", (node, env, site) =>
+  taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
+);
+TA_DISPATCH.set("tr", (node, env, site) =>
+  taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
+);
+TA_DISPATCH.set("ta.change", (node, env, site) =>
+  env.ta.change(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("change", (node, env, site) =>
+  env.ta.change(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.mom", (node, env, site) =>
+  env.ta.mom(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("mom", (node, env, site) =>
+  env.ta.mom(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.roc", (node, env, site) =>
+  env.ta.roc(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("roc", (node, env, site) =>
+  env.ta.roc(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.stdev", (node, env, site) =>
+  env.ta.stdev(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("stdev", (node, env, site) =>
+  env.ta.stdev(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.sum", (node, env, site) =>
+  env.ta.sum(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("sum", (node, env, site) =>
+  env.ta.sum(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.wma", (node, env, site) =>
+  env.ta.wma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("wma", (node, env, site) =>
+  env.ta.wma(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.rising", (node, env, site) =>
+  env.ta.rising(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("rising", (node, env, site) =>
+  env.ta.rising(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.falling", (node, env, site) =>
+  env.ta.falling(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("falling", (node, env, site) =>
+  env.ta.falling(site, srcArg(node, env), lenArg(node, env, 1)),
+);
+TA_DISPATCH.set("ta.crossover", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.crossover(site, a, b);
+});
+TA_DISPATCH.set("crossover", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.crossover(site, a, b);
+});
+TA_DISPATCH.set("ta.crossunder", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.crossunder(site, a, b);
+});
+TA_DISPATCH.set("crossunder", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.crossunder(site, a, b);
+});
+TA_DISPATCH.set("ta.cross", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.cross(site, a, b);
+});
+TA_DISPATCH.set("cross", (node, env, site) => {
+  const a = srcArg(node, env);
+  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
+  return env.ta.cross(site, a, b);
+});
+
+/**
+ * Dispatch map for single-arg `math.*` builtins.
+ */
+const MATH_DISPATCH: Map<string, (node: Call, env: Env) => Cell | undefined> =
+  new Map<string, (node: Call, env: Env) => Cell | undefined>();
+
+MATH_DISPATCH.set("math.abs", (node, env) =>
+  mathAbs(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("abs", (node, env) =>
+  mathAbs(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.sqrt", (node, env) =>
+  mathSqrt(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("sqrt", (node, env) =>
+  mathSqrt(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.log", (node, env) =>
+  mathLog(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("log", (node, env) =>
+  mathLog(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.log10", (node, env) =>
+  mathLog10(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("log10", (node, env) =>
+  mathLog10(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.exp", (node, env) =>
+  mathExp(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("exp", (node, env) =>
+  mathExp(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.floor", (node, env) =>
+  mathFloor(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("floor", (node, env) =>
+  mathFloor(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.ceil", (node, env) =>
+  mathCeil(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("ceil", (node, env) =>
+  mathCeil(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.sign", (node, env) =>
+  mathSign(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("sign", (node, env) =>
+  mathSign(cellArg(node, env, 0, ["number", "x"])),
+);
+MATH_DISPATCH.set("math.sin", (node, env) =>
+  mathSin(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("sin", (node, env) =>
+  mathSin(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("math.cos", (node, env) =>
+  mathCos(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("cos", (node, env) =>
+  mathCos(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("math.tan", (node, env) =>
+  mathTan(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("tan", (node, env) =>
+  mathTan(cellArg(node, env, 0, ["angle", "x"])),
+);
+MATH_DISPATCH.set("math.asin", (node, env) =>
+  mathAsin(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("asin", (node, env) =>
+  mathAsin(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("math.acos", (node, env) =>
+  mathAcos(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("acos", (node, env) =>
+  mathAcos(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("math.atan", (node, env) =>
+  mathAtan(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("atan", (node, env) =>
+  mathAtan(cellArg(node, env, 0, ["x"])),
+);
+MATH_DISPATCH.set("math.todegrees", (node, env) =>
+  mathToDegrees(cellArg(node, env, 0, ["radians", "x"])),
+);
+MATH_DISPATCH.set("math.toradians", (node, env) =>
+  mathToRadians(cellArg(node, env, 0, ["degrees", "x"])),
+);
+MATH_DISPATCH.set("math.isfinite", (node, env) =>
+  mathIsFinite(cellArg(node, env, 0, ["number", "x"])),
+);
 
 interface WhileNode {
   kind: "While";
@@ -409,6 +638,14 @@ interface Env {
   tickCount: number;
   /** `varip`-declared names — persist across realtime ticks (reference varip). */
   varipNames: Set<string>;
+  /** PineArray values returned from `array.*` builtins (Python `_pine_array_ids`).
+   *  `[]` subscript on these returns na for offset > 0 (only offset 0 is valid).
+   *  Other PineArrays (e.g. `ta.gamma_levels`) support full newest-first indexing. */
+  pineArrayIds: Set<PineArray>;
+  /** Safety cap for while loop iterations per bar. */
+  whileCap: number;
+  /** Safety cap for for-to / for-in iterations per bar. */
+  forCap: number;
 }
 
 export class Runtime {
@@ -418,6 +655,9 @@ export class Runtime {
   readonly libraries: LibraryRegistry;
   readonly mode: RuntimeMode;
   readonly timeout_seconds: number | null;
+  readonly maxBars: number;
+  readonly whileCap: number;
+  readonly forCap: number;
 
   constructor(
     public readonly symbol = "AAPL",
@@ -429,6 +669,9 @@ export class Runtime {
     this.libraries = resolveLibraries(options?.libraries);
     this.mode = options?.mode ?? "interpret";
     this.timeout_seconds = options?.timeout_seconds ?? null;
+    this.maxBars = options?.maxBars ?? 100_000;
+    this.whileCap = options?.whileCap ?? 10_000;
+    this.forCap = options?.forCap ?? 1_000_000;
   }
 
   /** Store Pine source for `import namespace/name/version`. */
@@ -465,6 +708,20 @@ export class Runtime {
     const extraOpts = extra && !isPlainInputs(extra) ? extra : undefined;
     const mode = extraOpts?.mode ?? this.mode;
     const inputs = mergeInputs(this.inputs, extra);
+    const maxBars = extraOpts?.maxBars ?? this.maxBars;
+    if (ohlcv.length > maxBars) {
+      return {
+        series: {},
+        plots: [],
+        plot_meta: [],
+        count: 0,
+        script_name: null,
+        script_type: "indicator",
+        mode: "interpret",
+        error: `ohlcv length (${ohlcv.length}) exceeds maxBars (${maxBars})`,
+        error_kind: "runtime",
+      };
+    }
     const rt = resolveRealtimeWindow(ohlcv.length, {
       realtimeLastBar: extraOpts?.realtimeLastBar,
       realtimeTicks: extraOpts?.realtimeTicks,
@@ -483,6 +740,8 @@ export class Runtime {
       timeout_seconds: extraOpts?.timeout_seconds ?? this.timeout_seconds,
       realtime_first: rt.first,
       realtime_ticks: rt.ticks,
+      whileCap: extraOpts?.whileCap ?? this.whileCap,
+      forCap: extraOpts?.forCap ?? this.forCap,
     };
     if (mode === "compile") {
       return runCompiled(source, ohlcv, host);
@@ -763,6 +1022,8 @@ export function interpretTree(
     timeout_seconds?: number | null;
     realtime_first?: number | null;
     realtime_ticks?: number;
+    whileCap?: number;
+    forCap?: number;
   },
 ): RuntimeResult {
   const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
@@ -810,6 +1071,9 @@ export function interpretTree(
     tickIndex: 0,
     tickCount: 1,
     varipNames: new Set(),
+    pineArrayIds: new Set<PineArray>(),
+    whileCap: host?.whileCap ?? 10_000,
+    forCap: host?.forCap ?? 1_000_000,
   };
 
   const n = ohlcv.length;
@@ -948,12 +1212,17 @@ function pushNamedSeries(env: Env, id: string, value: Cell): void {
 
 function beginBar(env: Env, bar: OHLCVBar, i: number): void {
   env.barIndex = i;
-  const o = bar.open ?? 0;
-  const h = bar.high ?? 0;
-  const l = bar.low ?? 0;
-  const c = bar.close ?? 0;
-  const vol = bar.volume ?? 1;
-  const t = bar.time ?? i * 60_000;
+  // Sanitize non-finite OHLCV values to na (matches Python behavior).
+  const sanitize = (v: number | undefined): number | null => {
+    if (v === undefined || !Number.isFinite(v)) return null;
+    return v;
+  };
+  const o = sanitize(bar.open);
+  const h = sanitize(bar.high);
+  const l = sanitize(bar.low);
+  const c = sanitize(bar.close);
+  const vol = sanitize(bar.volume) ?? 1;
+  const t = sanitize(bar.time) ?? i * 60_000;
   pushNamedSeries(env, "open", o);
   pushNamedSeries(env, "high", h);
   pushNamedSeries(env, "low", l);
@@ -979,10 +1248,10 @@ function beginBar(env: Env, bar: OHLCVBar, i: number): void {
   // Python `_builtin_timenow`: host ctx, else dataset last bar time (no wall-clock).
   env.ctx.timenow = env.lastBarTime;
 
-  bindDerived(env, "hl2", (h + l) / 2);
-  bindDerived(env, "hlc3", (h + l + c) / 3);
-  bindDerived(env, "ohlc4", (o + h + l + c) / 4);
-  bindDerived(env, "hlcc4", (h + l + c + c) / 4);
+  bindDerived(env, "hl2", ((h ?? 0) + (l ?? 0)) / 2);
+  bindDerived(env, "hlc3", ((h ?? 0) + (l ?? 0) + (c ?? 0)) / 3);
+  bindDerived(env, "ohlc4", ((o ?? 0) + (h ?? 0) + (l ?? 0) + (c ?? 0)) / 4);
+  bindDerived(env, "hlcc4", ((h ?? 0) + (l ?? 0) + (c ?? 0) + (c ?? 0)) / 4);
 
   const parts = utcPartsFromMs(t);
   env.ctx.year = parts.year;
@@ -1626,13 +1895,22 @@ function evalExpr(node: expr | undefined, env: Env): Value {
       if (node.value.kind === "Name") {
         const s = seriesGet(env, node.value.id);
         if (s) return s.get(offset);
-        // Python `visit_Subscript` list path: array-valued names index
-        // newest-first (`value[-(offset + 1)]`); OOB soft-fails to na.
         const v = ctxGet(env, node.value.id);
         if (v instanceof PineArray) {
+          // Python `_pine_array_ids`: array.* results (e.g. `array.from`) only
+          // support offset 0 (returning the array's last element for plot compat);
+          // offset > 0 → na. Other PineArrays (e.g. `ta.gamma_levels`) support
+          // full newest-first indexing (`value[-(offset + 1)]`).
+          if (env.pineArrayIds.has(v)) {
+            if (offset === 0) {
+              const size = v.size();
+              return size > 0 ? v.get(size - 1) : NA;
+            }
+            return NA;
+          }
           const size = v.size();
           const i = size - 1 - offset;
-          return i < 0 || i >= size ? NA : (v.get(i) as Value);
+          return i < 0 || i >= size ? NA : v.get(i);
         }
       }
       return NA;
@@ -1738,12 +2016,12 @@ function evalForTo(node: ForTo, env: Env): Value {
   };
   if (step > 0) {
     for (let i = start; i <= end; i += step) {
-      if (++n > FOR_CAP) break;
+      if (++n > env.forCap) break;
       if (run(i) === "break") break;
     }
   } else {
     for (let i = start; i >= end; i += step) {
-      if (++n > FOR_CAP) break;
+      if (++n > env.forCap) break;
       if (run(i) === "break") break;
     }
   }
@@ -1754,7 +2032,7 @@ function evalWhile(node: While, env: Env): Value {
   let last: Value = NA;
   let n = 0;
   while (isTruthy(unwrap(evalExpr(node.test, env)))) {
-    if (++n > WHILE_CAP) break;
+    if (++n > env.whileCap) break;
     try {
       for (const s of asStmts(node.body)) last = execStmt(s, env);
     } catch (err) {
@@ -1833,7 +2111,7 @@ function evalForIn(node: ForIn, env: Env): Value {
   else if (iter instanceof PineArray) items = iter.toValues();
   const target = node.target.kind === "Name" ? node.target.id : null;
   let last: Value = NA;
-  const limit = Math.min(items.length, FOR_CAP);
+  const limit = Math.min(items.length, env.forCap);
   for (let i = 0; i < limit; i++) {
     const item = items[i]!;
     if (target) bindName(env, target, item);
@@ -1849,124 +2127,10 @@ function evalForIn(node: ForIn, env: Env): Value {
 }
 
 /**
- * Python `_MATH_CONSTANTS` static dotted keys (base.py).
- * `barmerge.*` are Python True/False booleans (ast/evaluator/base.py ~92),
- * matching compile (emit.ts) — plotting coerces to 1/0 on both backends.
- * Dynamic series (`timeframe.*` flags, `syminfo.ticker`, `bid`/`ask`) stay in Name blocks.
+ * `mathConstant` resolves dotted `_MATH_CONSTANTS` keys (shared in
+ * `src/runtime/constants.ts`). Dynamic series (`timeframe.*` flags,
+ * `syminfo.ticker`, `bid`/`ask`) stay in Name blocks.
  */
-/* Exported for direct unit tests (typeof / parity assertions); not part of the package API. */
-export const MATH_CONSTANTS: Record<string, Value> = {
-  "math.pi": Math.PI,
-  "math.e": Math.E,
-  "math.phi": (1 + Math.sqrt(5)) / 2,
-  "math.rphi": 2 / (1 + Math.sqrt(5)),
-  "format.mintick": "mintick",
-  "format.percent": "percent",
-  "format.volume": "volume",
-  "format.price": "price",
-  "text.formatting.none": "",
-  "text.formatting.bold": "bold",
-  "text.formatting.italic": "italic",
-  "text.formatting.bold_italic": "bold italic",
-  "size.auto": "auto",
-  "size.tiny": 8,
-  "size.small": 10,
-  "size.normal": 12,
-  "size.large": 16,
-  "size.huge": 20,
-  "order.ascending": 1,
-  "order.descending": -1,
-  "barmerge.gaps_on": true,
-  "barmerge.gaps_off": false,
-  "barmerge.lookahead_on": true,
-  "barmerge.lookahead_off": false,
-  "shape.arrowup": "arrowup",
-  "shape.arrowdown": "arrowdown",
-  "shape.circle": "circle",
-  "shape.cross": "cross",
-  "shape.diamond": "diamond",
-  "shape.flag": "flag",
-  "shape.labelup": "labelup",
-  "shape.labeldown": "labeldown",
-  "shape.square": "square",
-  "shape.triangledown": "triangledown",
-  "shape.triangleup": "triangleup",
-  "shape.xcross": "xcross",
-  "location.abovebar": "abovebar",
-  "location.belowbar": "belowbar",
-  "location.top": "top",
-  "location.bottom": "bottom",
-  "location.absolute": "absolute",
-  "xloc.bar_index": "bar_index",
-  "xloc.bar_time": "bar_time",
-  "yloc.price": "price",
-  "yloc.abovebar": "abovebar",
-  "yloc.belowbar": "belowbar",
-  "extend.none": "none",
-  "extend.left": "left",
-  "extend.right": "right",
-  "extend.both": "both",
-  // Pine display.* is a bitfield: none=0 pane=1 data_window=2 price_scale=4
-  // status_line=8 all=15. Integers so `display.pane + display.data_window` works.
-  "display.none": 0,
-  "display.pane": 1,
-  "display.all": 15,
-  "display.data_window": 2,
-  "display.price_scale": 4,
-  "display.status_line": 8,
-  "position.top_left": "top_left",
-  "position.top_center": "top_center",
-  "position.top_right": "top_right",
-  "position.middle_left": "middle_left",
-  "position.middle_center": "middle_center",
-  "position.middle_right": "middle_right",
-  "position.bottom_left": "bottom_left",
-  "position.bottom_center": "bottom_center",
-  "position.bottom_right": "bottom_right",
-  "hline.style_solid": "solid",
-  "hline.style_dashed": "dashed",
-  "hline.style_dotted": "dotted",
-  // Python plotting.py PlotStyle / `_builtin_plot_linestyle_*`.
-  "plot.linestyle_solid": "linestyle_solid",
-  "plot.linestyle_dashed": "linestyle_dashed",
-  "plot.linestyle_dotted": "linestyle_dotted",
-  // Python plotting.py PlotStyle tokens — longer than hline's "solid".
-  "plot.style_line": "style_line",
-  "plot.style_linebr": "style_linebr",
-  "plot.style_stepline": "style_stepline",
-  "plot.style_steplinebr": "style_steplinebr",
-  "plot.style_stepline_diamond": "style_stepline_diamond",
-  "plot.style_histogram": "style_histogram",
-  "plot.style_columns": "style_columns",
-  "plot.style_cross": "style_cross",
-  "plot.style_area": "style_area",
-  "plot.style_areabr": "style_areabr",
-  "plot.style_circles": "style_circles",
-  // Python alerts.py `_alerts_builtin_map`.
-  "alert.freq_once_per_bar": "once_per_bar",
-  "alert.freq_once_per_bar_close": "once_per_bar_close",
-  "alert.freq_all": "all",
-  "dayofweek.sunday": 1,
-  "dayofweek.monday": 2,
-  "dayofweek.tuesday": 3,
-  "dayofweek.wednesday": 4,
-  "dayofweek.thursday": 5,
-  "dayofweek.friday": 6,
-  "dayofweek.saturday": 7,
-  "month.january": 1,
-  "month.february": 2,
-  "month.march": 3,
-  "month.april": 4,
-  "month.may": 5,
-  "month.june": 6,
-  "month.july": 7,
-  "month.august": 8,
-  "month.september": 9,
-  "month.october": 10,
-  "month.november": 11,
-  "month.december": 12,
-};
-
 function mathConstant(node: Attribute): Value | undefined {
   const path = attrPath(node);
   if (
@@ -1974,7 +2138,7 @@ function mathConstant(node: Attribute): Value | undefined {
     !Object.prototype.hasOwnProperty.call(MATH_CONSTANTS, path)
   )
     return undefined;
-  return MATH_CONSTANTS[path];
+  return MATH_CONSTANTS[path] as Value;
 }
 
 /** `strategy.long` / `strategy.short` → "long"/"short"; dotted `_MATH_CONSTANTS`; other attrs are na. */
@@ -2329,17 +2493,23 @@ function evalCall(node: Call, env: Env): Value {
   }
   const fname = callName(node);
   const site = siteKey(node, env);
-  if (fname === "ta.sma" || fname === "sma") {
-    return env.ta.sma(site, srcArg(node, env), lenArg(node, env, 1));
+  // O(1) dispatch for high-frequency ta.* builtins.
+  const taHandler = TA_DISPATCH.get(fname ?? "");
+  if (taHandler) {
+    const result = taHandler(node, env, site);
+    if (result !== undefined) return result;
   }
-  if (fname === "ta.ema" || fname === "ema") {
-    return env.ta.ema(site, srcArg(node, env), lenArg(node, env, 1));
+  // O(1) dispatch for single-arg math.* builtins.
+  const mathHandler = MATH_DISPATCH.get(fname ?? "");
+  if (mathHandler) {
+    const result = mathHandler(node, env);
+    if (result !== undefined) return result;
   }
-  if (fname === "ta.rsi" || fname === "rsi") {
-    return env.ta.rsi(site, srcArg(node, env), lenArg(node, env, 1));
+  if (fname === "ta.kc" || fname === "kc") {
+    return evalKc(node, env, site);
   }
-  if (fname === "ta.rma" || fname === "rma") {
-    return env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1));
+  if (fname === "ta.supertrend" || fname === "supertrend") {
+    return evalSupertrend(node, env, site);
   }
   if (fname === "ta.atr" || fname === "atr") {
     // Python 1-arg period-only form gates the length on _is_period_like
@@ -2353,15 +2523,6 @@ function evalCall(node: Call, env: Env): Value {
       num(env.ctx.close),
       period,
     );
-  }
-  if (fname === "ta.kc" || fname === "kc") {
-    return evalKc(node, env, site);
-  }
-  if (fname === "ta.supertrend" || fname === "supertrend") {
-    return evalSupertrend(node, env, site);
-  }
-  if (fname === "ta.tr" || fname === "tr") {
-    return evalTr(node, env, site);
   }
   const extraTa = evalExtraTa(fname, node, env, site);
   if (extraTa !== undefined) return extraTa;
@@ -2871,9 +3032,15 @@ function taTr(
 ): Cell {
   const fn = (env.ta as TaEngine & { tr?: TaEngine["tr"] }).tr;
   if (typeof fn === "function") return fn.call(env.ta, site, high, low, close);
-  return env.ta.atr(site, high, low, close, 1) == null && env.barIndex === 0
-    ? NA
-    : NA;
+  // Fallback: TR on bar 0 is high-low; otherwise na (no prev close).
+  if (env.barIndex === 0) {
+    const h = num(env.ctx.high);
+    const l = num(env.ctx.low);
+    if (h == null || l == null || !Number.isFinite(h) || !Number.isFinite(l))
+      return null;
+    return h - l;
+  }
+  return NA;
 }
 
 function num(v: Value | undefined): Cell {
@@ -3106,6 +3273,34 @@ function emptyCompileResult(
   };
 }
 
+/** Reusable column buffers to avoid re-allocating 6 arrays on every `run()`. */
+const columnBufferPool = new Map<number, ColumnBuffers>();
+
+interface ColumnBuffers {
+  open: Array<number | null>;
+  high: Array<number | null>;
+  low: Array<number | null>;
+  close: Array<number | null>;
+  volume: Array<number | null>;
+  time: Array<number | null>;
+}
+
+function getColumnBuffers(n: number): ColumnBuffers {
+  let buf = columnBufferPool.get(n);
+  if (!buf) {
+    buf = {
+      open: new Array(n),
+      high: new Array(n),
+      low: new Array(n),
+      close: new Array(n),
+      volume: new Array(n),
+      time: new Array(n),
+    };
+    columnBufferPool.set(n, buf);
+  }
+  return buf;
+}
+
 function barsToColumns(ohlcv: OHLCVBar[]): {
   open: Array<number | null>;
   high: Array<number | null>;
@@ -3115,12 +3310,8 @@ function barsToColumns(ohlcv: OHLCVBar[]): {
   time: Array<number | null>;
 } {
   const n = ohlcv.length;
-  const open: Array<number | null> = new Array(n);
-  const high: Array<number | null> = new Array(n);
-  const low: Array<number | null> = new Array(n);
-  const close: Array<number | null> = new Array(n);
-  const volume: Array<number | null> = new Array(n);
-  const time: Array<number | null> = new Array(n);
+  const buf = getColumnBuffers(n);
+  const { open, high, low, close, volume, time } = buf;
   for (let i = 0; i < n; i++) {
     const b = ohlcv[i]!;
     const c = b.close ?? null;
@@ -3823,21 +4014,11 @@ function evalMathCall(
   node: Call,
   env: Env,
 ): Cell | undefined {
-  if (fname === "math.abs" || fname === "abs") {
-    return mathAbs(cellArg(node, env, 0, ["number", "x"]));
-  }
+  // Complex/conditional math builtins not in MATH_DISPATCH.
   if (fname === "math.max" || fname === "max")
     return mathMax(...allCellArgs(node, env));
   if (fname === "math.min" || fname === "min")
     return mathMin(...allCellArgs(node, env));
-  if (fname === "math.sqrt" || fname === "sqrt")
-    return mathSqrt(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.log" || fname === "log")
-    return mathLog(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.log10" || fname === "log10")
-    return mathLog10(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.exp" || fname === "exp")
-    return mathExp(cellArg(node, env, 0, ["number", "x"]));
   if (fname === "math.pow" || fname === "pow") {
     return mathPow(
       cellArg(node, env, 0, ["base", "number", "x"]),
@@ -3851,12 +4032,6 @@ function evalMathCall(
       prec == null ? undefined : unwrap(evalExpr(prec, env)),
     );
   }
-  if (fname === "math.floor" || fname === "floor")
-    return mathFloor(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.ceil" || fname === "ceil")
-    return mathCeil(cellArg(node, env, 0, ["number", "x"]));
-  if (fname === "math.sign" || fname === "sign")
-    return mathSign(cellArg(node, env, 0, ["number", "x"]));
   if (fname === "math.avg" || fname === "avg")
     return mathAvg(...allCellArgs(node, env));
   if (fname === "math.sum") {
@@ -3868,24 +4043,6 @@ function evalMathCall(
     if (arr) return arr.sum();
     return mathSum(...allCellArgs(node, env));
   }
-  if (fname === "math.sin" || fname === "sin")
-    return mathSin(cellArg(node, env, 0, ["angle", "x"]));
-  if (fname === "math.cos" || fname === "cos")
-    return mathCos(cellArg(node, env, 0, ["angle", "x"]));
-  if (fname === "math.tan" || fname === "tan")
-    return mathTan(cellArg(node, env, 0, ["angle", "x"]));
-  if (fname === "math.asin" || fname === "asin")
-    return mathAsin(cellArg(node, env, 0, ["x"]));
-  if (fname === "math.acos" || fname === "acos")
-    return mathAcos(cellArg(node, env, 0, ["x"]));
-  if (fname === "math.atan" || fname === "atan")
-    return mathAtan(cellArg(node, env, 0, ["x"]));
-  if (fname === "math.todegrees")
-    return mathToDegrees(cellArg(node, env, 0, ["radians", "x"]));
-  if (fname === "math.toradians")
-    return mathToRadians(cellArg(node, env, 0, ["degrees", "x"]));
-  if (fname === "math.isfinite")
-    return mathIsFinite(cellArg(node, env, 0, ["number", "x"]));
   if (fname === "math.random" || fname === "random") {
     const a0 = callArg(node.args, 0, ["min"]);
     const a1 = callArg(node.args, 1, ["max"]);
@@ -6157,6 +6314,7 @@ function evalArrayCall(
     const arr = new PineArray();
     for (const a of asArgs(node.args))
       arr.push(storeValue(evalExpr(a.value, env)));
+    env.pineArrayIds.add(arr);
     return arr;
   }
   if (fname === "array.lastindexof") {

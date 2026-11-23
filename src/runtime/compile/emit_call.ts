@@ -626,16 +626,12 @@ function unwrapSpecialize(node: expr): expr {
  */
 export function isArrayReturningCall(func: expr): boolean {
   const { name } = resolveCallee(func);
+  // `ta.gamma_levels` returns a PineArray that Python supports subscripting
+  // with `[]` (newest-first). `array.from`, `array.copy`, `array.concat`,
+  // `array.slice`, and `array.new*` are NOT subscriptable via `[]` in Python
+  // (only `array.get()` works), so they must NOT be in `arrayNames`.
   if (name === "ta_gamma_levels" || name === "gamma_levels") return true;
-  if (
-    name === "array_from" ||
-    name === "array_copy" ||
-    name === "array_concat" ||
-    name === "array_slice"
-  ) {
-    return true;
-  }
-  return name.startsWith("array_new");
+  return false;
 }
 
 function collectArgs(node: Call, visit: VisitFn): CallArgs {
