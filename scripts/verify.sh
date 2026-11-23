@@ -29,6 +29,7 @@ TYPECHECK_CMD='bun run typecheck'
 TEST_CMD='bun run test'
 OKF_CMD='okn --no-telemetry validate --spec 0.2 okf'
 # /oo:commands
+# oo:custom
 # No linter detected; add a `lint` script or edit LINT_CMD.
 
 # Scope format and lint to what this commit or push actually changes. The
@@ -81,6 +82,9 @@ scope_to_changed() {
 }
 FORMAT_CMD="$(scope_to_changed "$FORMAT_CMD" "$FORMAT_FILES_CMD" "$FORMAT_EXT")"
 LINT_CMD="$(scope_to_changed "$LINT_CMD" "$LINT_FILES_CMD" "$LINT_EXT")"
+# /oo:custom
+# No formatter detected; add a `format:check` script or edit FORMAT_CMD.
+# No linter detected; add a `lint` script or edit LINT_CMD.
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
   BOLD=$'\033[1m'
@@ -174,16 +178,27 @@ run_step() {
     return 0
   fi
 
-  if [ "$status" -eq 127 ] && [ "${OO_STRICT:-0}" != "1" ]; then
-    printf '  %s %s\n' "${YELLOW}${SKIP}${RESET}" "${DIM}tool not installed; skipped (set OO_STRICT=1 to fail)${RESET}"
-    SKIPPED=$((SKIPPED + 1))
-    return 0
+  if [ "$status" -eq 127 ]; then
+    if [ "$key" = "test" ]; then
+      printf '  %s %s\n' "${RED}${FAIL}${RESET}" "${DIM}test command not found (exit 127); install the runner or point TEST_CMD at it (for example .venv/bin/pytest).${RESET}"
+      FAILED=$((FAILED + 1))
+      return 0
+    fi
+    if [ "${OO_STRICT:-0}" != "1" ]; then
+      printf '  %s %s\n' "${YELLOW}${SKIP}${RESET}" "${DIM}tool not installed; skipped (set OO_STRICT=1 to fail)${RESET}"
+      SKIPPED=$((SKIPPED + 1))
+      return 0
+    fi
   fi
 
   printf '  %s %s\n' "${RED}${FAIL}${RESET}" "${DIM}$(elapsed "$start" "$end")${RESET}"
-  sed 's/^/    /' "$TMP" | head -80
-  if [ "$(wc -l <"$TMP")" -gt 80 ]; then
-    printf '    %s\n' "${DIM}... output truncated${RESET}"
+  local lines
+  lines=$(wc -l <"$TMP")
+  if [ "$lines" -gt 80 ]; then
+    printf '    %s\n' "${DIM}... $((lines - 80)) lines omitted; showing last 80${RESET}"
+    tail -n 80 "$TMP" | sed 's/^/    /'
+  else
+    sed 's/^/    /' "$TMP"
   fi
   FAILED=$((FAILED + 1))
   return 0
@@ -197,6 +212,9 @@ run_step format "Format" "$FORMAT_CMD"
 run_step lint "Lint" "$LINT_CMD"
 run_step typecheck "Typecheck" "$TYPECHECK_CMD"
 run_step okf "OKF" "$OKF_CMD"
+if [ -n "${ARTIFACT_CMD:-}" ]; then
+  run_step artifact "Artifact" "$ARTIFACT_CMD"
+fi
 
 if [ "$MODE" = "all" ] || [ "$MODE" = "pre-push" ]; then
   run_step test "Tests" "$TEST_CMD"
@@ -204,7 +222,7 @@ fi
 
 # A setup with no project checks looks green while proving nothing. Say so, and
 # fail under OO_STRICT so an umbrella or empty scaffold cannot pass silently.
-if [ -z "$FORMAT_CMD" ] && [ -z "$LINT_CMD" ] && [ -z "$TYPECHECK_CMD" ] && [ -z "$TEST_CMD" ]; then
+if [ -z "$FORMAT_CMD" ] && [ -z "$LINT_CMD" ] && [ -z "$TYPECHECK_CMD" ] && [ -z "$TEST_CMD" ] && [ -z "${ARTIFACT_CMD:-}" ]; then
   printf '%s %-10s %s\n' "${YELLOW}!${RESET}" "Wiring" "${DIM}no project checks detected; only OKF runs${RESET}"
   if [ "${OO_STRICT:-0}" = "1" ]; then
     FAILED=$((FAILED + 1))
