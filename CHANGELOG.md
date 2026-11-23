@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PERFORMANCE.md` — performance guide, optimization checklist, and streaming O(n²) documentation.
+- `src/runtime/constants.ts` — shared `MATH_CONSTANTS` single source of truth for both interpret and compile backends.
+- `package.json` subpath exports: `./parse` and `./runtime` for tree-shaking.
+- `RuntimeOptions.maxBars` — maximum OHLCV bars per `run()` call (default 100,000) to prevent memory-exhaustion DoS.
+- `RuntimeOptions.whileCap` / `forCap` — configurable loop safety caps.
+- `PineSeries({ maxSize })` — optional FIFO eviction to bound memory on long historical runs.
+- `request.security` per-bar `SecurityCache` to avoid recomputing identical requests every bar.
+
+### Changed
+
+- All TA window functions (`sma`, `stdev`, `sum`, `highest`, `lowest`, `wma`, `vwma`, `cci`, `linreg`, `highestbars`, `lowestbars`, `alma`, `cmo`, `swma`, `cog`, `median`, `mode`, `percentrank`, `percentile*`, `bbPct`, `kama`, `mfi`, `stochRsi`, `fractal`, `zigzag`, `cumulativeDelta`, `volumeMomentum`, `smaWeighted`, `skewness`, `kurtosis`, `volumeWeightedMomentum`, `marketCondition`, `orderFlowImbalance`, `liquidityScore`, `momentumFilter`, `rsiDivergence`, `correlation`, `pairWindow`, `rci`, `dpo`, `kst`, `aroon`, `volumeThrust`) replaced `Array.shift()` + `push()` with an O(1) `RingBuffer`.
+- `TaEngine.snapshot`/`restore` now only snapshot/restore dirty call sites instead of all ~80 Maps every realtime tick.
+- `evalCall` uses O(1) `Map` dispatch for high-frequency `ta.*` and single-arg `math.*` builtins instead of an O(n) if-else chain.
+- `beginBar()` sanitizes non-finite/undefined OHLCV to `na`.
+- `barsToColumns()` reuses column buffers from a size-keyed pool instead of allocating 6 arrays per `run()`.
+- `MATH_CONSTANTS` deduplicated into `src/runtime/constants.ts` (was duplicated in interpret.ts and emit.ts).
+
+### Fixed
+
+- `ta.tr()` fallback returned `NA` in both ternary branches; now returns `high - low` on bar 0, `NA` otherwise.
+- `PineArray` `[]` subscript: `array.from`/`array.copy`/`array.concat`/`array.slice` results now follow Python `_pine_array_ids` semantics (offset 0 returns last element, offset > 0 → na); `ta.gamma_levels` results support full newest-first indexing.
+- `cloneValue()` handles `RingBuffer` via a new `clone()` method, fixing realtime tick rollback (`st.window.push is not a function`).
+- Compile `histGet()` handles `PineArray` values stored via `hold()` (offset 0 → last element, offset > 0 → na).
+
 ## [0.10.0] - 2026-11-04
 
 Multi-tick realtime windows, reference `varip`, and list subscripts.
