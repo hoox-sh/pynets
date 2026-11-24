@@ -405,37 +405,6 @@ for (const spec of TA_SRC_LEN_SPECS) {
   TA_DISPATCH.set(`ta.${spec.name}`, handler);
   TA_DISPATCH.set(spec.name, handler);
 }
-TA_DISPATCH.set("ta.crossover", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.crossover(site, a, b);
-});
-TA_DISPATCH.set("crossover", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.crossover(site, a, b);
-});
-TA_DISPATCH.set("ta.crossunder", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.crossunder(site, a, b);
-});
-TA_DISPATCH.set("crossunder", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.crossunder(site, a, b);
-});
-TA_DISPATCH.set("ta.cross", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.cross(site, a, b);
-});
-TA_DISPATCH.set("cross", (node, env, site) => {
-  const a = srcArg(node, env);
-  const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
-  return env.ta.cross(site, a, b);
-});
-
 /**
  * Dispatch map for single-arg `math.*` builtins.
  */
@@ -4437,8 +4406,11 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       );
     case "source": {
       const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
-      if (valueArg == null)
-        return arg.default === "close" ? num(env.ctx.close) : NA;
+      if (valueArg == null) {
+        if (arg.default === "close") return num(env.ctx.close);
+        if (arg.default === "hlc3") return hlc3(env);
+        return NA;
+      }
       return unwrap(evalExpr(valueArg, env));
     }
     case "value":
@@ -4728,222 +4700,7 @@ function evalExtraTa(
       ...values,
     );
   }
-  if (fname === "ta.highest" || fname === "highest") {
-    if (typeof ta.highest !== "function") return NA;
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:222-233 via _expect_series
-      // allow_period_only): source defaults to the context high series and
-      // the length gates on _is_period_like → non-period-like → na period 0.
-      return (ta.highest as TaEngine["highest"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    return (ta.highest as TaEngine["highest"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.lowest" || fname === "lowest") {
-    if (typeof ta.lowest !== "function") return NA;
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:235-246): source defaults to
-      // the context low series; length gated like ta.highest.
-      return (ta.lowest as TaEngine["lowest"]).call(
-        env.ta,
-        site,
-        num(env.ctx.low),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    return (ta.lowest as TaEngine["lowest"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
 
-  if (fname === "ta.crossover" || fname === "crossover") {
-    if (typeof ta.crossover !== "function") return NA;
-    return (ta.crossover as TaEngine["crossover"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
-    );
-  }
-  if (fname === "ta.crossunder" || fname === "crossunder") {
-    if (typeof ta.crossunder !== "function") return NA;
-    return (ta.crossunder as TaEngine["crossunder"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
-    );
-  }
-  if (fname === "ta.macd" || fname === "macd") {
-    if (typeof ta.macd !== "function") return NA;
-    const r = (ta.macd as TaEngine["macd"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["fastlen", "fastLength", "fast"], 12),
-      lenOrDefault(node, env, 2, ["slowlen", "slowLength", "slow"], 26),
-      lenOrDefault(node, env, 3, ["signal", "signalLength", "siglen"], 9),
-    );
-    return tupleOf([r.macd, r.signal, r.hist]);
-  }
-  if (fname === "ta.bb" || fname === "bb") {
-    if (typeof ta.bb !== "function") return NA;
-    if (
-      positionalCount(node) === 2 &&
-      !hasKwarg(node, ["source", "series"]) &&
-      periodLikeArg(node, env, 0, ["source", "series", "length"]) != null
-    ) {
-      // Python period-first form (basic.py:394-401): (length, mult) with the
-      // series defaulting to the context close. Dispatch gates slot 0 on
-      // _is_period_like, so a series first slot stays on the 3-arg form.
-      const length = periodLikeArg(node, env, 0, [
-        "source",
-        "series",
-        "length",
-      ])!;
-      const multRaw = unwrap(
-        evalExpr(callArg(node.args, 1, ["mult", "multiplier"]), env),
-      );
-      const mult =
-        typeof multRaw === "number" && Number.isFinite(multRaw)
-          ? multRaw
-          : Number.NaN;
-      const r = (ta.bb as TaEngine["bb"]).call(
-        env.ta,
-        site,
-        num(env.ctx.close),
-        length,
-        mult,
-      );
-      return tupleOf([r.mid, r.up, r.lo]);
-    }
-    const r = (ta.bb as TaEngine["bb"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["mult", "multiplier"], 2),
-    );
-    return tupleOf([r.mid, r.up, r.lo]);
-  }
-
-  if (fname === "ta.roc" || fname === "roc") {
-    if (typeof ta.roc !== "function") return NA;
-    return (ta.roc as TaEngine["roc"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-  if (fname === "ta.mom" || fname === "mom") {
-    if (typeof ta.mom !== "function") return NA;
-    return (ta.mom as TaEngine["mom"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-
-  if (fname === "ta.vwap" || fname === "vwap") {
-    if (typeof ta.vwap !== "function") return NA;
-    const src = callArg(node.args, 0, ["source", "series"]);
-    const source = src != null ? unwrap(evalExpr(src, env)) : hlc3(env);
-    return (ta.vwap as TaEngine["vwap"]).call(
-      env.ta,
-      site,
-      source,
-      num(env.ctx.volume),
-    );
-  }
-  if (fname === "ta.rising" || fname === "rising") {
-    if (typeof ta.rising !== "function") return NA;
-    return (ta.rising as TaEngine["rising"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-  if (fname === "ta.falling" || fname === "falling") {
-    if (typeof ta.falling !== "function") return NA;
-    return (ta.falling as TaEngine["falling"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-  if (fname === "ta.cross" || fname === "cross") {
-    if (typeof ta.cross !== "function") return NA;
-    return (ta.cross as TaEngine["cross"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
-    );
-  }
-
-  if (fname === "ta.alma" || fname === "alma") {
-    if (typeof ta.alma !== "function") return NA;
-    return (ta.alma as TaEngine["alma"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["offset"], 0.85),
-      lenOrDefault(node, env, 3, ["sigma"], 6),
-    );
-  }
-
-  if (fname === "ta.kama" || fname === "kama") {
-    if (typeof ta.kama !== "function") return NA;
-    return (ta.kama as TaEngine["kama"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["fastLength", "fast", "fastlen"], 2),
-      lenOrDefault(node, env, 3, ["slowLength", "slow", "slowlen"], 30),
-    );
-  }
-
-  if (fname === "ta.sar" || fname === "sar") {
-    if (typeof ta.sar !== "function") return NA;
-    return (ta.sar as TaEngine["sar"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenOrDefault(node, env, 0, ["start"], 0.02),
-      lenOrDefault(node, env, 1, ["increment"], 0.02),
-      lenOrDefault(node, env, 2, ["maximum", "max"], 0.2),
-    );
-  }
-
-  if (fname === "ta.correlation" || fname === "correlation") {
-    if (typeof ta.correlation !== "function") return NA;
-    return (ta.correlation as TaEngine["correlation"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
-      lenArg(node, env, 2),
-    );
-  }
   if (fname === "ta.swma" || fname === "swma") {
     if (typeof ta.swma !== "function") return NA;
     const len = callArg(node.args, 1, ["length"]);
@@ -4995,31 +4752,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.rci" || fname === "rci") {
-    return env.ta.rci(site, srcArg(node, env), lenArg(node, env, 1));
-  }
-
-  if (fname === "ta.atr_stop" || fname === "atr_stop") {
-    const atr = unwrap(
-      evalExpr(callArg(node.args, 0, ["atr", "atr_value"]), env),
-    );
-    const multRaw = unwrap(
-      evalExpr(callArg(node.args, 1, ["multiplier", "mult"]), env),
-    );
-    const mult = multRaw == null || !Number.isFinite(multRaw) ? 2 : multRaw;
-    return env.ta.atrStop(num(env.ctx.close), atr, mult);
-  }
-  if (fname === "ta.zigzag" || fname === "zigzag") {
-    const thRaw = unwrap(
-      evalExpr(
-        callArg(node.args, 1, ["threshold", "percent", "deviation"]),
-        env,
-      ),
-    );
-    const th = thRaw == null || !Number.isFinite(thRaw) ? 5 : thRaw;
-    const z = env.ta.zigzag(site, srcArg(node, env), th);
-    return tupleOf([z.high, z.low, z.dir]);
-  }
   // wave10a-start
   const wave10aArg = (
     index: number,

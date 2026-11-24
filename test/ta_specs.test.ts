@@ -103,10 +103,19 @@ describe("TA source/length specs", () => {
   });
 
   test("fixed-arity context descriptors match omitted and explicit args", () => {
+    // rci requires a positive length, so its omitted form errors by design.
+    const onlyExplicit = new Set(["rci"]);
     for (const spec of TA_CONTEXT_CALL_SPECS) {
-      const numbers = spec.args.filter((arg) => arg.kind === "number").length;
-      const explicit = Array.from({ length: numbers }, () => "3").join(", ");
-      for (const args of ["", explicit]) {
+      const numbers = spec.args.filter((arg) => arg.kind === "number");
+      const maxIndex = numbers.reduce(
+        (max, arg) => Math.max(max, arg.callIndex),
+        -1,
+      );
+      const explicit = Array.from({ length: maxIndex + 1 }, (_, i) =>
+        numbers.some((arg) => arg.callIndex === i) ? "3" : "close",
+      ).join(", ");
+      const forms = onlyExplicit.has(spec.name) ? [explicit] : ["", explicit];
+      for (const args of forms) {
         const src = `indicator("t")\nplot(ta.${spec.name}(${args}), "v")`;
         const compiled = new Runtime("TEST", { mode: "compile" }).run(
           src,
@@ -239,6 +248,34 @@ describe("TA source/length specs", () => {
       "ta.klinger(high, low, close, volume, 2, 3)",
       "ta.klinger(high, low, close, volume)",
       "ta.klinger(high, low, close, volume, 2.5, 3)",
+      "ta.highest(3)",
+      "ta.highest()",
+      "ta.highest(7.5)",
+      "ta.highest(close, 3)",
+      "ta.highest(source=close, length=3)",
+      "ta.lowest(3)",
+      "ta.lowest()",
+      "ta.lowest(7.5)",
+      "ta.lowest(close, 3)",
+      "ta.vwap()",
+      "ta.vwap(close)",
+      "ta.alma(3)",
+      "ta.alma(close)",
+      "ta.alma(close, 3)",
+      "ta.kama(3)",
+      "ta.kama(close, 3)",
+      "ta.sar()",
+      "ta.sar(0.02, 0.02, 0.2)",
+      "ta.correlation()",
+      "ta.correlation(close, open)",
+      "ta.correlation(close, open, 3)",
+      "ta.rci(close, 3)",
+      "ta.atr_stop(1)",
+      "ta.atr_stop(close, 2)",
+      "ta.crossover(close, open)",
+      "ta.crossover(close)",
+      "ta.crossunder(close, open)",
+      "ta.cross(close, open)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
@@ -284,6 +321,27 @@ describe("TA source/length specs", () => {
     ];
     for (const call of tupleCalls) {
       const src = `indicator("t")\n[d,u] = ${call}\nplot(d)\nplot(u)`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(Object.values(compiled.series), call).toEqual(
+        Object.values(interpreted.series),
+      );
+    }
+  });
+
+  test("tuple context descriptors match across backends", () => {
+    const calls = [
+      "ta.macd(close, 3, 5, 2)",
+      "ta.macd(3, 5, 2)",
+      "ta.macd()",
+      "ta.zigzag(close, 3)",
+      "ta.zigzag(close)",
+      "ta.zigzag()",
+    ];
+    for (const call of calls) {
+      const src = `indicator("t")\n[a,b,c] = ${call}\nplot(a)\nplot(b)\nplot(c)`;
       const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
       const interpreted = new Runtime("TEST").run(src, BARS);
       expect(compiled.error, `${call} compile`).toBeUndefined();

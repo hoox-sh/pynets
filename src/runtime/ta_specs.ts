@@ -361,7 +361,7 @@ export type TaCallArgSpec =
       readonly kind: "source";
       readonly names: readonly string[];
       readonly callIndex: number;
-      readonly default: "na" | "close";
+      readonly default: "na" | "close" | "hlc3";
     }
   | {
       readonly kind: "value";
@@ -424,7 +424,7 @@ const cond = (
 const source = (
   callIndex: number,
   names: readonly string[] = ["source", "series"],
-  def: "na" | "close" = "na",
+  def: "na" | "close" | "hlc3" = "na",
 ): TaCallArgSpec => ({ kind: "source", names, callIndex, default: def });
 const v = (callIndex: number, names: readonly string[]): TaCallArgSpec => ({
   kind: "value",
@@ -509,6 +509,89 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
     tupleFields: ["plus", "minus", "adx"],
   },
   { name: "fractal", method: "fractal", args: [c("high"), c("low"), n(0)] },
+  {
+    name: "macd",
+    method: "macd",
+    args: [
+      source(0),
+      n(1, ["fastlen", "fastLength", "fast"], 12),
+      n(2, ["slowlen", "slowLength", "slow"], 26),
+      n(3, ["signal", "signalLength", "siglen"], 9),
+    ],
+    tupleFields: ["macd", "signal", "hist"],
+  },
+  {
+    name: "vwap",
+    method: "vwap",
+    args: [source(0, ["source", "series", "src"], "hlc3"), c("volume")],
+  },
+  {
+    name: "alma",
+    method: "alma",
+    args: [
+      source(0),
+      n(1, ["length"], 0),
+      n(2, ["offset"], 0.85),
+      n(3, ["sigma"], 6),
+    ],
+  },
+  {
+    name: "kama",
+    method: "kama",
+    args: [
+      source(0),
+      n(1, ["length"], 0),
+      n(2, ["fastLength", "fast", "fastlen"], 2),
+      n(3, ["slowLength", "slow", "slowlen"], 30),
+    ],
+  },
+  {
+    name: "sar",
+    method: "sar",
+    args: [
+      c("high"),
+      c("low"),
+      n(0, ["start"], 0.02),
+      n(1, ["increment"], 0.02),
+      n(2, ["maximum", "max"], 0.2),
+    ],
+  },
+  {
+    name: "correlation",
+    method: "correlation",
+    args: [source(0), v(1, ["source2", "b", "series2"]), n(2, ["length"], 0)],
+  },
+  { name: "rci", method: "rci", args: [source(0), n(1, ["length"], 0)] },
+  {
+    name: "atr_stop",
+    method: "atrStop",
+    args: [
+      c("close"),
+      v(0, ["atr", "atr_value"]),
+      n(1, ["multiplier", "mult"], 2),
+    ],
+  },
+  {
+    name: "zigzag",
+    method: "zigzag",
+    args: [source(0), n(1, ["threshold", "percent", "deviation"], 5)],
+    tupleFields: ["high", "low", "dir"],
+  },
+  {
+    name: "crossover",
+    method: "crossover",
+    args: [source(0), v(1, ["source2", "b", "series2"])],
+  },
+  {
+    name: "crossunder",
+    method: "crossunder",
+    args: [source(0), v(1, ["source2", "b", "series2"])],
+  },
+  {
+    name: "cross",
+    method: "cross",
+    args: [source(0), v(1, ["source2", "b", "series2"])],
+  },
 ];
 
 export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
@@ -576,7 +659,20 @@ const OHLC_LENGTH_VARIANTS: readonly TaOverloadVariant[] = [
   },
 ];
 
+const HIGH_LOW_VARIANTS = (
+  context: TaContextArg,
+): readonly TaOverloadVariant[] => [
+  {
+    maxPositional: 1,
+    forbidsKwarg: ["source", "series"],
+    args: [c(context), n(0, ["length"], 0, true)],
+  },
+  { args: [source(0), n(1, ["length"], 0)] },
+];
+
 export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
+  { name: "highest", method: "highest", variants: HIGH_LOW_VARIANTS("high") },
+  { name: "lowest", method: "lowest", variants: HIGH_LOW_VARIANTS("low") },
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },

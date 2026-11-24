@@ -544,7 +544,11 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
         args,
         arg.callIndex,
         [...arg.names],
-        arg.default === "close" ? CLOSE : "null",
+        arg.default === "close"
+          ? CLOSE
+          : arg.default === "hlc3"
+            ? HLC3
+            : "null",
       );
     case "value":
       return pick(args, arg.callIndex, [...arg.names], "null");
@@ -1997,22 +2001,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     const sf = taCall(runtimePairGate.method, site, seriesParts("__s"));
     return `((__l, __r, __s) => (Number.isInteger(__l) && Number.isInteger(__r) ? ${pf} : ${sf}))(${first}, ${second}, ${sourceExpr})`;
   }
-  if (method === "highest" || method === "lowest") {
-    const defSrc = method === "lowest" ? LOW : HIGH;
-    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:222-246): source defaults to
-      // the context high/low series and the length gates on _is_period_like
-      // → non-period-like → na period 0 (interpret evalExtraTa).
-      return taCall(method, site, [
-        defSrc,
-        periodGate(pick(args, 0, ["length"], "null"), "0"),
-      ]);
-    }
-    return taCall(method, site, [
-      src(),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
 
   if (method === "max" || method === "min") {
     const defSrc = method === "min" ? LOW : HIGH;
@@ -2034,20 +2022,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     }
     return taCall("tr", site, [HIGH, LOW, CLOSE]);
   }
-  if (method === "cross" || method === "crossover" || method === "crossunder") {
-    const a = pick(args, 0, ["source", "series", "a"], CLOSE);
-    const b = pick(args, 1, ["source2", "b", "series2"], "0");
-    return taCall(method, site, [a, b]);
-  }
-  if (method === "macd") {
-    const call = taCall("macd", site, [
-      src(),
-      pick(args, 1, ["fastlen", "fastLength", "fast"], "12"),
-      pick(args, 2, ["slowlen", "slowLength", "slow"], "26"),
-      pick(args, 3, ["signal", "signalLength", "siglen"], "9"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.macd, __r.signal, __r.hist]; })()`;
-  }
 
   if (method === "supertrend") {
     const call = taCall("supertrend", site, [
@@ -2059,22 +2033,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
     return `(() => { const __r = ${call}; return [__r.st, __r.dir]; })()`;
   }
-  if (method === "alma") {
-    return taCall("alma", site, [
-      src(),
-      len(1, "9"),
-      pick(args, 2, ["offset"], "0.85"),
-      pick(args, 3, ["sigma"], "6"),
-    ]);
-  }
-  if (method === "kama") {
-    return taCall("kama", site, [
-      src(),
-      len(1, "14"),
-      pick(args, 2, ["fastLength", "fast", "fastlen"], "2"),
-      pick(args, 3, ["slowLength", "slow", "slowlen"], "30"),
-    ]);
-  }
 
   if (method === "swma") {
     if (hasArg(args, 1, ["length", "period"])) {
@@ -2083,52 +2041,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return taCall("swma", site, [src()]);
   }
 
-  if (method === "vwap") {
-    return taCall("vwap", site, [
-      pick(args, 0, ["source", "series", "src"], HLC3),
-      pick(args, 1, ["volume"], VOL),
-    ]);
-  }
-  if (method === "sar") {
-    return taCall("sar", site, [
-      HIGH,
-      LOW,
-      pick(args, 0, ["start"], "0.02"),
-      pick(args, 1, ["increment"], "0.02"),
-      pick(args, 2, ["maximum", "max"], "0.2"),
-    ]);
-  }
-
-  if (method === "correlation") {
-    return taCall("correlation", site, [
-      pick(args, 0, ["source1", "source", "a"], CLOSE),
-      pick(args, 1, ["source2", "b"], CLOSE),
-      len(2, "14"),
-    ]);
-  }
-
-  if (method === "rci") {
-    // srcArg: missing source is na, not close.
-    return taCall("rci", site, [
-      pick(args, 0, ["source", "series"], "null"),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
-
-  if (method === "atr_stop") {
-    // Kernel has no call-site; missing multiplier → 2 (interpret numArg).
-    return `__h.ta.atrStop(${CLOSE}, ${pick(args, 0, ["atr", "atr_value"], "null")}, ${finiteOr(pick(args, 1, ["multiplier", "mult"], "null"), "2")})`;
-  }
-  if (method === "zigzag") {
-    const call = taCall("zigzag", site, [
-      pick(args, 0, ["source", "series"], "null"),
-      finiteOr(
-        pick(args, 1, ["threshold", "percent", "deviation"], "null"),
-        "5",
-      ),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.high, __r.low, __r.dir]; })()`;
-  }
   if (method === "hammer") {
     return `__h.ta.hammer(${cellOf(pick(args, 0, ["open"], "null"))}, ${cellOf(pick(args, 1, ["high"], "null"))}, ${cellOf(pick(args, 2, ["low"], "null"))}, ${cellOf(pick(args, 3, ["close"], "null"))})`;
   }
