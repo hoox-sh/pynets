@@ -209,6 +209,7 @@ import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
 import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
 import {
+  TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   TA_SRC_LEN_SPECS,
@@ -4513,6 +4514,37 @@ function evalExtraTa(
       ...values,
     );
   }
+  const lenExtra = TA_LEN_EXTRA_BY_NAME.get(base);
+  if (lenExtra != null) {
+    const fn = (ta as Record<string, unknown>)[lenExtra.method];
+    if (typeof fn !== "function") return NA;
+    const values: Cell[] = [];
+    for (const ctx of lenExtra.contextArgs) values.push(num(env.ctx[ctx]));
+    if (lenExtra.hasSourceArg) values.push(srcArg(node, env));
+    values.push(
+      lenOrDefault(
+        node,
+        env,
+        lenExtra.lengthIndex,
+        ["length"],
+        lenExtra.interpretDefaultLength,
+      ),
+    );
+    values.push(
+      lenOrDefault(
+        node,
+        env,
+        lenExtra.extraIndex,
+        [...lenExtra.extraNames],
+        lenExtra.interpretDefaultExtra,
+      ),
+    );
+    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
+    );
+  }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -4786,16 +4818,7 @@ function evalExtraTa(
       lenArg(node, env, 3),
     );
   }
-  if (fname === "ta.linreg" || fname === "linreg") {
-    if (typeof ta.linreg !== "function") return NA;
-    return (ta.linreg as TaEngine["linreg"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["offset"], 0),
-    );
-  }
+
   if (fname === "ta.vwap" || fname === "vwap") {
     if (typeof ta.vwap !== "function") return NA;
     const src = callArg(node.args, 0, ["source", "series"]);
@@ -4832,16 +4855,6 @@ function evalExtraTa(
       site,
       srcArg(node, env),
       unwrap(evalExpr(callArg(node.args, 1, ["source2", "b", "series2"]), env)),
-    );
-  }
-  if (fname === "ta.bbw" || fname === "bbw") {
-    if (typeof ta.bbw !== "function") return NA;
-    return (ta.bbw as TaEngine["bbw"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["mult", "multiplier"], 2),
     );
   }
 
@@ -5117,18 +5130,6 @@ function evalExtraTa(
       lenOrDefault(node, env, 1, ["short", "short_length"], 13),
     );
   }
-  if (fname === "ta.kcw" || fname === "kcw") {
-    if (typeof ta.kcw !== "function") return NA;
-    return (ta.kcw as TaEngine["kcw"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      lenArg(node, env, 0),
-      lenOrDefault(node, env, 1, ["mult", "multiplier"], 2),
-    );
-  }
 
   if (
     fname === "ta.percentile_nearest_rank" ||
@@ -5361,14 +5362,7 @@ function evalExtraTa(
       lenArg(node, env, 1),
     );
   }
-  if (fname === "ta.bb_pct" || fname === "bb_pct") {
-    return env.ta.bbPct(
-      site,
-      num(env.ctx.close),
-      lenArg(node, env, 0),
-      numArg(node, env, 1, ["std_dev", "mult", "std"], 2),
-    );
-  }
+
   if (fname === "ta.emv" || fname === "emv") {
     return env.ta.emv(
       site,

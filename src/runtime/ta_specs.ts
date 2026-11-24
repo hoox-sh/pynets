@@ -260,3 +260,84 @@ export const TA_OHLCV_SPECS: readonly TaOhlcvSpec[] = [
 export const TA_OHLCV_BY_NAME: ReadonlyMap<string, TaOhlcvSpec> = new Map(
   TA_OHLCV_SPECS.map((spec) => [spec.name, spec]),
 );
+
+export interface TaLenExtraSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  /** Context series prepended before the source/length slots. */
+  readonly contextArgs: readonly TaContextArg[];
+  /** True when slot 0 is a source argument; false when context supplies it. */
+  readonly hasSourceArg: boolean;
+  /** Positional index of the length argument. */
+  readonly lengthIndex: number;
+  /** Positional index of the trailing extra argument (mult/offset). */
+  readonly extraIndex: number;
+  /** Accepted names for the trailing extra argument. */
+  readonly extraNames: readonly string[];
+  readonly compileDefaultLength: number;
+  readonly interpretDefaultLength: number;
+  readonly compileDefaultExtra: number;
+  readonly interpretDefaultExtra: number;
+}
+
+const MULT = ["mult", "multiplier"] as const;
+
+export const TA_LEN_EXTRA_SPECS: readonly TaLenExtraSpec[] = [
+  {
+    name: "bbw",
+    method: "bbw",
+    contextArgs: [],
+    hasSourceArg: true,
+    lengthIndex: 1,
+    extraIndex: 2,
+    extraNames: MULT,
+    compileDefaultLength: 0,
+    interpretDefaultLength: 0,
+    compileDefaultExtra: 2,
+    interpretDefaultExtra: 2,
+  },
+  {
+    name: "kcw",
+    method: "kcw",
+    contextArgs: ["high", "low", "close"],
+    hasSourceArg: false,
+    lengthIndex: 0,
+    extraIndex: 1,
+    extraNames: MULT,
+    compileDefaultLength: 0,
+    interpretDefaultLength: 0,
+    compileDefaultExtra: 2,
+    interpretDefaultExtra: 2,
+  },
+  {
+    name: "bb_pct",
+    method: "bbPct",
+    contextArgs: ["close"],
+    hasSourceArg: false,
+    lengthIndex: 0,
+    extraIndex: 1,
+    extraNames: ["std_dev", "mult", "std"],
+    compileDefaultLength: 0,
+    interpretDefaultLength: 0,
+    compileDefaultExtra: 2,
+    interpretDefaultExtra: 2,
+  },
+  {
+    name: "linreg",
+    method: "linreg",
+    contextArgs: [],
+    hasSourceArg: true,
+    lengthIndex: 1,
+    extraIndex: 2,
+    extraNames: ["offset"],
+    compileDefaultLength: 0,
+    interpretDefaultLength: 0,
+    compileDefaultExtra: 0,
+    interpretDefaultExtra: 0,
+  },
+];
+
+export const TA_LEN_EXTRA_BY_NAME: ReadonlyMap<string, TaLenExtraSpec> =
+  new Map(TA_LEN_EXTRA_SPECS.map((spec) => [spec.name, spec]));

@@ -48,6 +48,7 @@ export const TA_METHODS: ReadonlySet<string> = new Set([
   "pivotlow",
   "swma",
   "kc",
+  "kcw",
   "willr",
   "wpr",
   "vwap",

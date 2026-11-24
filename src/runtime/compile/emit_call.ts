@@ -6,7 +6,11 @@
  */
 import type { Attribute, Call, Constant, expr, Name } from "../../ast/nodes.ts";
 import { TA_BARE_ATTRS, TA_METHODS } from "../ta_names.ts";
-import { TA_OHLCV_BY_NAME, TA_SRC_LEN_BY_NAME } from "../ta_specs.ts";
+import {
+  TA_LEN_EXTRA_BY_NAME,
+  TA_OHLCV_BY_NAME,
+  TA_SRC_LEN_BY_NAME,
+} from "../ta_specs.ts";
 import { emitUserFuncCall } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
 
@@ -17,6 +21,7 @@ const LOW = "low_arr[__bar_idx]";
 const CLOSE = "close_arr[__bar_idx]";
 const VOL = "vol_arr[__bar_idx]";
 const OPEN = "open_arr[__bar_idx]";
+const CTX_EXPR = { high: HIGH, low: LOW, close: CLOSE, volume: VOL } as const;
 // Interpret's bare `ta.vwap` sources hlc3 = (h+l+c)/3, falling back to close
 // when any component is na — mirror that exactly on the compile side.
 const HLC3 =
@@ -1783,14 +1788,31 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   const ohlcv = TA_OHLCV_BY_NAME.get(method);
   if (ohlcv != null) {
-    const ctxExpr = { high: HIGH, low: LOW, close: CLOSE, volume: VOL };
     return taCall(
       ohlcv.method,
       site,
       ohlcv.args.map((arg, i) =>
-        pick(args, i, [...arg.names], ctxExpr[arg.context]),
+        pick(args, i, [...arg.names], CTX_EXPR[arg.context]),
       ),
     );
+  }
+  const lenExtra = TA_LEN_EXTRA_BY_NAME.get(method);
+  if (lenExtra != null) {
+    const parts: string[] = [];
+    for (const ctx of lenExtra.contextArgs) parts.push(CTX_EXPR[ctx]);
+    if (lenExtra.hasSourceArg) parts.push(src());
+    parts.push(
+      len(lenExtra.lengthIndex, String(lenExtra.compileDefaultLength)),
+    );
+    parts.push(
+      pick(
+        args,
+        lenExtra.extraIndex,
+        [...lenExtra.extraNames],
+        String(lenExtra.compileDefaultExtra),
+      ),
+    );
+    return taCall(lenExtra.method, site, parts);
   }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
@@ -1895,13 +1917,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2"),
     ]);
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
-  }
-  if (method === "bbw") {
-    return taCall("bbw", site, [
-      src(),
-      len(1, "20"),
-      pick(args, 2, ["mult", "multiplier"], "2"),
-    ]);
   }
   if (method === "kc") {
     const call = taCall("kc", site, [
@@ -2045,13 +2060,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       len(1, "14"),
       pick(args, 2, ["fastLength", "fast", "fastlen"], "2"),
       pick(args, 3, ["slowLength", "slow", "slowlen"], "30"),
-    ]);
-  }
-  if (method === "linreg") {
-    return taCall("linreg", site, [
-      src(),
-      len(1, "14"),
-      pick(args, 2, ["offset"], "0"),
     ]);
   }
   if (method === "barssince") {
@@ -2281,13 +2289,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       LOW,
       finiteOr(pick(args, 0, ["length"], "null"), "0"),
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "bb_pct") {
-    return taCall("bbPct", site, [
-      CLOSE,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-      finiteOr(pick(args, 1, ["std_dev", "mult", "std"], "null"), "2"),
     ]);
   }
   if (method === "emv") {

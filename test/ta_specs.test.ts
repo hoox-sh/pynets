@@ -8,7 +8,11 @@
 import { describe, expect, test } from "bun:test";
 import { Runtime, TaEngine } from "../src/index.ts";
 import { TA_METHODS } from "../src/runtime/ta_names.ts";
-import { TA_OHLCV_SPECS, TA_SRC_LEN_SPECS } from "../src/runtime/ta_specs.ts";
+import {
+  TA_LEN_EXTRA_SPECS,
+  TA_OHLCV_SPECS,
+  TA_SRC_LEN_SPECS,
+} from "../src/runtime/ta_specs.ts";
 
 const BARS = Array.from({ length: 40 }, (_, i) => ({
   open: 100 + i * 0.2,
@@ -65,6 +69,28 @@ describe("TA source/length specs", () => {
         expect(compiled.error, `${spec.name} compile`).toBeUndefined();
         expect(interpreted.error, `${spec.name} interpret`).toBeUndefined();
         expect(compiled.plots, `${spec.name} ${src}`).toEqual(
+          interpreted.plots,
+        );
+      }
+    }
+  });
+
+  test("length+extra descriptors match omitted and explicit args", () => {
+    for (const spec of TA_LEN_EXTRA_SPECS) {
+      const explicit = [spec.hasSourceArg ? "close" : null, "3", "2"]
+        .filter((part) => part != null)
+        .join(", ");
+      const omitted = spec.hasSourceArg ? "close" : "";
+      for (const args of [omitted, explicit]) {
+        const src = `indicator("t")\nplot(ta.${spec.name}(${args}), "v")`;
+        const compiled = new Runtime("TEST", { mode: "compile" }).run(
+          src,
+          BARS,
+        );
+        const interpreted = new Runtime("TEST").run(src, BARS);
+        expect(compiled.error, `${spec.name} compile`).toBeUndefined();
+        expect(interpreted.error, `${spec.name} interpret`).toBeUndefined();
+        expect(compiled.plots, `${spec.name} ${args}`).toEqual(
           interpreted.plots,
         );
       }
