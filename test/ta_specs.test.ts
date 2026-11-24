@@ -211,6 +211,11 @@ describe("TA source/length specs", () => {
       "ta.dmi()",
       "ta.dmi(3)",
       "ta.dmi(diLength=3, adxSmoothing=4)",
+      "ta.kc(close, 3, 2)",
+      "ta.kc(close)",
+      "ta.kc(close, 7.5, 2)",
+      "ta.kc(high + 1, low + 1, close + 1, 3, 2)",
+      "ta.kc(high + 1, low + 1, close + 1, 3)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

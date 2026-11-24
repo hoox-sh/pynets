@@ -552,6 +552,8 @@ export interface TaOverloadSpec {
   readonly method: string;
   /** Ordered variants; the first matching one wins. */
   readonly variants: readonly TaOverloadVariant[];
+  /** Record fields to expose as a Pine tuple (e.g. kc). */
+  readonly tupleFields?: readonly string[];
 }
 
 const WILLR_VARIANTS: readonly TaOverloadVariant[] = [
@@ -578,6 +580,32 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "kc",
+    method: "kc",
+    tupleFields: ["mid", "up", "lo"],
+    variants: [
+      {
+        minPositional: 4,
+        args: [
+          v(0, ["high"]),
+          v(1, ["low"]),
+          v(2, ["close"]),
+          n(3, ["length"], 0),
+          n(4, ["mult", "multiplier"], 1),
+        ],
+      },
+      {
+        args: [
+          c("high"),
+          c("low"),
+          source(0),
+          n(1, ["length"], 0, true),
+          n(2, ["mult", "multiplier"], 1),
+        ],
+      },
+    ],
+  },
   {
     name: "vwma",
     method: "vwma",

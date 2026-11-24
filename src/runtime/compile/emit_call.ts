@@ -1892,11 +1892,16 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
         (v.forbidsKwarg == null || !hasAnyKw(args, [...v.forbidsKwarg])),
     );
     if (variant != null) {
-      return taCall(
+      const call = taCall(
         overload.method,
         site,
         variant.args.map((arg) => emitSpecArg(arg, args)),
       );
+      if (overload.tupleFields != null) {
+        const fields = overload.tupleFields.map((field) => `__r.${field}`);
+        return `(() => { const __r = ${call}; return [${fields.join(", ")}]; })()`;
+      }
+      return call;
     }
   }
   if (method === "highest" || method === "lowest") {
@@ -1975,16 +1980,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       src(),
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
       finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
-  }
-  if (method === "kc") {
-    const call = taCall("kc", site, [
-      HIGH,
-      LOW,
-      src(),
-      len(1, "20"),
-      pick(args, 2, ["mult", "multiplier"], "1"),
     ]);
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }

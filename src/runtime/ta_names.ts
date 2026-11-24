@@ -195,6 +195,7 @@ export const TA_BARE_ATTRS: ReadonlySet<string> = new Set([
 const EXTRA_TA_BASE = [
   "accdist",
   "atr",
+  "kc",
   "acceleration_factor",
   "ad",
   "advanced_breakout_detector",

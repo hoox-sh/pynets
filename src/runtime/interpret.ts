@@ -2840,9 +2840,6 @@ function evalCall(node: Call, env: Env): Value {
     const result = mathHandler(node, env);
     if (result !== undefined) return result;
   }
-  if (fname === "ta.kc" || fname === "kc") {
-    return evalKc(node, env, site);
-  }
   if (fname === "ta.supertrend" || fname === "supertrend") {
     return evalSupertrend(node, env, site);
   }
@@ -3246,28 +3243,6 @@ function evalCall(node: Call, env: Env): Value {
   return NA;
 }
 
-function evalKc(node: Call, env: Env, site: string): Value {
-  const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-  let high = num(env.ctx.high);
-  let low = num(env.ctx.low);
-  let close = srcArg(node, env);
-  // Python 3-arg reference form dispatches on _is_period_like(args[1])
-  // (volatility.py ~250 / basic.py ~451): a non-period-like length is ignored
-  // → same as absent (na period 0). The legacy 4-arg form below coerces via
-  // _expect_int (fractional floors) and stays ungated.
-  let length = periodLikeArg(node, env, 1, ["length"]) ?? 0;
-  let mult = numArg(node, env, 2, ["mult", "multiplier"], 1);
-  if (positional.length >= 4) {
-    high = unwrap(evalExpr(positional[0]!.value, env));
-    low = unwrap(evalExpr(positional[1]!.value, env));
-    close = unwrap(evalExpr(positional[2]!.value, env));
-    length = lenArg(node, env, 3);
-    mult = numArg(node, env, 4, ["mult", "multiplier"], 1);
-  }
-  const kc = taKc(env, site, high, low, close, length, mult);
-  return tupleOf([kc.mid, kc.up, kc.lo]);
-}
-
 function evalSupertrend(node: Call, env: Env, site: string): Value {
   const factor = numArg(node, env, 0, ["factor"], 3);
   const period = namedOrLen(node, env, 1, ["atrPeriod", "length"], 10);
@@ -3301,25 +3276,6 @@ function evalTr(node: Call, env: Env, site: string): Cell {
     num(env.ctx.low),
     num(env.ctx.close),
   );
-}
-
-function taKc(
-  env: Env,
-  site: string,
-  high: Cell,
-  low: Cell,
-  close: Cell,
-  length: number,
-  mult: number,
-): { mid: Cell; up: Cell; lo: Cell } {
-  const fn = (env.ta as TaEngine & { kc?: TaEngine["kc"] }).kc;
-  if (typeof fn === "function")
-    return fn.call(env.ta, site, high, low, close, length, mult);
-  const mid = env.ta.ema(`${site}:ema`, close, length);
-  const atrVal = env.ta.atr(`${site}:atr`, high, low, close, length);
-  if (mid == null) return { mid: null, up: null, lo: null };
-  const width = (atrVal ?? 0) * mult;
-  return { mid, up: mid + width, lo: mid - width };
 }
 
 function taSupertrend(
@@ -4634,11 +4590,18 @@ function evalExtraTa(
     );
     if (variant != null) {
       const values = variant.args.map((arg) => evalSpecArg(arg, node, env));
-      return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      const result = (fn as (site: string, ...args: Cell[]) => Cell).call(
         env.ta,
         site,
         ...values,
       );
+      if (overload.tupleFields != null) {
+        const record = result as unknown as Record<string, Cell>;
+        return tupleOf(
+          overload.tupleFields.map((field) => record[field] ?? NA),
+        );
+      }
+      return result;
     }
   }
   if (fname === "ta.highest" || fname === "highest") {
