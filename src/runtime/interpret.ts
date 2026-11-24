@@ -4417,6 +4417,11 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       return unwrap(
         evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
       );
+    case "required": {
+      const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
+      if (valueArg == null) runtimeError(arg.message);
+      return unwrap(evalExpr(valueArg, env));
+    }
     case "typicalExplicit": {
       const h = unwrap(
         evalExpr(callArg(node.args, arg.highIndex, ["high"]), env),
@@ -4528,11 +4533,14 @@ function evalExtraTa(
     const fn = (ta as Record<string, unknown>)[callSpec.method];
     if (typeof fn !== "function") return NA;
     const values = callSpec.args.map((arg) => evalSpecArg(arg, node, env));
-    const result = (fn as (site: string, ...args: Cell[]) => Cell).call(
-      env.ta,
-      site,
-      ...values,
-    );
+    const result =
+      callSpec.hasSite === false
+        ? (fn as (...args: Cell[]) => Cell).call(env.ta, ...values)
+        : (fn as (site: string, ...args: Cell[]) => Cell).call(
+            env.ta,
+            site,
+            ...values,
+          );
     if (callSpec.tupleFields != null) {
       const record = result as unknown as Record<string, Cell>;
       return tupleOf(callSpec.tupleFields.map((field) => record[field] ?? NA));
@@ -4735,15 +4743,7 @@ function evalExtraTa(
     if (arg == null) runtimeError(message);
     return arg;
   };
-  if (fname === "ta.hammer" || fname === "hammer") {
-    const msg = "ta.hammer() requires 4 arguments: open, high, low, close";
-    return env.ta.hammer(
-      unwrap(evalExpr(wave10aArg(0, ["open"], msg), env)),
-      unwrap(evalExpr(wave10aArg(1, ["high"], msg), env)),
-      unwrap(evalExpr(wave10aArg(2, ["low"], msg), env)),
-      unwrap(evalExpr(wave10aArg(3, ["close"], msg), env)),
-    );
-  }
+
   if (fname === "ta.engulfing" || fname === "engulfing") {
     const msg = "ta.engulfing() requires 4 arguments: open, high, low, close";
     const open = unwrap(evalExpr(wave10aArg(0, ["open"], msg), env));
@@ -4752,64 +4752,7 @@ function evalExtraTa(
     const close = unwrap(evalExpr(wave10aArg(3, ["close"], msg), env));
     return env.ta.engulfing(site, open, close);
   }
-  if (fname === "ta.gap_detector" || fname === "gap_detector") {
-    const msg = "ta.gap_detector() requires 3 arguments: high, low, prev_close";
-    return env.ta.gapDetector(
-      unwrap(evalExpr(wave10aArg(0, ["high"], msg), env)),
-      unwrap(evalExpr(wave10aArg(1, ["low"], msg), env)),
-      unwrap(evalExpr(wave10aArg(2, ["prev_close", "prev"], msg), env)),
-    );
-  }
-  if (fname === "ta.double_top_bottom" || fname === "double_top_bottom") {
-    const msg = "ta.double_top_bottom() requires 3 arguments";
-    const high = unwrap(evalExpr(wave10aArg(0, ["high"], msg), env));
-    const low = unwrap(evalExpr(wave10aArg(1, ["low"], msg), env));
-    return env.ta.doubleTopBottom(
-      site,
-      high,
-      low,
-      unwrap(evalExpr(wave10aArg(2, ["period", "length"], msg), env)),
-    );
-  }
-  if (fname === "ta.inside_bar_pattern" || fname === "inside_bar_pattern") {
-    const msg = "ta.inside_bar_pattern() requires 2 arguments";
-    const high = unwrap(evalExpr(wave10aArg(0, ["high"], msg), env));
-    const low = unwrap(evalExpr(wave10aArg(1, ["low"], msg), env));
-    return env.ta.insideBarPattern(site, high, low);
-  }
-  if (fname === "ta.macd_signal" || fname === "macd_signal") {
-    const msg = "ta.macd_signal() requires 2 arguments: macd_line, signal_line";
-    return env.ta.macdSignal(
-      unwrap(evalExpr(wave10aArg(0, ["macd_line", "macd"], msg), env)),
-      unwrap(evalExpr(wave10aArg(1, ["signal_line", "signal"], msg), env)),
-    );
-  }
-  if (fname === "ta.acceleration_factor" || fname === "acceleration_factor") {
-    const msg = "ta.acceleration_factor() requires 2 arguments";
-    return env.ta.accelerationFactor(
-      site,
-      unwrap(
-        evalExpr(
-          wave10aArg(0, ["momentum_list", "momentum", "source", "series"], msg),
-          env,
-        ),
-      ),
-      unwrap(evalExpr(wave10aArg(1, ["period", "length"], msg), env)),
-    );
-  }
-  if (fname === "ta.stoch_smooth" || fname === "stoch_smooth") {
-    const msg =
-      "ta.stoch_smooth() requires 6 arguments: high, low, close, period, smooth_k, smooth_d";
-    return env.ta.stochSmooth(
-      site,
-      unwrap(evalExpr(wave10aArg(0, ["high"], msg), env)),
-      unwrap(evalExpr(wave10aArg(1, ["low"], msg), env)),
-      unwrap(evalExpr(wave10aArg(2, ["close"], msg), env)),
-      unwrap(evalExpr(wave10aArg(3, ["period", "length"], msg), env)),
-      unwrap(evalExpr(wave10aArg(4, ["smooth_k", "k"], msg), env)),
-      unwrap(evalExpr(wave10aArg(5, ["smooth_d", "d"], msg), env)),
-    );
-  }
+
   // wave10a-end
   // wave10b-start
   const wave10bList = (
@@ -4941,84 +4884,7 @@ function evalExtraTa(
       weightArg == null ? "linear" : evalExpr(weightArg, env),
     );
   }
-  if (fname === "ta.apo" || fname === "apo") {
-    const msg =
-      "ta.apo() requires 3 arguments: series, fast_period, slow_period";
-    return env.ta.apo(
-      site,
-      wave11n(0, ["series", "source"], msg),
-      wave11n(1, ["fast_period", "fast"], msg),
-      wave11n(2, ["slow_period", "slow"], msg),
-    );
-  }
-  if (fname === "ta.atr_normalized" || fname === "atr_normalized") {
-    const msg =
-      "ta.atr_normalized() requires 4 arguments: high, low, close, period";
-    return env.ta.atrNormalized(
-      site,
-      wave11n(0, ["high"], msg),
-      wave11n(1, ["low"], msg),
-      wave11n(2, ["close"], msg),
-      wave11n(3, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.beta" || fname === "beta") {
-    const msg = "ta.beta() requires 3 arguments: series1, series2, length";
-    return env.ta.beta(
-      site,
-      wave11n(0, ["series1", "series", "source"], msg),
-      wave11n(1, ["series2", "series_b", "other"], msg),
-      wave11n(2, ["length", "period"], msg),
-    );
-  }
-  if (fname === "ta.r_squared" || fname === "r_squared") {
-    const msg = "ta.r_squared() requires 3 arguments: series1, series2, length";
-    return env.ta.rSquared(
-      site,
-      wave11n(0, ["series1", "series", "source"], msg),
-      wave11n(1, ["series2", "series_b", "other"], msg),
-      wave11n(2, ["length", "period"], msg),
-    );
-  }
-  if (fname === "ta.comovement" || fname === "comovement") {
-    const msg =
-      "ta.comovement() requires 3 arguments: series1, series2, length";
-    return env.ta.comovement(
-      site,
-      wave11n(0, ["series1", "series", "source"], msg),
-      wave11n(1, ["series2", "series_b", "other"], msg),
-      wave11n(2, ["length", "period"], msg),
-    );
-  }
-  if (fname === "ta.skewness" || fname === "skewness") {
-    const msg = "ta.skewness() requires 2 arguments: series, period";
-    return env.ta.skewness(
-      site,
-      wave11n(0, ["series", "source"], msg),
-      wave11n(1, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.kurtosis" || fname === "kurtosis") {
-    const msg = "ta.kurtosis() requires 2 arguments: series, period";
-    return env.ta.kurtosis(
-      site,
-      wave11n(0, ["series", "source"], msg),
-      wave11n(1, ["period", "length"], msg),
-    );
-  }
-  if (
-    fname === "ta.volume_weighted_momentum" ||
-    fname === "volume_weighted_momentum"
-  ) {
-    const msg =
-      "ta.volume_weighted_momentum() requires 3 arguments: series, volume, length";
-    return env.ta.volumeWeightedMomentum(
-      site,
-      wave11n(0, ["series", "source"], msg),
-      wave11n(1, ["volume"], msg),
-      wave11n(2, ["length", "period"], msg),
-    );
-  }
+
   if (fname === "ta.parkinson" || fname === "parkinson") {
     const msg = "ta.parkinson() requires 2 arguments: high, low";
     const highArg = wave10aArg(0, ["high"], msg);
@@ -5046,73 +4912,7 @@ function evalExtraTa(
       num(evalExpr(argsExpr[3]!, env)),
     );
   }
-  if (fname === "ta.mean_reversion_score" || fname === "mean_reversion_score") {
-    const msg = "ta.mean_reversion_score() requires 4 arguments";
-    return env.ta.meanReversionScore(
-      site,
-      wave11n(0, ["close", "source"], msg),
-      wave11n(1, ["sma"], msg),
-      wave11n(2, ["stdev", "std_dev"], msg),
-      wave11n(3, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.market_condition" || fname === "market_condition") {
-    const msg = "ta.market_condition() requires 4 arguments";
-    return env.ta.marketCondition(
-      site,
-      wave11n(0, ["close", "source"], msg),
-      wave11n(1, ["atr"], msg),
-      wave11n(2, ["sma_period", "sma_length"], msg),
-      wave11n(3, ["stdev_period", "stdev_length"], msg),
-    );
-  }
-  if (fname === "ta.order_flow_imbalance" || fname === "order_flow_imbalance") {
-    const msg = "ta.order_flow_imbalance() requires 5 arguments";
-    return env.ta.orderFlowImbalance(
-      site,
-      wave11n(0, ["high"], msg),
-      wave11n(1, ["low"], msg),
-      wave11n(2, ["close"], msg),
-      wave11n(3, ["volume"], msg),
-      wave11n(4, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.liquidity_score" || fname === "liquidity_score") {
-    const msg = "ta.liquidity_score() requires 4 arguments";
-    return env.ta.liquidityScore(
-      site,
-      wave11n(0, ["volume"], msg),
-      wave11n(1, ["volatility"], msg),
-      wave11n(2, ["spread"], msg),
-      wave11n(3, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.fear_greed_index" || fname === "fear_greed_index") {
-    const msg = "ta.fear_greed_index() requires 4 arguments";
-    return env.ta.fearGreedIndex(
-      wave11n(0, ["rsi"], msg),
-      wave11n(1, ["vix"], msg),
-      wave11n(2, ["put_call", "put_call_ratio"], msg),
-      wave11n(3, ["breadth"], msg),
-    );
-  }
-  if (fname === "ta.crowd_sentiment" || fname === "crowd_sentiment") {
-    const msg = "ta.crowd_sentiment() requires 3 arguments";
-    return env.ta.crowdSentiment(
-      wave11n(0, ["price_agreement", "price"], msg),
-      wave11n(1, ["volume_agreement", "volume"], msg),
-      wave11n(2, ["time_agreement", "time"], msg),
-    );
-  }
-  if (fname === "ta.smart_money_flow" || fname === "smart_money_flow") {
-    const msg = "ta.smart_money_flow() requires 4 arguments";
-    return env.ta.smartMoneyFlow(
-      wave11n(0, ["price_change"], msg),
-      wave11n(1, ["volume"], msg),
-      wave11n(2, ["time_since_high", "time_high"], msg),
-      wave11n(3, ["time_since_low", "time_low"], msg),
-    );
-  }
+
   if (
     fname === "ta.trend_confirmation_score" ||
     fname === "trend_confirmation_score"
@@ -5127,23 +4927,7 @@ function evalExtraTa(
       wave11n(4, ["rsi_alignment"], msg),
     );
   }
-  if (fname === "ta.max_loss_level" || fname === "max_loss_level") {
-    const msg = "ta.max_loss_level() requires 3 arguments";
-    return env.ta.maxLossLevel(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["account", "account_size"], msg),
-      wave11n(2, ["max_loss_pct", "max_loss_percent"], msg),
-    );
-  }
-  if (fname === "ta.profit_lock_level" || fname === "profit_lock_level") {
-    const msg = "ta.profit_lock_level() requires 4 arguments";
-    return env.ta.profitLockLevel(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["current", "current_price"], msg),
-      wave11n(2, ["trail_pct", "trail_percent"], msg),
-      wave11n(3, ["direction"], msg),
-    );
-  }
+
   // wave11-end
   // wave12-start — risk / sizing / timing analytics
   const wave12s = (index: number, names: string[], message: string): Value =>

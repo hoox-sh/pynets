@@ -369,6 +369,13 @@ export type TaCallArgSpec =
       readonly callIndex: number;
     }
   | {
+      readonly kind: "required";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+      /** Runtime error message when the argument is absent. */
+      readonly message: string;
+    }
+  | {
       readonly kind: "typicalExplicit";
       readonly highIndex: number;
       readonly lowIndex: number;
@@ -397,6 +404,8 @@ export interface TaContextCallSpec {
   /** `TaEngine` method (camelCase). */
   readonly method: string;
   readonly args: readonly TaCallArgSpec[];
+  /** False for stateless kernels without a call-site argument. */
+  readonly hasSite?: boolean;
   /** Record fields to expose as a Pine tuple (e.g. dmi). */
   readonly tupleFields?: readonly string[];
 }
@@ -431,6 +440,19 @@ const v = (callIndex: number, names: readonly string[]): TaCallArgSpec => ({
   names,
   callIndex,
 });
+const req = (
+  callIndex: number,
+  names: readonly string[],
+  message: string,
+): TaCallArgSpec => ({ kind: "required", names, callIndex, message });
+const requiredArgs = (
+  message: string,
+  slots: readonly {
+    readonly index: number;
+    readonly names: readonly string[];
+  }[],
+): readonly TaCallArgSpec[] =>
+  slots.map(({ index, names }) => req(index, names, message));
 const typical = (
   highIndex: number,
   lowIndex: number,
@@ -601,6 +623,268 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
     name: "cross",
     method: "cross",
     args: [source(0), v(1, ["source2", "b", "series2"])],
+  },
+  {
+    name: "apo",
+    method: "apo",
+    args: requiredArgs(
+      "ta.apo() requires 3 arguments: series, fast_period, slow_period",
+      [
+        { index: 0, names: ["series", "source"] },
+        { index: 1, names: ["fast_period", "fast"] },
+        { index: 2, names: ["slow_period", "slow"] },
+      ],
+    ),
+  },
+  {
+    name: "atr_normalized",
+    method: "atrNormalized",
+    args: requiredArgs(
+      "ta.atr_normalized() requires 4 arguments: high, low, close, period",
+      [
+        { index: 0, names: ["high"] },
+        { index: 1, names: ["low"] },
+        { index: 2, names: ["close"] },
+        { index: 3, names: ["period", "length"] },
+      ],
+    ),
+  },
+  {
+    name: "beta",
+    method: "beta",
+    args: requiredArgs(
+      "ta.beta() requires 3 arguments: series1, series2, length",
+      [
+        { index: 0, names: ["series1", "series", "source"] },
+        { index: 1, names: ["series2", "series_b", "other"] },
+        { index: 2, names: ["length", "period"] },
+      ],
+    ),
+  },
+  {
+    name: "r_squared",
+    method: "rSquared",
+    args: requiredArgs(
+      "ta.r_squared() requires 3 arguments: series1, series2, length",
+      [
+        { index: 0, names: ["series1", "series", "source"] },
+        { index: 1, names: ["series2", "series_b", "other"] },
+        { index: 2, names: ["length", "period"] },
+      ],
+    ),
+  },
+  {
+    name: "comovement",
+    method: "comovement",
+    args: requiredArgs(
+      "ta.comovement() requires 3 arguments: series1, series2, length",
+      [
+        { index: 0, names: ["series1", "series", "source"] },
+        { index: 1, names: ["series2", "series_b", "other"] },
+        { index: 2, names: ["length", "period"] },
+      ],
+    ),
+  },
+  {
+    name: "skewness",
+    method: "skewness",
+    args: requiredArgs("ta.skewness() requires 2 arguments: series, period", [
+      { index: 0, names: ["series", "source"] },
+      { index: 1, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "kurtosis",
+    method: "kurtosis",
+    args: requiredArgs("ta.kurtosis() requires 2 arguments: series, period", [
+      { index: 0, names: ["series", "source"] },
+      { index: 1, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "volume_weighted_momentum",
+    method: "volumeWeightedMomentum",
+    args: requiredArgs(
+      "ta.volume_weighted_momentum() requires 3 arguments: series, volume, length",
+      [
+        { index: 0, names: ["series", "source"] },
+        { index: 1, names: ["volume"] },
+        { index: 2, names: ["length", "period"] },
+      ],
+    ),
+  },
+  {
+    name: "mean_reversion_score",
+    method: "meanReversionScore",
+    args: requiredArgs("ta.mean_reversion_score() requires 4 arguments", [
+      { index: 0, names: ["close", "source"] },
+      { index: 1, names: ["sma"] },
+      { index: 2, names: ["stdev", "std_dev"] },
+      { index: 3, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "market_condition",
+    method: "marketCondition",
+    args: requiredArgs("ta.market_condition() requires 4 arguments", [
+      { index: 0, names: ["close", "source"] },
+      { index: 1, names: ["atr"] },
+      { index: 2, names: ["sma_period", "sma_length"] },
+      { index: 3, names: ["stdev_period", "stdev_length"] },
+    ]),
+  },
+  {
+    name: "order_flow_imbalance",
+    method: "orderFlowImbalance",
+    args: requiredArgs("ta.order_flow_imbalance() requires 5 arguments", [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+      { index: 2, names: ["close"] },
+      { index: 3, names: ["volume"] },
+      { index: 4, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "liquidity_score",
+    method: "liquidityScore",
+    args: requiredArgs("ta.liquidity_score() requires 4 arguments", [
+      { index: 0, names: ["volume"] },
+      { index: 1, names: ["volatility"] },
+      { index: 2, names: ["spread"] },
+      { index: 3, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "fear_greed_index",
+    method: "fearGreedIndex",
+    hasSite: false,
+    args: requiredArgs("ta.fear_greed_index() requires 4 arguments", [
+      { index: 0, names: ["rsi"] },
+      { index: 1, names: ["vix"] },
+      { index: 2, names: ["put_call", "put_call_ratio"] },
+      { index: 3, names: ["breadth"] },
+    ]),
+  },
+  {
+    name: "crowd_sentiment",
+    method: "crowdSentiment",
+    hasSite: false,
+    args: requiredArgs("ta.crowd_sentiment() requires 3 arguments", [
+      { index: 0, names: ["price_agreement", "price"] },
+      { index: 1, names: ["volume_agreement", "volume"] },
+      { index: 2, names: ["time_agreement", "time"] },
+    ]),
+  },
+  {
+    name: "smart_money_flow",
+    method: "smartMoneyFlow",
+    hasSite: false,
+    args: requiredArgs("ta.smart_money_flow() requires 4 arguments", [
+      { index: 0, names: ["price_change"] },
+      { index: 1, names: ["volume"] },
+      { index: 2, names: ["time_since_high", "time_high"] },
+      { index: 3, names: ["time_since_low", "time_low"] },
+    ]),
+  },
+  {
+    name: "max_loss_level",
+    method: "maxLossLevel",
+    hasSite: false,
+    args: requiredArgs("ta.max_loss_level() requires 3 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["account", "account_size"] },
+      { index: 2, names: ["max_loss_pct", "max_loss_percent"] },
+    ]),
+  },
+  {
+    name: "profit_lock_level",
+    method: "profitLockLevel",
+    hasSite: false,
+    args: requiredArgs("ta.profit_lock_level() requires 4 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["current", "current_price"] },
+      { index: 2, names: ["trail_pct", "trail_percent"] },
+      { index: 3, names: ["direction"] },
+    ]),
+  },
+  {
+    name: "hammer",
+    method: "hammer",
+    hasSite: false,
+    args: requiredArgs(
+      "ta.hammer() requires 4 arguments: open, high, low, close",
+      [
+        { index: 0, names: ["open"] },
+        { index: 1, names: ["high"] },
+        { index: 2, names: ["low"] },
+        { index: 3, names: ["close"] },
+      ],
+    ),
+  },
+  {
+    name: "gap_detector",
+    method: "gapDetector",
+    hasSite: false,
+    args: requiredArgs(
+      "ta.gap_detector() requires 3 arguments: high, low, prev_close",
+      [
+        { index: 0, names: ["high"] },
+        { index: 1, names: ["low"] },
+        { index: 2, names: ["prev_close", "prev"] },
+      ],
+    ),
+  },
+  {
+    name: "macd_signal",
+    method: "macdSignal",
+    hasSite: false,
+    args: requiredArgs(
+      "ta.macd_signal() requires 2 arguments: macd_line, signal_line",
+      [
+        { index: 0, names: ["macd_line", "macd"] },
+        { index: 1, names: ["signal_line", "signal"] },
+      ],
+    ),
+  },
+  {
+    name: "double_top_bottom",
+    method: "doubleTopBottom",
+    args: requiredArgs("ta.double_top_bottom() requires 3 arguments", [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+      { index: 2, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "inside_bar_pattern",
+    method: "insideBarPattern",
+    args: requiredArgs("ta.inside_bar_pattern() requires 2 arguments", [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+    ]),
+  },
+  {
+    name: "acceleration_factor",
+    method: "accelerationFactor",
+    args: requiredArgs("ta.acceleration_factor() requires 2 arguments", [
+      { index: 0, names: ["momentum_list", "momentum", "source", "series"] },
+      { index: 1, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "stoch_smooth",
+    method: "stochSmooth",
+    args: requiredArgs(
+      "ta.stoch_smooth() requires 6 arguments: high, low, close, period, smooth_k, smooth_d",
+      [
+        { index: 0, names: ["high"] },
+        { index: 1, names: ["low"] },
+        { index: 2, names: ["close"] },
+        { index: 3, names: ["period", "length"] },
+        { index: 4, names: ["smooth_k", "k"] },
+        { index: 5, names: ["smooth_d", "d"] },
+      ],
+    ),
   },
 ];
 

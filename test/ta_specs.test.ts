@@ -106,6 +106,8 @@ describe("TA source/length specs", () => {
     // rci requires a positive length, so its omitted form errors by design.
     const onlyExplicit = new Set(["rci"]);
     for (const spec of TA_CONTEXT_CALL_SPECS) {
+      // Required-argument kernels are covered by the explicit call list below.
+      if (spec.args.some((arg) => arg.kind === "required")) continue;
       const numbers = spec.args.filter((arg) => arg.kind === "number");
       const maxIndex = numbers.reduce(
         (max, arg) => Math.max(max, arg.callIndex),
@@ -279,6 +281,30 @@ describe("TA source/length specs", () => {
       "ta.percentile_nearest_rank(close, 3, 50)",
       "ta.percentile_nearest_rank(close, 3)",
       "ta.percentile_linear_interpolation(close, 3, 50)",
+      "ta.apo(close, 3, 5)",
+      "ta.atr_normalized(high, low, close, 3)",
+      "ta.beta(close, open, 3)",
+      "ta.r_squared(close, open, 3)",
+      "ta.comovement(close, open, 3)",
+      "ta.skewness(close, 3)",
+      "ta.kurtosis(close, 3)",
+      "ta.volume_weighted_momentum(close, volume, 3)",
+      "ta.mean_reversion_score(close, ta.sma(close, 3), ta.stdev(close, 3), 3)",
+      "ta.market_condition(close, ta.atr(3), 3, 3)",
+      "ta.order_flow_imbalance(high, low, close, volume, 3)",
+      "ta.liquidity_score(volume, close, close, 3)",
+      "ta.fear_greed_index(50, 20, 1, 50)",
+      "ta.crowd_sentiment(1, 1, 1)",
+      "ta.smart_money_flow(1, volume, 2, 3)",
+      "ta.max_loss_level(100, 1000, 2)",
+      "ta.profit_lock_level(100, 110, 2, 1)",
+      "ta.hammer(open, high, low, close)",
+      "ta.gap_detector(high, low, close)",
+      "ta.macd_signal(close, open)",
+      "ta.double_top_bottom(high, low, 3)",
+      "ta.inside_bar_pattern(high, low)",
+      "ta.acceleration_factor(close, 3)",
+      "ta.stoch_smooth(high, low, close, 3, 3, 3)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
@@ -331,6 +357,30 @@ describe("TA source/length specs", () => {
       expect(Object.values(compiled.series), call).toEqual(
         Object.values(interpreted.series),
       );
+    }
+  });
+
+  test("required-argument descriptors keep interpret errors", () => {
+    const cases: Array<[string, string]> = [
+      [
+        "ta.apo()",
+        "ta.apo() requires 3 arguments: series, fast_period, slow_period",
+      ],
+      [
+        "ta.skewness(close)",
+        "ta.skewness() requires 2 arguments: series, period",
+      ],
+      [
+        "ta.hammer(open, high, low)",
+        "ta.hammer() requires 4 arguments: open, high, low, close",
+      ],
+    ];
+    for (const [call, message] of cases) {
+      const interpreted = new Runtime("TEST").run(
+        `indicator("t")\nplot(${call}, "v")`,
+        BARS,
+      );
+      expect(interpreted.error ?? "", call).toContain(message);
     }
   });
 

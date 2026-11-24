@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1464 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1465 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -192,6 +192,8 @@ array-valued names; Python's own compile mode returns na here).
    `TaRuntimePeriodFirstSpec`. For Python's legacy positional-then-keyword
    merge with ignored names (`ao`, `aroon`), add a `TaMergedKwargSpec`. For a
    two-slot runtime period gate with series fallthrough
-   (`pivothigh`/`pivotlow`), add a `TaRuntimePairGateSpec`.
+   (`pivothigh`/`pivotlow`), add a `TaRuntimePairGateSpec`. For fixed-arity
+   analytics with required arguments, add a `TaContextCallSpec` using
+   `required` args (and `hasSite: false` for stateless kernels).
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).
