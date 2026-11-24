@@ -11,7 +11,9 @@ import {
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
+  TA_OVERLOAD_BY_NAME,
   TA_SRC_LEN_BY_NAME,
+  type TaCallArgSpec,
 } from "../ta_specs.ts";
 import { emitUserFuncCall } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
@@ -524,6 +526,32 @@ function periodGate(expr: string, fb: string): string {
  */
 function finiteOr(expr: string, fb: string): string {
   return `((__v) => (__v != null && Number.isFinite(__v) ? __v : ${fb}))(${expr})`;
+}
+
+function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
+  switch (arg.kind) {
+    case "context":
+      return CTX_EXPR[arg.context];
+    case "condition":
+      // Compile comparisons produce JS booleans; TA kernels expect a numeric
+      // cell (0/1), matching interpret's comparison result.
+      return `((${pick(args, arg.callIndex, [...arg.names], "null")}) ? 1 : 0)`;
+    case "source":
+      return pick(
+        args,
+        arg.callIndex,
+        [...arg.names],
+        arg.default === "close" ? CLOSE : "null",
+      );
+    case "value":
+      return pick(args, arg.callIndex, [...arg.names], "null");
+    case "number": {
+      const expr = pick(args, arg.callIndex, [...arg.names], "null");
+      return arg.periodLike
+        ? periodGate(expr, String(arg.default))
+        : finiteOr(expr, String(arg.default));
+    }
+  }
 }
 
 /** Interpret `unwrap`: bool → 1/0, non-finite → null. */
@@ -1818,42 +1846,32 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   const callSpec = TA_CONTEXT_CALL_BY_NAME.get(method);
   if (callSpec != null) {
-    const parts = callSpec.args.map((arg) => {
-      if (arg.kind === "context") return CTX_EXPR[arg.context];
-      if (arg.kind === "number")
-        return finiteOr(
-          pick(args, arg.callIndex, [...arg.names], "null"),
-          String(arg.default),
-        );
-      return "null";
-    });
-    return taCall(callSpec.method, site, parts);
+    return taCall(
+      callSpec.method,
+      site,
+      callSpec.args.map((arg) => emitSpecArg(arg, args)),
+    );
   }
   const conditionSpec = TA_CONDITION_CALL_BY_NAME.get(method);
   if (conditionSpec != null) {
-    const parts = conditionSpec.args.map((arg) => {
-      switch (arg.kind) {
-        case "context":
-          return CTX_EXPR[arg.context];
-        case "condition":
-          // Compile comparisons produce JS booleans; TA kernels expect a
-          // numeric cell (0/1), matching interpret's comparison result.
-          return `((${pick(args, arg.callIndex, [...arg.names], "null")}) ? 1 : 0)`;
-        case "source":
-          return pick(
-            args,
-            arg.callIndex,
-            [...arg.names],
-            arg.default === "close" ? CLOSE : "null",
-          );
-        case "number":
-          return finiteOr(
-            pick(args, arg.callIndex, [...arg.names], "null"),
-            String(arg.default),
-          );
-      }
-    });
-    return taCall(conditionSpec.method, site, parts);
+    return taCall(
+      conditionSpec.method,
+      site,
+      conditionSpec.args.map((arg) => emitSpecArg(arg, args)),
+    );
+  }
+  const overload = TA_OVERLOAD_BY_NAME.get(method);
+  if (overload != null) {
+    const variant = overload.variants.find(
+      (v) => v.minPositional == null || args.pos.length >= v.minPositional,
+    );
+    if (variant != null) {
+      return taCall(
+        overload.method,
+        site,
+        variant.args.map((arg) => emitSpecArg(arg, args)),
+      );
+    }
   }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
@@ -1899,17 +1917,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       return taCall(method, site, [defSrc, len(0, "14")]);
     }
     return taCall(method, site, [defSrc, "14"]);
-  }
-  if (method === "atr") {
-    if (args.pos.length >= 4) {
-      return taCall("atr", site, [
-        args.pos[0]!,
-        args.pos[1]!,
-        args.pos[2]!,
-        args.pos[3]!,
-      ]);
-    }
-    return taCall("atr", site, [HIGH, LOW, CLOSE, len(0, "14")]);
   }
   if (method === "tr") {
     if (args.pos.length >= 3) {
@@ -2137,17 +2144,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     }
     return taCall("swma", site, [src()]);
   }
-  if (method === "willr" || method === "wpr") {
-    if (args.pos.length >= 4) {
-      return taCall("willr", site, [
-        args.pos[0]!,
-        args.pos[1]!,
-        args.pos[2]!,
-        args.pos[3]!,
-      ]);
-    }
-    return taCall("willr", site, [HIGH, LOW, CLOSE, len(0, "14")]);
-  }
+
   if (method === "vwap") {
     return taCall("vwap", site, [
       pick(args, 0, ["source", "series", "src"], HLC3),

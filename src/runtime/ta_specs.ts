@@ -349,6 +349,8 @@ export type TaCallArgSpec =
       readonly names: readonly string[];
       readonly callIndex: number;
       readonly default: number;
+      /** Gate on `_is_period_like` (integer) instead of finite coercion. */
+      readonly periodLike?: boolean;
     }
   | {
       readonly kind: "condition";
@@ -360,6 +362,11 @@ export type TaCallArgSpec =
       readonly names: readonly string[];
       readonly callIndex: number;
       readonly default: "na" | "close";
+    }
+  | {
+      readonly kind: "value";
+      readonly names: readonly string[];
+      readonly callIndex: number;
     };
 
 export interface TaContextCallSpec {
@@ -378,11 +385,13 @@ const n = (
   callIndex: number,
   names: readonly string[] = ["length"],
   def = 0,
+  periodLike = false,
 ): TaCallArgSpec => ({
   kind: "number",
   names,
   callIndex,
   default: def,
+  periodLike,
 });
 const cond = (
   callIndex: number,
@@ -393,6 +402,11 @@ const source = (
   names: readonly string[] = ["source", "series"],
   def: "na" | "close" = "na",
 ): TaCallArgSpec => ({ kind: "source", names, callIndex, default: def });
+const v = (callIndex: number, names: readonly string[]): TaCallArgSpec => ({
+  kind: "value",
+  names,
+  callIndex,
+});
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   {
@@ -449,3 +463,48 @@ export const TA_CONDITION_CALL_SPECS: readonly TaContextCallSpec[] = [
 
 export const TA_CONDITION_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
   new Map(TA_CONDITION_CALL_SPECS.map((spec) => [spec.name, spec]));
+
+export interface TaOverloadVariant {
+  /** Select when the call has at least this many positional arguments. */
+  readonly minPositional?: number;
+  readonly args: readonly TaCallArgSpec[];
+}
+
+export interface TaOverloadSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  /** Ordered variants; the first matching one wins. */
+  readonly variants: readonly TaOverloadVariant[];
+}
+
+const WILLR_VARIANTS: readonly TaOverloadVariant[] = [
+  {
+    minPositional: 4,
+    args: [v(0, ["high"]), v(1, ["low"]), v(2, ["close"]), v(3, ["length"])],
+  },
+  {
+    args: [c("high"), c("low"), c("close"), n(0, ["length"], 0, true)],
+  },
+];
+
+const OHLC_LENGTH_VARIANTS: readonly TaOverloadVariant[] = [
+  {
+    minPositional: 4,
+    args: [v(0, ["high"]), v(1, ["low"]), v(2, ["close"]), v(3, ["length"])],
+  },
+  {
+    args: [c("high"), c("low"), c("close"), n(0, ["length"], 0, true)],
+  },
+];
+
+export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
+  { name: "willr", method: "willr", variants: WILLR_VARIANTS },
+  { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
+  { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+];
+
+export const TA_OVERLOAD_BY_NAME: ReadonlyMap<string, TaOverloadSpec> = new Map(
+  TA_OVERLOAD_SPECS.map((spec) => [spec.name, spec]),
+);

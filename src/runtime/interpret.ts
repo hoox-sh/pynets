@@ -213,8 +213,10 @@ import {
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
+  TA_OVERLOAD_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   TA_SRC_LEN_SPECS,
+  type TaCallArgSpec,
 } from "./ta_specs.ts";
 import {
   CompileError,
@@ -2844,19 +2846,6 @@ function evalCall(node: Call, env: Env): Value {
   if (fname === "ta.supertrend" || fname === "supertrend") {
     return evalSupertrend(node, env, site);
   }
-  if (fname === "ta.atr" || fname === "atr") {
-    // Python 1-arg period-only form gates the length on _is_period_like
-    // (volatility.py ~54 / basic.py ~420): non-period-like → ignored → same
-    // as the arg being absent (na period 0 → na kernel).
-    const period = periodLikeArg(node, env, 0, ["length"]) ?? 0;
-    return env.ta.atr(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      period,
-    );
-  }
   const extraTa = evalExtraTa(fname, node, env, site);
   if (extraTa !== undefined) return extraTa;
   const mathVal = evalMathCall(fname, node, env);
@@ -4479,6 +4468,32 @@ function lenOrDefault(
 
 type TaAny = TaEngine & Record<string, unknown>;
 
+function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
+  switch (arg.kind) {
+    case "context":
+      return num(env.ctx[arg.context]);
+    case "condition":
+      return unwrap(
+        evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
+      );
+    case "source": {
+      const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
+      if (valueArg == null)
+        return arg.default === "close" ? num(env.ctx.close) : NA;
+      return unwrap(evalExpr(valueArg, env));
+    }
+    case "value":
+      return unwrap(
+        evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
+      );
+    case "number":
+      return arg.periodLike
+        ? (periodLikeArg(node, env, arg.callIndex, [...arg.names]) ??
+            arg.default)
+        : lenOrDefault(node, env, arg.callIndex, [...arg.names], arg.default);
+  }
+}
+
 function evalExtraTa(
   fname: string | null,
   node: Call,
@@ -4551,18 +4566,7 @@ function evalExtraTa(
   if (callSpec != null) {
     const fn = (ta as Record<string, unknown>)[callSpec.method];
     if (typeof fn !== "function") return NA;
-    const values = callSpec.args.map((arg) => {
-      if (arg.kind === "context") return num(env.ctx[arg.context]);
-      if (arg.kind === "number")
-        return lenOrDefault(
-          node,
-          env,
-          arg.callIndex,
-          [...arg.names],
-          arg.default,
-        );
-      return NA;
-    });
+    const values = callSpec.args.map((arg) => evalSpecArg(arg, node, env));
     return (fn as (site: string, ...args: Cell[]) => Cell).call(
       env.ta,
       site,
@@ -4573,35 +4577,29 @@ function evalExtraTa(
   if (conditionSpec != null) {
     const fn = (ta as Record<string, unknown>)[conditionSpec.method];
     if (typeof fn !== "function") return NA;
-    const values = conditionSpec.args.map((arg) => {
-      switch (arg.kind) {
-        case "context":
-          return num(env.ctx[arg.context]);
-        case "condition":
-          return unwrap(
-            evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
-          );
-        case "source": {
-          const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
-          if (valueArg == null)
-            return arg.default === "close" ? num(env.ctx.close) : NA;
-          return unwrap(evalExpr(valueArg, env));
-        }
-        case "number":
-          return lenOrDefault(
-            node,
-            env,
-            arg.callIndex,
-            [...arg.names],
-            arg.default,
-          );
-      }
-    });
+    const values = conditionSpec.args.map((arg) => evalSpecArg(arg, node, env));
     return (fn as (site: string, ...args: Cell[]) => Cell).call(
       env.ta,
       site,
       ...values,
     );
+  }
+  const overload = TA_OVERLOAD_BY_NAME.get(base);
+  if (overload != null) {
+    const fn = (ta as Record<string, unknown>)[overload.method];
+    if (typeof fn !== "function") return NA;
+    const positional = positionalCount(node);
+    const variant = overload.variants.find(
+      (v) => v.minPositional == null || positional >= v.minPositional,
+    );
+    if (variant != null) {
+      const values = variant.args.map((arg) => evalSpecArg(arg, node, env));
+      return (fn as (site: string, ...args: Cell[]) => Cell).call(
+        env.ta,
+        site,
+        ...values,
+      );
+    }
   }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
@@ -4816,30 +4814,7 @@ function evalExtraTa(
       lenArg(node, env, 1),
     );
   }
-  if (fname === "ta.wpr" || fname === "wpr") {
-    if (typeof ta.willr !== "function") return NA;
-    // Python 1-arg period-only form gates length via _is_period_like
-    // (oscillators.py ~198): non-period-like → ignored → na period 0.
-    return (ta.willr as TaEngine["willr"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      periodLikeArg(node, env, 0, ["length"]) ?? 0,
-    );
-  }
-  if (fname === "ta.willr" || fname === "willr") {
-    if (typeof ta.willr !== "function") return NA;
-    return (ta.willr as TaEngine["willr"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      periodLikeArg(node, env, 0, ["length"]) ?? 0,
-    );
-  }
+
   if (fname === "ta.stoch" || fname === "stoch") {
     if (typeof ta.stoch !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);

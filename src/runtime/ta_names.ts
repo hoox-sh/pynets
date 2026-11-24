@@ -194,6 +194,7 @@ export const TA_BARE_ATTRS: ReadonlySet<string> = new Set([
 /** Names handled by interpret's extra-TA dispatcher (with and without `ta.` prefix). */
 const EXTRA_TA_BASE = [
   "accdist",
+  "atr",
   "acceleration_factor",
   "ad",
   "advanced_breakout_detector",

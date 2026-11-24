@@ -13,6 +13,7 @@ import {
   TA_CONTEXT_CALL_SPECS,
   TA_LEN_EXTRA_SPECS,
   TA_OHLCV_SPECS,
+  TA_OVERLOAD_SPECS,
   TA_SRC_LEN_SPECS,
 } from "../src/runtime/ta_specs.ts";
 
@@ -149,6 +150,30 @@ describe("TA source/length specs", () => {
         expect(interpreted.error, `${call} interpret`).toBeUndefined();
         expect(compiled.plots, call).toEqual(interpreted.plots);
       }
+    }
+  });
+
+  test("overload descriptors match context and explicit forms", () => {
+    expect(TA_OVERLOAD_SPECS.length).toBeGreaterThan(0);
+    const calls = [
+      "ta.willr(3)",
+      "ta.willr()",
+      "ta.willr(7.5)",
+      "ta.willr(high + 1, low + 1, close + 1, 3)",
+      "ta.wpr(3)",
+      "ta.wpr(high + 1, low + 1, close + 1, 3)",
+      "ta.atr(3)",
+      "ta.atr()",
+      "ta.atr(7.5)",
+      "ta.atr(high + 1, low + 1, close + 1, 3)",
+    ];
+    for (const call of calls) {
+      const src = `indicator("t")\nplot(${call}, "v")`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(compiled.plots, call).toEqual(interpreted.plots);
     }
   });
 
