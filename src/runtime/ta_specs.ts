@@ -806,3 +806,40 @@ export const TA_RUNTIME_PERIOD_FIRST_BY_NAME: ReadonlyMap<
   string,
   TaRuntimePeriodFirstSpec
 > = new Map(TA_RUNTIME_PERIOD_FIRST_SPECS.map((spec) => [spec.name, spec]));
+
+/**
+ * Python's legacy `_merge_kwargs_into_args` path: positional values first,
+ * then keyword values appended in source order with their names ignored.
+ * Each period slot gates on `_is_period_like`; non-integers use the default.
+ */
+export interface TaMergedKwargSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  /** Context series prepended before the merged arguments. */
+  readonly contextArgs: readonly TaContextArg[];
+  /** Period-like slots after the context args, with their fallback defaults. */
+  readonly periodDefaults: readonly number[];
+  /** Record fields to expose as a Pine tuple. */
+  readonly tupleFields?: readonly string[];
+}
+
+export const TA_MERGED_KWARG_SPECS: readonly TaMergedKwargSpec[] = [
+  {
+    name: "ao",
+    method: "ao",
+    contextArgs: ["high", "low"],
+    periodDefaults: [5, 34],
+  },
+  {
+    name: "aroon",
+    method: "aroon",
+    contextArgs: ["high", "low"],
+    periodDefaults: [14],
+    tupleFields: ["down", "up"],
+  },
+];
+
+export const TA_MERGED_KWARG_BY_NAME: ReadonlyMap<string, TaMergedKwargSpec> =
+  new Map(TA_MERGED_KWARG_SPECS.map((spec) => [spec.name, spec]));

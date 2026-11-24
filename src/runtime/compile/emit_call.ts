@@ -10,6 +10,7 @@ import {
   TA_CONDITION_CALL_BY_NAME,
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
+  TA_MERGED_KWARG_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
@@ -1882,6 +1883,22 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       conditionSpec.args.map((arg) => emitSpecArg(arg, args)),
     );
   }
+  const mergedKwarg = TA_MERGED_KWARG_BY_NAME.get(method);
+  if (mergedKwarg != null) {
+    // Legacy `_merge_kwargs_into_args`: positional values, then keyword values
+    // in source order with their names ignored.
+    const merged = [...args.pos, ...Object.values(args.kw)];
+    const parts: string[] = mergedKwarg.contextArgs.map((ctx) => CTX_EXPR[ctx]);
+    mergedKwarg.periodDefaults.forEach((def, i) => {
+      parts.push(periodGate(merged[i] ?? "null", String(def)));
+    });
+    const call = taCall(mergedKwarg.method, site, parts);
+    if (mergedKwarg.tupleFields != null) {
+      const fields = mergedKwarg.tupleFields.map((field) => `__r.${field}`);
+      return `(() => { const __r = ${call}; return [${fields.join(", ")}]; })()`;
+    }
+    return call;
+  }
   const overload = TA_OVERLOAD_BY_NAME.get(method);
   if (overload != null) {
     const variant = overload.variants.find(
@@ -2140,24 +2157,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 4, ["fast_period", "fast", "fastlen"], "0"),
       pick(args, 5, ["slow_period", "slow", "slowlen"], "0"),
     ]);
-  }
-  if (method === "ao") {
-    // SMA(hl2, fast) − SMA(hl2, slow); high/low always come from the bar context.
-    return taCall("ao", site, [
-      HIGH,
-      LOW,
-      pick(args, 0, ["fast", "fastlen"], "5"),
-      pick(args, 1, ["slow", "slowlen"], "34"),
-    ]);
-  }
-  if (method === "aroon") {
-    // Kernel returns {down, up}; interpret exposes the tuple [down, up].
-    const call = taCall("aroon", site, [
-      HIGH,
-      LOW,
-      pick(args, 0, ["length"], "14"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.down, __r.up]; })()`;
   }
 
   if (method === "rci") {

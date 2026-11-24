@@ -212,6 +212,7 @@ import {
   TA_CONDITION_CALL_BY_NAME,
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
+  TA_MERGED_KWARG_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
@@ -4576,6 +4577,43 @@ function evalExtraTa(
       ...values,
     );
   }
+  const mergedKwarg = TA_MERGED_KWARG_BY_NAME.get(base);
+  if (mergedKwarg != null) {
+    const fn = (ta as Record<string, unknown>)[mergedKwarg.method];
+    if (typeof fn !== "function") return NA;
+    // Python's legacy `_merge_kwargs_into_args` path: positional values keep
+    // their order, then keyword values are appended in source order with the
+    // names ignored (ta.ao(slow=10) binds fast=10). Each period slot gates on
+    // `_is_period_like`; non-integers use the builtin default.
+    const list = asArgs(node.args);
+    const merged: Cell[] = [];
+    for (const a of list) {
+      if (argKeyword(a) == null) merged.push(unwrap(evalExpr(a.value, env)));
+    }
+    for (const a of list) {
+      if (argKeyword(a) != null)
+        merged.push(unwrap(evalExpr(argValue(a), env)));
+    }
+    const values: Cell[] = mergedKwarg.contextArgs.map((ctx) =>
+      num(env.ctx[ctx]),
+    );
+    mergedKwarg.periodDefaults.forEach((def, i) => {
+      const value = i < merged.length ? periodLikeCell(merged[i]!) : null;
+      values.push(value ?? def);
+    });
+    const result = (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
+    );
+    if (mergedKwarg.tupleFields != null) {
+      const record = result as unknown as Record<string, Cell>;
+      return tupleOf(
+        mergedKwarg.tupleFields.map((field) => record[field] ?? NA),
+      );
+    }
+    return result;
+  }
   const overload = TA_OVERLOAD_BY_NAME.get(base);
   if (overload != null) {
     const fn = (ta as Record<string, unknown>)[overload.method];
@@ -5067,47 +5105,6 @@ function evalExtraTa(
       lenOrDefault(node, env, 4, ["fast_period", "fast", "fastlen"], 0),
       lenOrDefault(node, env, 5, ["slow_period", "slow", "slowlen"], 0),
     );
-  }
-  if (fname === "ta.ao" || fname === "ta.aroon") {
-    // Python parity (pynescript base.py / oscillators.py):
-    // "ao"/"aroon" are absent from _TA_KWARG_ORDERS and their handlers carry no
-    // _KWARG_ORDER, so kwargs fall through the legacy path of
-    // _merge_kwargs_into_args (base.py ~603): kwarg VALUES are appended
-    // positionally after the positional args, in kwarg iteration order —
-    // the names are ignored (ta.ao(slow=10) binds fast=10; ta.ao(len=8)
-    // binds fast=8; ta.aroon(3, length=5) binds length=3).
-    const list = asArgs(node.args);
-    const merged: Cell[] = [];
-    for (const a of list) {
-      if (argKeyword(a) == null) merged.push(unwrap(evalExpr(a.value, env)));
-    }
-    for (const a of list) {
-      if (argKeyword(a) != null)
-        merged.push(unwrap(evalExpr(argValue(a), env)));
-    }
-    // Python handlers gate each length slot on _is_period_like (core.py ~3427):
-    // only whole numbers pass (7.0 → 7; 7.5 / bool / na / non-numbers fail).
-    // A non-period-like arg is IGNORED and the builtin default is used.
-    const periodLike = periodLikeCell;
-    if (fname === "ta.ao") {
-      const fast = merged.length >= 1 ? periodLike(merged[0]!) : null;
-      const slow = merged.length >= 2 ? periodLike(merged[1]!) : null;
-      return env.ta.ao(
-        site,
-        num(env.ctx.high),
-        num(env.ctx.low),
-        fast ?? 5,
-        slow ?? 34,
-      );
-    }
-    const length = merged.length >= 1 ? periodLike(merged[0]!) : null;
-    const r = env.ta.aroon(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      length ?? 14,
-    );
-    return tupleOf([r.down, r.up]);
   }
 
   if (fname === "ta.rci" || fname === "rci") {

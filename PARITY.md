@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1461 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1462 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -183,6 +183,7 @@ array-valued names; Python's own compile mode returns na here).
    condition/source/occurrence kernels, add an entry to
    `TA_CONDITION_CALL_SPECS`. For overloads selected by positional count, add
    a `TaOverloadSpec`. For runtime period-first dispatch (`bb`), add a
-   `TaRuntimePeriodFirstSpec`.
+   `TaRuntimePeriodFirstSpec`. For Python's legacy positional-then-keyword
+   merge with ignored names (`ao`, `aroon`), add a `TaMergedKwargSpec`.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).

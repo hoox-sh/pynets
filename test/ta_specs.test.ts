@@ -12,6 +12,7 @@ import {
   TA_CONDITION_CALL_SPECS,
   TA_CONTEXT_CALL_SPECS,
   TA_LEN_EXTRA_SPECS,
+  TA_MERGED_KWARG_SPECS,
   TA_OHLCV_SPECS,
   TA_OVERLOAD_SPECS,
   TA_SRC_LEN_SPECS,
@@ -224,6 +225,50 @@ describe("TA source/length specs", () => {
       expect(compiled.error, `${call} compile`).toBeUndefined();
       expect(interpreted.error, `${call} interpret`).toBeUndefined();
       expect(compiled.plots, call).toEqual(interpreted.plots);
+    }
+  });
+
+  test("merged-kwarg descriptors keep legacy positional+kwarg order", () => {
+    const proto = TaEngine.prototype as unknown as Record<string, unknown>;
+    for (const spec of TA_MERGED_KWARG_SPECS) {
+      expect(
+        typeof proto[spec.method],
+        `${spec.name} -> TaEngine.${spec.method}`,
+      ).toBe("function");
+    }
+    const scalarCalls = [
+      "ta.ao()",
+      "ta.ao(3)",
+      "ta.ao(3, 5)",
+      "ta.ao(7.5)",
+      "ta.ao(slow=10)",
+      "ta.ao(len=8)",
+      "ta.ao(fast=3, slow=5)",
+    ];
+    for (const call of scalarCalls) {
+      const src = `indicator("t")\nplot(${call}, "v")`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(compiled.plots, call).toEqual(interpreted.plots);
+    }
+    const tupleCalls = [
+      "ta.aroon()",
+      "ta.aroon(3)",
+      "ta.aroon(7.5)",
+      "ta.aroon(length=5)",
+      "ta.aroon(3, length=5)",
+    ];
+    for (const call of tupleCalls) {
+      const src = `indicator("t")\n[d,u] = ${call}\nplot(d)\nplot(u)`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(Object.values(compiled.series), call).toEqual(
+        Object.values(interpreted.series),
+      );
     }
   });
 
