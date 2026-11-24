@@ -607,6 +607,91 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
     ],
   },
   {
+    name: "tsi",
+    method: "tsi",
+    variants: [
+      {
+        positional: 2,
+        args: [
+          c("close"),
+          n(1, ["long", "long_length"], 25, true),
+          n(0, ["short", "short_length"], 13, true),
+        ],
+      },
+      {
+        args: [
+          source(0),
+          n(2, ["long", "long_length"], 25),
+          n(1, ["short", "short_length"], 13),
+        ],
+      },
+    ],
+  },
+  {
+    name: "wvad",
+    method: "wvad",
+    variants: [
+      {
+        minPositional: 4,
+        args: [
+          v(0, ["high"]),
+          v(1, ["low"]),
+          v(2, ["close"]),
+          v(3, ["volume"]),
+          n(4, ["length", "period"], 20),
+        ],
+      },
+      {
+        args: [
+          c("high"),
+          c("low"),
+          c("close"),
+          c("volume"),
+          n(0, ["length", "period"], 20, true),
+        ],
+      },
+    ],
+  },
+  {
+    name: "cmf",
+    method: "cmf",
+    variants: [
+      {
+        minPositional: 5,
+        args: [
+          v(1, ["high"]),
+          v(2, ["low"]),
+          v(0, ["close", "source"]),
+          v(3, ["volume"]),
+          n(4, ["length", "period"], 20),
+        ],
+      },
+      {
+        args: [
+          c("high"),
+          c("low"),
+          c("close"),
+          c("volume"),
+          n(0, ["length", "period"], 20, true),
+        ],
+      },
+    ],
+  },
+  {
+    name: "klinger",
+    method: "klinger",
+    variants: [
+      {
+        args: [
+          v(2, ["close"]),
+          v(3, ["volume"]),
+          n(4, ["fast_period", "fast", "fastlen"], 0),
+          n(5, ["slow_period", "slow", "slowlen"], 0),
+        ],
+      },
+    ],
+  },
+  {
     name: "vwma",
     method: "vwma",
     variants: [

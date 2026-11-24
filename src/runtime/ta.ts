@@ -2389,7 +2389,8 @@ export class TaEngine {
       st.value = null;
       return null;
     }
-    st.value = 100 * (e2 / a2);
+    // Python `_tsi`: raw ratio in [-1, 1], not percent.
+    st.value = e2 / a2;
     return st.value;
   }
 

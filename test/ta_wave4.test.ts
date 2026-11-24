@@ -71,12 +71,12 @@ describe("ta.cog incremental", () => {
 });
 
 describe("ta.tsi incremental", () => {
-  test("long 3 short 2 on a rise is 100 after warmup", () => {
+  test("long 3 short 2 on a rise is 1 after warmup", () => {
     const ta = new TaEngine();
     const out = [1, 2, 3, 4, 5, 6].map((x) => ta.tsi("tsi:0", x, 3, 2));
     expect(out.slice(0, 4)).toEqual([null, null, null, null]);
-    expect(out[4]).toBeCloseTo(100);
-    expect(out[5]).toBeCloseTo(100);
+    expect(out[4]).toBeCloseTo(1);
+    expect(out[5]).toBeCloseTo(1);
   });
 
   test("mixed series matches nested EMA of momentum", () => {
@@ -84,12 +84,12 @@ describe("ta.tsi incremental", () => {
     const src = [10, 12, 11, 13, 9, 14, 15, 8, 12, 16];
     const out = src.map((x) => ta.tsi("tsi:m", x, 3, 2));
     expect(out.slice(0, 4)).toEqual([null, null, null, null]);
-    expect(out[4]).toBeCloseTo(-11.11111111111111);
-    expect(out[5]).toBeCloseTo(32.231404958677686);
-    expect(out[6]).toBeCloseTo(46.30872483221476);
-    expect(out[7]).toBeCloseTo(-35.58165971959075);
-    expect(out[8]).toBeCloseTo(-2.0432764751973975);
-    expect(out[9]).toBeCloseTo(35.67625349961822);
+    expect(out[4]).toBeCloseTo(-0.1111111111111111);
+    expect(out[5]).toBeCloseTo(0.32231404958677686);
+    expect(out[6]).toBeCloseTo(0.4630872483221476);
+    expect(out[7]).toBeCloseTo(-0.3558165971959075);
+    expect(out[8]).toBeCloseTo(-0.020432764751973975);
+    expect(out[9]).toBeCloseTo(0.3567625349961822);
   });
 
   test("na mid-series delays seed; invalid periods are na", () => {
@@ -97,8 +97,8 @@ describe("ta.tsi incremental", () => {
     const src: Cell[] = [10, 12, null, 13, 14, 15, 16, 17];
     const out = src.map((x) => ta.tsi("tsi:na", x, 3, 2));
     expect(out.slice(0, 6)).toEqual([null, null, null, null, null, null]);
-    expect(out[6]).toBeCloseTo(100);
-    expect(out[7]).toBeCloseTo(100);
+    expect(out[6]).toBeCloseTo(1);
+    expect(out[7]).toBeCloseTo(1);
     expect(ta.tsi("tsi:p", 1, 0, 2)).toBeNull();
     expect(ta.tsi("tsi:p2", 1, 3, 0)).toBeNull();
   });

@@ -4955,30 +4955,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.tsi" || fname === "tsi") {
-    if (typeof ta.tsi !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => a.name == null);
-    if (positional.length === 2) {
-      // Python 2-arg period-first form gates BOTH slots via _is_period_like
-      // (oscillators.py ~299): args[0]=short, args[1]=long; a non-period-like
-      // slot is ignored → TS default (13/25), as if the slot were absent.
-      return (ta.tsi as TaEngine["tsi"]).call(
-        env.ta,
-        site,
-        num(env.ctx.close),
-        periodLikeArg(node, env, 1, ["long", "long_length"]) ?? 25,
-        periodLikeArg(node, env, 0, ["short", "short_length"]) ?? 13,
-      );
-    }
-    return (ta.tsi as TaEngine["tsi"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 2, ["long", "long_length"], 25),
-      lenOrDefault(node, env, 1, ["short", "short_length"], 13),
-    );
-  }
-
   if (
     fname === "ta.percentile_nearest_rank" ||
     fname === "percentile_nearest_rank"
@@ -5016,72 +4992,6 @@ function evalExtraTa(
       site,
       srcArg(node, env),
       lenArg(node, env, 1),
-    );
-  }
-
-  if (fname === "ta.wvad" || fname === "wvad") {
-    if (typeof ta.wvad !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-    if (positional.length >= 4) {
-      return (ta.wvad as TaEngine["wvad"]).call(
-        env.ta,
-        site,
-        unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
-        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
-        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
-        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
-        lenOrDefault(node, env, 4, ["length", "period"], 20),
-      );
-    }
-    return (ta.wvad as TaEngine["wvad"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      num(env.ctx.volume),
-      // Python 1-arg period-only form gates length via _is_period_like
-      // (volume.py ~586/~620): non-period-like → ignored → default 20 (0-arg
-      // fallback), exactly as if the arg were absent.
-      periodLikeArg(node, env, 0, ["length", "period"]) ?? 20,
-    );
-  }
-  if (fname === "ta.cmf" || fname === "cmf") {
-    if (typeof ta.cmf !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-    if (positional.length >= 5) {
-      return (ta.cmf as TaEngine["cmf"]).call(
-        env.ta,
-        site,
-        unwrap(evalExpr(callArg(node.args, 1, ["high"]), env)),
-        unwrap(evalExpr(callArg(node.args, 2, ["low"]), env)),
-        unwrap(evalExpr(callArg(node.args, 0, ["close", "source"]), env)),
-        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
-        lenOrDefault(node, env, 4, ["length", "period"], 20),
-      );
-    }
-    return (ta.cmf as TaEngine["cmf"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      num(env.ctx.volume),
-      // Python 1-arg period-only form gates length via _is_period_like
-      // (volume.py ~659/~681): non-period-like → ignored → default 20, as
-      // if the arg were absent.
-      periodLikeArg(node, env, 0, ["length", "period"]) ?? 20,
-    );
-  }
-  if (fname === "ta.klinger" || fname === "klinger") {
-    if (typeof ta.klinger !== "function") return NA;
-    return (ta.klinger as TaEngine["klinger"]).call(
-      env.ta,
-      site,
-      unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
-      unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
-      lenOrDefault(node, env, 4, ["fast_period", "fast", "fastlen"], 0),
-      lenOrDefault(node, env, 5, ["slow_period", "slow", "slowlen"], 0),
     );
   }
 

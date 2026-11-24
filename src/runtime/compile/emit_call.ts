@@ -2049,21 +2049,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `(() => { const __r = ${call}; return [__r.macd, __r.signal, __r.hist]; })()`;
   }
 
-  if (method === "tsi") {
-    if (args.pos.length === 2) {
-      return taCall("tsi", site, [
-        CLOSE,
-        pick(args, 1, ["long", "long_length"], "25"),
-        pick(args, 0, ["short", "short_length"], "13"),
-      ]);
-    }
-    return taCall("tsi", site, [
-      src(),
-      pick(args, 2, ["long", "long_length"], "25"),
-      pick(args, 1, ["short", "short_length"], "13"),
-    ]);
-  }
-
   if (method === "supertrend") {
     const call = taCall("supertrend", site, [
       HIGH,
@@ -2119,51 +2104,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 0, ["source1", "source", "a"], CLOSE),
       pick(args, 1, ["source2", "b"], CLOSE),
       len(2, "14"),
-    ]);
-  }
-
-  if (method === "wvad") {
-    if (args.pos.length >= 4 || Object.hasOwn(args.kw, "high")) {
-      return taCall("wvad", site, [
-        pick(args, 0, ["high"], HIGH),
-        pick(args, 1, ["low"], LOW),
-        pick(args, 2, ["close"], CLOSE),
-        pick(args, 3, ["volume"], VOL),
-        pick(args, 4, ["length", "period"], "20"),
-      ]);
-    }
-    return taCall("wvad", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      VOL,
-      pick(args, 0, ["length", "period"], "20"),
-    ]);
-  }
-  if (method === "cmf") {
-    if (args.pos.length >= 5) {
-      return taCall("cmf", site, [
-        pick(args, 1, ["high"], HIGH),
-        pick(args, 2, ["low"], LOW),
-        pick(args, 0, ["close", "source"], CLOSE),
-        pick(args, 3, ["volume"], VOL),
-        pick(args, 4, ["length", "period"], "20"),
-      ]);
-    }
-    return taCall("cmf", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      VOL,
-      pick(args, 0, ["length", "period"], "20"),
-    ]);
-  }
-  if (method === "klinger") {
-    return taCall("klinger", site, [
-      pick(args, 2, ["close"], CLOSE),
-      pick(args, 3, ["volume"], VOL),
-      pick(args, 4, ["fast_period", "fast", "fastlen"], "0"),
-      pick(args, 5, ["slow_period", "slow", "slowlen"], "0"),
     ]);
   }
 
