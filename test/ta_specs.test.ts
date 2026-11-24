@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { Runtime, TaEngine } from "../src/index.ts";
 import { TA_METHODS } from "../src/runtime/ta_names.ts";
 import {
+  TA_CONTEXT_CALL_SPECS,
   TA_LEN_EXTRA_SPECS,
   TA_OHLCV_SPECS,
   TA_SRC_LEN_SPECS,
@@ -82,6 +83,26 @@ describe("TA source/length specs", () => {
         .join(", ");
       const omitted = spec.hasSourceArg ? "close" : "";
       for (const args of [omitted, explicit]) {
+        const src = `indicator("t")\nplot(ta.${spec.name}(${args}), "v")`;
+        const compiled = new Runtime("TEST", { mode: "compile" }).run(
+          src,
+          BARS,
+        );
+        const interpreted = new Runtime("TEST").run(src, BARS);
+        expect(compiled.error, `${spec.name} compile`).toBeUndefined();
+        expect(interpreted.error, `${spec.name} interpret`).toBeUndefined();
+        expect(compiled.plots, `${spec.name} ${args}`).toEqual(
+          interpreted.plots,
+        );
+      }
+    }
+  });
+
+  test("fixed-arity context descriptors match omitted and explicit args", () => {
+    for (const spec of TA_CONTEXT_CALL_SPECS) {
+      const numbers = spec.args.filter((arg) => arg.kind === "number").length;
+      const explicit = Array.from({ length: numbers }, () => "3").join(", ");
+      for (const args of ["", explicit]) {
         const src = `indicator("t")\nplot(ta.${spec.name}(${args}), "v")`;
         const compiled = new Runtime("TEST", { mode: "compile" }).run(
           src,

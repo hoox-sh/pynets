@@ -341,3 +341,74 @@ export const TA_LEN_EXTRA_SPECS: readonly TaLenExtraSpec[] = [
 
 export const TA_LEN_EXTRA_BY_NAME: ReadonlyMap<string, TaLenExtraSpec> =
   new Map(TA_LEN_EXTRA_SPECS.map((spec) => [spec.name, spec]));
+
+export type TaCallArgSpec =
+  | { readonly kind: "context"; readonly context: TaContextArg }
+  | {
+      readonly kind: "number";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+      readonly default: number;
+    };
+
+export interface TaContextCallSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  readonly args: readonly TaCallArgSpec[];
+}
+
+const c = (context: TaContextArg): TaCallArgSpec => ({
+  kind: "context",
+  context,
+});
+const n = (
+  callIndex: number,
+  names: readonly string[] = ["length"],
+  def = 0,
+): TaCallArgSpec => ({
+  kind: "number",
+  names,
+  callIndex,
+  default: def,
+});
+
+export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
+  {
+    name: "iii",
+    method: "iii",
+    args: [c("high"), c("low"), c("close"), c("volume")],
+  },
+  {
+    name: "uo",
+    method: "uo",
+    args: [c("high"), c("low"), c("close"), n(0), n(1), n(2)],
+  },
+  { name: "dpo", method: "dpo", args: [c("close"), n(0)] },
+  {
+    name: "kst",
+    method: "kst",
+    args: [c("close"), n(0), n(1), n(2), n(3)],
+  },
+  {
+    name: "stochrsi",
+    method: "stochRsi",
+    args: [c("close"), n(0), n(1)],
+  },
+  { name: "donchian", method: "donchian", args: [c("high"), c("low"), n(0)] },
+  {
+    name: "ichimoku",
+    method: "ichimoku",
+    args: [c("high"), c("low"), n(0), n(1)],
+  },
+  {
+    name: "emv",
+    method: "emv",
+    args: [c("high"), c("low"), c("volume"), n(0)],
+  },
+  { name: "fractal", method: "fractal", args: [c("high"), c("low"), n(0)] },
+];
+
+export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
+  new Map(TA_CONTEXT_CALL_SPECS.map((spec) => [spec.name, spec]));

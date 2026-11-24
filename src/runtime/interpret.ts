@@ -209,6 +209,7 @@ import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
 import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
 import {
+  TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_SRC_LEN_BY_NAME,
@@ -4545,6 +4546,21 @@ function evalExtraTa(
       ...values,
     );
   }
+  const callSpec = TA_CONTEXT_CALL_BY_NAME.get(base);
+  if (callSpec != null) {
+    const fn = (ta as Record<string, unknown>)[callSpec.method];
+    if (typeof fn !== "function") return NA;
+    const values = callSpec.args.map((arg) =>
+      arg.kind === "context"
+        ? num(env.ctx[arg.context])
+        : lenOrDefault(node, env, arg.callIndex, [...arg.names], arg.default),
+    );
+    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
+    );
+  }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -5193,17 +5209,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.iii" || fname === "iii") {
-    if (typeof ta.iii !== "function") return NA;
-    return (ta.iii as TaEngine["iii"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      num(env.ctx.volume),
-    );
-  }
   if (fname === "ta.wvad" || fname === "wvad") {
     if (typeof ta.wvad !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
@@ -5310,76 +5315,11 @@ function evalExtraTa(
     );
     return tupleOf([r.down, r.up]);
   }
-  if (fname === "ta.uo" || fname === "uo") {
-    return env.ta.uo(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      lenArg(node, env, 0),
-      lenArg(node, env, 1),
-      lenArg(node, env, 2),
-    );
-  }
+
   if (fname === "ta.rci" || fname === "rci") {
     return env.ta.rci(site, srcArg(node, env), lenArg(node, env, 1));
   }
-  if (fname === "ta.dpo" || fname === "dpo") {
-    return env.ta.dpo(site, num(env.ctx.close), lenArg(node, env, 0));
-  }
-  if (fname === "ta.kst" || fname === "kst") {
-    return env.ta.kst(
-      site,
-      num(env.ctx.close),
-      lenArg(node, env, 0),
-      lenArg(node, env, 1),
-      lenArg(node, env, 2),
-      lenArg(node, env, 3),
-    );
-  }
-  if (fname === "ta.stochrsi" || fname === "stochrsi") {
-    return env.ta.stochRsi(
-      site,
-      num(env.ctx.close),
-      lenArg(node, env, 0),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.donchian" || fname === "donchian") {
-    return env.ta.donchian(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenArg(node, env, 0),
-    );
-  }
-  if (fname === "ta.ichimoku" || fname === "ichimoku") {
-    return env.ta.ichimoku(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenArg(node, env, 0),
-      lenArg(node, env, 1),
-    );
-  }
 
-  if (fname === "ta.emv" || fname === "emv") {
-    return env.ta.emv(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.volume),
-      lenArg(node, env, 0),
-    );
-  }
-  if (fname === "ta.fractal" || fname === "fractal") {
-    return env.ta.fractal(
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      lenArg(node, env, 0),
-    );
-  }
   if (fname === "ta.atr_stop" || fname === "atr_stop") {
     const atr = unwrap(
       evalExpr(callArg(node.args, 0, ["atr", "atr_value"]), env),

@@ -7,6 +7,7 @@
 import type { Attribute, Call, Constant, expr, Name } from "../../ast/nodes.ts";
 import { TA_BARE_ATTRS, TA_METHODS } from "../ta_names.ts";
 import {
+  TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_SRC_LEN_BY_NAME,
@@ -1814,6 +1815,18 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     );
     return taCall(lenExtra.method, site, parts);
   }
+  const callSpec = TA_CONTEXT_CALL_BY_NAME.get(method);
+  if (callSpec != null) {
+    const parts = callSpec.args.map((arg) =>
+      arg.kind === "context"
+        ? CTX_EXPR[arg.context]
+        : finiteOr(
+            pick(args, arg.callIndex, [...arg.names], "null"),
+            String(arg.default),
+          ),
+    );
+    return taCall(callSpec.method, site, parts);
+  }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
@@ -2171,9 +2184,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   if (method === "cum") {
     return taCall("cum", site, [src()]);
   }
-  if (method === "iii") {
-    return taCall("iii", site, [HIGH, LOW, CLOSE, VOL]);
-  }
+
   if (method === "wvad") {
     if (args.pos.length >= 4 || Object.hasOwn(args.kw, "high")) {
       return taCall("wvad", site, [
@@ -2236,16 +2247,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
     return `(() => { const __r = ${call}; return [__r.down, __r.up]; })()`;
   }
-  if (method === "uo") {
-    return taCall("uo", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-      finiteOr(pick(args, 2, ["length"], "null"), "0"),
-    ]);
-  }
+
   if (method === "rci") {
     // srcArg: missing source is na, not close.
     return taCall("rci", site, [
@@ -2253,59 +2255,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
     ]);
   }
-  if (method === "dpo") {
-    return taCall("dpo", site, [
-      CLOSE,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "kst") {
-    return taCall("kst", site, [
-      CLOSE,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-      finiteOr(pick(args, 2, ["length"], "null"), "0"),
-      finiteOr(pick(args, 3, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "stochrsi") {
-    // Engine method is stochRsi; record already branded {stochrsi, signal}.
-    return taCall("stochRsi", site, [
-      CLOSE,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "donchian") {
-    return taCall("donchian", site, [
-      HIGH,
-      LOW,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "ichimoku") {
-    return taCall("ichimoku", site, [
-      HIGH,
-      LOW,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "emv") {
-    return taCall("emv", site, [
-      HIGH,
-      LOW,
-      VOL,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "fractal") {
-    return taCall("fractal", site, [
-      HIGH,
-      LOW,
-      finiteOr(pick(args, 0, ["length"], "null"), "0"),
-    ]);
-  }
+
   if (method === "atr_stop") {
     // Kernel has no call-site; missing multiplier → 2 (interpret numArg).
     return `__h.ta.atrStop(${CLOSE}, ${pick(args, 0, ["atr", "atr_value"], "null")}, ${finiteOr(pick(args, 1, ["multiplier", "mult"], "null"), "2")})`;
