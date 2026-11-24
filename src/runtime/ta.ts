@@ -175,10 +175,17 @@ interface SarState {
   increment: number;
   maximum: number;
   started: boolean;
+  /** Valid bars seen since the seed (Python `seen`). */
+  seen: number;
   sar: Cell;
   ep: Cell;
   trend: number;
   af: number;
+  /** Previous two bars' extremes for the non-reversal clamp. */
+  l1: Cell;
+  l2: Cell;
+  h1: Cell;
+  h2: Cell;
 }
 
 interface AdxState {
@@ -1765,10 +1772,15 @@ export class TaEngine {
         increment: incF,
         maximum: maxF,
         started: false,
+        seen: 0,
         sar: null,
         ep: null,
         trend: 1,
         af: startF,
+        l1: null,
+        l2: null,
+        h1: null,
+        h2: null,
       };
       this.sarSites.set(site, st);
     }
@@ -1776,12 +1788,27 @@ export class TaEngine {
     const l = finiteCell(low);
     if (!st.started) {
       if (h === null || l === null) return null;
+      // Python `_sar_inc_update`: seed low[0], emit na on the first valid bar.
       st.started = true;
       st.sar = l;
       st.ep = h;
       st.trend = 1;
       st.af = startF;
-      return l;
+      st.seen = 1;
+      st.l1 = l;
+      st.l2 = l;
+      st.h1 = h;
+      st.h2 = h;
+      return null;
+    }
+    if (st.seen < 2) {
+      // Second valid bar emits the seed itself; the clamp window advances.
+      st.seen = 2;
+      st.l2 = st.l1;
+      st.l1 = l ?? 0;
+      st.h2 = st.h1;
+      st.h1 = h ?? 0;
+      return st.sar;
     }
     const previous = st.sar;
     const ep = st.ep;
@@ -1790,32 +1817,38 @@ export class TaEngine {
     let trend = st.trend;
     let af = st.af;
     let epF = ep;
-    let sarV: number;
+    let sarV = previous + af * (epF - previous);
     if (trend === 1) {
-      sarV = previous + af * (epF - previous);
       if (h > epF) {
         epF = h;
         af = Math.min(af + incF, maxF);
       }
-      if (sarV > l) {
+      if (l < sarV) {
         trend = -1;
         sarV = epF;
         epF = l;
         af = startF;
+      } else {
+        sarV = Math.min(sarV, st.l1 ?? l, st.l2 ?? l);
       }
     } else {
-      sarV = previous - af * (previous - epF);
       if (l < epF) {
         epF = l;
         af = Math.min(af + incF, maxF);
       }
-      if (sarV < h) {
+      if (h > sarV) {
         trend = 1;
         sarV = epF;
         epF = h;
         af = startF;
+      } else {
+        sarV = Math.max(sarV, st.h1 ?? h, st.h2 ?? h);
       }
     }
+    st.l2 = st.l1;
+    st.l1 = l;
+    st.h2 = st.h1;
+    st.h1 = h;
     st.sar = sarV;
     st.ep = epF;
     st.trend = trend;

@@ -103,37 +103,37 @@ describe("ta.sar incremental", () => {
     const highs = [10, 12, 11, 13, 14, 15, 16];
     const lows = [8, 9, 8, 10, 11, 12, 13];
     const out = highs.map((h, i) => ta.sar("sar:0", h, lows[i]!));
-    expect(out[0]).toBe(8);
-    expect(out[1]).toBeCloseTo(8.04);
-    expect(out[2]).toBeCloseTo(12);
-    expect(out[3]).toBeCloseTo(8);
-    expect(out[4]).toBeCloseTo(8.1);
-    expect(out[5]).toBeCloseTo(8.336);
-    expect(out[6]).toBeCloseTo(8.73584);
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBe(8);
+    expect(out[2]).toBe(11);
+    expect(out[3]).toBe(8);
+    expect(out[4]).toBe(8);
+    expect(out[5]).toBeCloseTo(8.24);
+    expect(out[6]).toBeCloseTo(8.6456);
   });
 
-  test("leading na stays na then starts at first valid low", () => {
+  test("leading na stays na then seeds on the first valid bar", () => {
     const ta = new TaEngine();
     const highs: Cell[] = [null, null, 10, 12, 13, 11, 14];
     const lows: Cell[] = [null, null, 8, 9, 10, 8, 11];
     const out = highs.map((h, i) => ta.sar("sar:na", h, lows[i]!));
     expect(out[0]).toBeNull();
     expect(out[1]).toBeNull();
-    expect(out[2]).toBe(8);
-    expect(out[3]).toBeCloseTo(8.04);
-    expect(out[4]).toBeCloseTo(8.1984);
-    expect(out[5]).toBeCloseTo(13);
-    expect(out[6]).toBeCloseTo(8);
+    expect(out[2]).toBeNull();
+    expect(out[3]).toBe(8);
+    expect(out[4]).toBe(8);
+    expect(out[5]).toBe(13);
+    expect(out[6]).toBe(8);
   });
 
   test("custom start/increment/maximum are per-site", () => {
     const ta = new TaEngine();
     const a = ta.sar("sar:a", 10, 8, 0.02, 0.02, 0.2);
     const b = ta.sar("sar:b", 10, 8, 0.01, 0.01, 0.1);
-    expect(a).toBe(8);
-    expect(b).toBe(8);
-    expect(ta.sar("sar:a", 12, 9, 0.02, 0.02, 0.2)).toBeCloseTo(8.04);
-    expect(ta.sar("sar:b", 12, 9, 0.01, 0.01, 0.1)).toBeCloseTo(8.02);
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+    expect(ta.sar("sar:a", 12, 9, 0.02, 0.02, 0.2)).toBe(8);
+    expect(ta.sar("sar:b", 12, 9, 0.01, 0.01, 0.1)).toBe(8);
   });
 });
 

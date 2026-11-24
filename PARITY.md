@@ -18,6 +18,9 @@ source tree — never a `pynescript` release installed in `.venv`.
 - **`ta.pivothigh` / `ta.pivotlow`** confirm the center bar `right` bars back
   (`_pivot_confirm_window`): left ties confirm, the right side is strict.
 - **`ta.tsi`** returns the raw ratio in `[-1, 1]` (`_tsi`), not percent.
+- **`ta.sar`** seeds `low[0]`, emits `na` on the first valid bar, emits the
+  seed on the second, then applies Wilder's step with the previous-two-bar
+  clamp (`_sar_inc_update`).
 - **Incremental bar-mode detectors** now match `_*_inc_update` rather than the
   full-list path: `ta.zigzag`, `ta.acceleration_factor`, `ta.stoch_smooth`,
   `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`,

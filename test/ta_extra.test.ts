@@ -209,18 +209,19 @@ describe("ta.mfi incremental", () => {
 });
 
 describe("ta.sar incremental", () => {
-  test("first valid bar is the low", () => {
+  test("first valid bar seeds and returns na; second emits the seed", () => {
     const ta = new TaEngine();
-    expect(ta.sar("sar:0", 10, 8)).toBe(8);
-    const second = ta.sar("sar:0", 12, 9);
-    expect(typeof second).toBe("number");
-    expect(Number.isFinite(second!)).toBe(true);
+    expect(ta.sar("sar:0", 10, 8)).toBeNull();
+    expect(ta.sar("sar:0", 12, 9)).toBe(8);
+    const third = ta.sar("sar:0", 11, 8);
+    expect(typeof third).toBe("number");
+    expect(Number.isFinite(third!)).toBe(true);
   });
 
   test("leading na stays na; non-finite params → na", () => {
     const ta = new TaEngine();
     expect(ta.sar("sar:0", null, 8)).toBeNull();
-    expect(ta.sar("sar:0", 10, 8)).toBe(8);
+    expect(ta.sar("sar:0", 10, 8)).toBeNull();
     expect(ta.sar("sar:1", 10, 8, Number.NaN)).toBeNull();
   });
 });
