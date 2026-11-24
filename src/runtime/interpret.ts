@@ -5215,10 +5215,6 @@ function evalExtraTa(
       lenOrDefault(node, env, 2, ["percentage", "percent"], 50),
     );
   }
-  if (fname === "ta.cum" || fname === "cum") {
-    if (typeof ta.cum !== "function") return NA;
-    return (ta.cum as TaEngine["cum"]).call(env.ta, site, srcArg(node, env));
-  }
 
   if (
     (fname === "ta.max" || fname === "ta.min") &&

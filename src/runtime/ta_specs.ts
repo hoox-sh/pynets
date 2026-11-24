@@ -436,6 +436,11 @@ export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
 export const TA_CONDITION_CALL_SPECS: readonly TaContextCallSpec[] = [
   { name: "barssince", method: "barssince", args: [cond(0)] },
   {
+    name: "cum",
+    method: "cum",
+    args: [source(0, ["source", "series", "src"], "na")],
+  },
+  {
     name: "valuewhen",
     method: "valuewhen",
     args: [cond(0), source(1), n(2, ["occurrence", "occ"], 0)],

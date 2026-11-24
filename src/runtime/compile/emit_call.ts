@@ -2198,9 +2198,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       len(2, "14"),
     ]);
   }
-  if (method === "cum") {
-    return taCall("cum", site, [src()]);
-  }
 
   if (method === "wvad") {
     if (args.pos.length >= 4 || Object.hasOwn(args.kw, "high")) {

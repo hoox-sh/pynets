@@ -133,6 +133,7 @@ describe("TA source/length specs", () => {
           "ta.valuewhen(close > open)",
         ],
       },
+      { name: "cum", calls: ["ta.cum()", "ta.cum(close)"] },
     ];
     for (const spec of TA_CONDITION_CALL_SPECS) {
       const entry = cases.find((c) => c.name === spec.name);
