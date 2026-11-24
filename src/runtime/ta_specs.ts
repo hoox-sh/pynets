@@ -384,6 +384,11 @@ export type TaCallArgSpec =
       readonly fallback: number;
       /** Which slot wins when both are integer-like. */
       readonly pick?: "first" | "second";
+    }
+  | {
+      readonly kind: "volumeSwap";
+      readonly names: readonly string[];
+      readonly callIndex: number;
     };
 
 export interface TaContextCallSpec {
@@ -451,6 +456,10 @@ const periodPair = (
   fallback,
   pick,
 });
+const volumeSwap = (
+  callIndex: number,
+  names: readonly string[] = ["volume"],
+): TaCallArgSpec => ({ kind: "volumeSwap", names, callIndex });
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   {
@@ -555,6 +564,28 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "vwma",
+    method: "vwma",
+    variants: [
+      {
+        maxPositional: 1,
+        forbidsKwarg: ["volume"],
+        args: [c("close"), c("volume"), n(0, ["length"], 0, true)],
+      },
+      {
+        minPositional: 3,
+        args: [source(0), volumeSwap(1), n(2, ["length", "period"], 0)],
+      },
+      {
+        requiresKwarg: ["volume"],
+        args: [source(0), volumeSwap(1), n(2, ["length", "period"], 0)],
+      },
+      {
+        args: [source(0), c("volume"), n(1, ["length"], 0)],
+      },
+    ],
+  },
   {
     name: "highestbars",
     method: "highestbars",

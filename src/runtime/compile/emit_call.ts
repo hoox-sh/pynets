@@ -559,6 +559,8 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
       const winner = arg.pick === "first" ? "__a" : "__b";
       return `(((__a, __b) => ((Number.isInteger(__a) && Number.isInteger(__b)) ? ${winner} : ${arg.fallback}))(${first}, ${second}))`;
     }
+    case "volumeSwap":
+      return `((__v) => (Number.isInteger(__v) ? ${VOL} : __v))(${pick(args, arg.callIndex, [...arg.names], "null")})`;
     case "number": {
       const expr = pick(args, arg.callIndex, [...arg.names], "null");
       return arg.periodLike
@@ -1980,34 +1982,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 2, ["mult", "multiplier"], "1"),
     ]);
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
-  }
-
-  if (method === "vwma") {
-    if (args.pos.length <= 1 && !hasAnyKw(args, ["volume"])) {
-      // Python 1-arg period-only form (basic.py:80-88): close + volume from
-      // the chart context; length gates on _is_period_like → na period 0.
-      return taCall("vwma", site, [
-        CLOSE,
-        VOL,
-        periodGate(pick(args, 0, ["length"], "null"), "0"),
-      ]);
-    }
-    if (args.pos.length >= 3 || hasAnyKw(args, ["volume"])) {
-      // Python 3-arg community form (basic.py:89-100): (source, volume,
-      // length). A period-like middle slot swaps volume back to the context
-      // series (basic.py:93/97) — mirror interpret's per-bar swap.
-      const vol = `((__v) => (Number.isInteger(__v) ? ${VOL} : __v))(${pick(args, 1, ["volume"], "null")})`;
-      return taCall("vwma", site, [
-        src(),
-        vol,
-        finiteOr(pick(args, 2, ["length", "period"], "null"), "0"),
-      ]);
-    }
-    return taCall("vwma", site, [
-      src(),
-      VOL,
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
   }
 
   if (method === "tsi") {

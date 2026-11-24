@@ -199,6 +199,14 @@ describe("TA source/length specs", () => {
       "ta.highestbars(source=close, length=3)",
       "ta.lowestbars(3)",
       "ta.lowestbars(close, 3)",
+      "ta.vwma(7)",
+      "ta.vwma()",
+      "ta.vwma(7.5)",
+      "ta.vwma(close, 7)",
+      "ta.vwma(close, volume, 7)",
+      "ta.vwma(close, volume * 1.5, 7)",
+      "ta.vwma(close, 7, 3)",
+      "ta.vwma(close, volume=volume, length=7)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

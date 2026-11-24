@@ -4508,6 +4508,14 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       if (first == null || second == null) return arg.fallback;
       return arg.pick === "first" ? first : second;
     }
+    case "volumeSwap": {
+      const raw = unwrap(
+        evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
+      );
+      return typeof raw === "number" && Number.isInteger(raw)
+        ? num(env.ctx.volume)
+        : raw;
+    }
     case "number":
       return arg.periodLike
         ? (periodLikeArg(node, env, arg.callIndex, [...arg.names]) ??
@@ -4755,52 +4763,6 @@ function evalExtraTa(
       site,
       srcArg(node, env),
       lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-  if (fname === "ta.vwma" || fname === "vwma") {
-    if (typeof ta.vwma !== "function") return NA;
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["volume"])) {
-      // Python 1-arg period-only form (basic.py:80-88): close + volume from
-      // the chart context; length gates on _is_period_like → non-period-like
-      // → na period 0.
-      return (ta.vwma as TaEngine["vwma"]).call(
-        env.ta,
-        site,
-        num(env.ctx.close),
-        num(env.ctx.volume),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    if (positionalCount(node) >= 3 || hasKwarg(node, ["volume"])) {
-      // Python 3-arg community form (basic.py:89-100): (source, volume,
-      // length). A period-like middle slot swaps volume back to the context
-      // series (basic.py:93/97) — cells are last samples, mirroring
-      // _is_period_like's series-last-sample check.
-      const periodRaw = unwrap(
-        evalExpr(callArg(node.args, 2, ["length", "period"]), env),
-      );
-      const period =
-        typeof periodRaw === "number" && Number.isFinite(periodRaw)
-          ? periodRaw
-          : 0;
-      const volLike = periodLikeArg(node, env, 1, ["volume"]) != null;
-      const vol = volLike
-        ? num(env.ctx.volume)
-        : unwrap(evalExpr(callArg(node.args, 1, ["volume"]), env));
-      return (ta.vwma as TaEngine["vwma"]).call(
-        env.ta,
-        site,
-        srcArg(node, env),
-        vol,
-        period,
-      );
-    }
-    return (ta.vwma as TaEngine["vwma"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      num(env.ctx.volume),
-      lenArg(node, env, 1),
     );
   }
 
