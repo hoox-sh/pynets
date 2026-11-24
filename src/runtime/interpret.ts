@@ -4713,33 +4713,6 @@ function evalExtraTa(
   }
 
   if (
-    fname === "ta.percentile_nearest_rank" ||
-    fname === "percentile_nearest_rank"
-  ) {
-    if (typeof ta.percentileNearest !== "function") return NA;
-    return (ta.percentileNearest as TaEngine["percentileNearest"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["percentage", "percent"], 50),
-    );
-  }
-  if (
-    fname === "ta.percentile_linear_interpolation" ||
-    fname === "percentile_linear_interpolation"
-  ) {
-    if (typeof ta.percentileLinear !== "function") return NA;
-    return (ta.percentileLinear as TaEngine["percentileLinear"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-      lenOrDefault(node, env, 2, ["percentage", "percent"], 50),
-    );
-  }
-
-  if (
     (fname === "ta.max" || fname === "ta.min") &&
     typeof ta.max === "function"
   ) {

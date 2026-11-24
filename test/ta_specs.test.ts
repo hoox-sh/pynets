@@ -276,6 +276,9 @@ describe("TA source/length specs", () => {
       "ta.crossover(close)",
       "ta.crossunder(close, open)",
       "ta.cross(close, open)",
+      "ta.percentile_nearest_rank(close, 3, 50)",
+      "ta.percentile_nearest_rank(close, 3)",
+      "ta.percentile_linear_interpolation(close, 3, 50)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

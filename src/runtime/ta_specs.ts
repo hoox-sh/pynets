@@ -563,6 +563,16 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   },
   { name: "rci", method: "rci", args: [source(0), n(1, ["length"], 0)] },
   {
+    name: "percentile_nearest_rank",
+    method: "percentileNearest",
+    args: [source(0), n(1, ["length"], 0), n(2, ["percentage", "percent"], 50)],
+  },
+  {
+    name: "percentile_linear_interpolation",
+    method: "percentileLinear",
+    args: [source(0), n(1, ["length"], 0), n(2, ["percentage", "percent"], 50)],
+  },
+  {
     name: "atr_stop",
     method: "atrStop",
     args: [

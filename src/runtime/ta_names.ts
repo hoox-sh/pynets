@@ -79,6 +79,8 @@ export const TA_METHODS: ReadonlySet<string> = new Set([
   "median",
   "mode",
   "percentrank",
+  "percentile_nearest_rank",
+  "percentile_linear_interpolation",
   "dema",
   "tema",
   "bbw",
