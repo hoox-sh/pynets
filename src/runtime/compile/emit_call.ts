@@ -6,7 +6,7 @@
  */
 import type { Attribute, Call, Constant, expr, Name } from "../../ast/nodes.ts";
 import { TA_BARE_ATTRS, TA_METHODS } from "../ta_names.ts";
-import { TA_SRC_LEN_BY_NAME } from "../ta_specs.ts";
+import { TA_OHLCV_BY_NAME, TA_SRC_LEN_BY_NAME } from "../ta_specs.ts";
 import { emitUserFuncCall } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
 
@@ -1781,6 +1781,17 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       len(1, String(srcLen.compileDefaultLength)),
     ]);
   }
+  const ohlcv = TA_OHLCV_BY_NAME.get(method);
+  if (ohlcv != null) {
+    const ctxExpr = { high: HIGH, low: LOW, close: CLOSE, volume: VOL };
+    return taCall(
+      ohlcv.method,
+      site,
+      ohlcv.args.map((arg, i) =>
+        pick(args, i, [...arg.names], ctxExpr[arg.context]),
+      ),
+    );
+  }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
@@ -2151,35 +2162,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   if (method === "cum") {
     return taCall("cum", site, [src()]);
-  }
-  if (method === "accdist") {
-    return taCall("accdist", site, [
-      pick(args, 0, ["high"], HIGH),
-      pick(args, 1, ["low"], LOW),
-      pick(args, 2, ["close"], CLOSE),
-      pick(args, 3, ["volume"], VOL),
-    ]);
-  }
-  // `vpt` is an alias of the pvt kernel on interpret (no ta.vpt engine fn).
-  if (
-    method === "pvt" ||
-    method === "vpt" ||
-    method === "obv" ||
-    method === "nvi" ||
-    method === "pvi"
-  ) {
-    return taCall(method === "vpt" ? "pvt" : method, site, [
-      pick(args, 0, ["source", "close"], CLOSE),
-      pick(args, 1, ["volume"], VOL),
-    ]);
-  }
-  if (method === "wad") {
-    return taCall("wad", site, [
-      pick(args, 0, ["high"], HIGH),
-      pick(args, 1, ["low"], LOW),
-      pick(args, 2, ["close"], CLOSE),
-      pick(args, 3, ["volume"], VOL),
-    ]);
   }
   if (method === "iii") {
     return taCall("iii", site, [HIGH, LOW, CLOSE, VOL]);

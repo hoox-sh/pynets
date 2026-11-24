@@ -208,7 +208,11 @@ import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
 import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
-import { TA_SRC_LEN_BY_NAME, TA_SRC_LEN_SPECS } from "./ta_specs.ts";
+import {
+  TA_OHLCV_BY_NAME,
+  TA_SRC_LEN_BY_NAME,
+  TA_SRC_LEN_SPECS,
+} from "./ta_specs.ts";
 import {
   CompileError,
   compileEligible,
@@ -4493,6 +4497,22 @@ function evalExtraTa(
       lenArg(node, env, 1),
     );
   }
+  const ohlcv = TA_OHLCV_BY_NAME.get(base);
+  if (ohlcv != null) {
+    const fn = (ta as Record<string, unknown>)[ohlcv.method];
+    if (typeof fn !== "function") return NA;
+    const values = ohlcv.args.map((arg, i) => {
+      const valueArg = callArg(node.args, i, [...arg.names]);
+      return valueArg == null
+        ? num(env.ctx[arg.context])
+        : unwrap(evalExpr(valueArg, env));
+    });
+    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
+    );
+  }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -4886,34 +4906,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 3, ["slowLength", "slow", "slowlen"], 30),
     );
   }
-  if (
-    fname === "ta.accdist" ||
-    fname === "accdist" ||
-    fname === "ta.ad" ||
-    fname === "ad"
-  ) {
-    const hArg = callArg(node.args, 0, ["high"]);
-    const lArg = callArg(node.args, 1, ["low"]);
-    const cArg = callArg(node.args, 2, ["close"]);
-    const vArg = callArg(node.args, 3, ["volume"]);
-    return env.ta.accdist(
-      site,
-      hArg == null ? num(env.ctx.high) : unwrap(evalExpr(hArg, env)),
-      lArg == null ? num(env.ctx.low) : unwrap(evalExpr(lArg, env)),
-      cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env)),
-      vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env)),
-    );
-  }
-  if (fname === "ta.obv" || fname === "obv") {
-    if (typeof ta.obv !== "function") return NA;
-    const cArg = callArg(node.args, 0, ["source", "close"]);
-    const vArg = callArg(node.args, 1, ["volume"]);
-    const close =
-      cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
-    const volume =
-      vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
-    return (ta.obv as TaEngine["obv"]).call(env.ta, site, close, volume);
-  }
+
   if (fname === "ta.pivothigh" || fname === "pivothigh") {
     if (typeof ta.pivothigh !== "function") return NA;
     if (
@@ -5198,73 +5191,7 @@ function evalExtraTa(
       lenArg(node, env, 1),
     );
   }
-  if (fname === "ta.accdist" || fname === "accdist") {
-    if (typeof ta.accdist !== "function") return NA;
-    return (ta.accdist as TaEngine["accdist"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      num(env.ctx.volume),
-    );
-  }
-  if (
-    fname === "ta.pvt" ||
-    fname === "pvt" ||
-    fname === "ta.vpt" ||
-    fname === "vpt"
-  ) {
-    if (typeof ta.pvt !== "function") return NA;
-    return (ta.pvt as TaEngine["pvt"]).call(
-      env.ta,
-      site,
-      num(env.ctx.close),
-      num(env.ctx.volume),
-    );
-  }
-  if (fname === "ta.wad" || fname === "wad") {
-    if (typeof ta.wad !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-    if (positional.length >= 4) {
-      return (ta.wad as TaEngine["wad"]).call(
-        env.ta,
-        site,
-        unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
-        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
-        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
-        unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
-      );
-    }
-    return (ta.wad as TaEngine["wad"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      num(env.ctx.volume),
-    );
-  }
-  if (fname === "ta.nvi" || fname === "nvi") {
-    if (typeof ta.nvi !== "function") return NA;
-    const cArg = callArg(node.args, 0, ["source", "close"]);
-    const vArg = callArg(node.args, 1, ["volume"]);
-    const close =
-      cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
-    const volume =
-      vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
-    return (ta.nvi as TaEngine["nvi"]).call(env.ta, site, close, volume);
-  }
-  if (fname === "ta.pvi" || fname === "pvi") {
-    if (typeof ta.pvi !== "function") return NA;
-    const cArg = callArg(node.args, 0, ["source", "close"]);
-    const vArg = callArg(node.args, 1, ["volume"]);
-    const close =
-      cArg == null ? num(env.ctx.close) : unwrap(evalExpr(cArg, env));
-    const volume =
-      vArg == null ? num(env.ctx.volume) : unwrap(evalExpr(vArg, env));
-    return (ta.pvi as TaEngine["pvi"]).call(env.ta, site, close, volume);
-  }
+
   if (fname === "ta.iii" || fname === "iii") {
     if (typeof ta.iii !== "function") return NA;
     return (ta.iii as TaEngine["iii"]).call(

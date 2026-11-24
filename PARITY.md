@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1455 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1456 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -176,6 +176,7 @@ array-valued names; Python's own compile mode returns na here).
    `src/runtime/compile/emit_call.ts`. Use `taCall` only for methods that take a
    call-site string; stateless methods use `taPure`. For a simple
    `(source, length)` kernel, add a `TaSrcLenSpec` in
-   `src/runtime/ta_specs.ts` instead of hand-writing both backends.
+   `src/runtime/ta_specs.ts` instead of hand-writing both backends. For a
+   context-OHLCV kernel with optional explicit args, add a `TaOhlcvSpec`.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).

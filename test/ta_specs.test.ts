@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { Runtime, TaEngine } from "../src/index.ts";
 import { TA_METHODS } from "../src/runtime/ta_names.ts";
-import { TA_SRC_LEN_SPECS } from "../src/runtime/ta_specs.ts";
+import { TA_OHLCV_SPECS, TA_SRC_LEN_SPECS } from "../src/runtime/ta_specs.ts";
 
 const BARS = Array.from({ length: 40 }, (_, i) => ({
   open: 100 + i * 0.2,
@@ -46,6 +46,28 @@ describe("TA source/length specs", () => {
       expect(compiled.plots, `${name} omitted length`).toEqual(
         interpreted.plots,
       );
+    }
+  });
+
+  test("context-OHLCV descriptors match omitted and explicit args", () => {
+    for (const spec of TA_OHLCV_SPECS) {
+      const omitted = `indicator("t")\nplot(ta.${spec.name}(), "v")`;
+      const explicitArgs = spec.args
+        .map((arg) => `${arg.context} + 1`)
+        .join(", ");
+      const explicit = `indicator("t")\nplot(ta.${spec.name}(${explicitArgs}), "v")`;
+      for (const src of [omitted, explicit]) {
+        const compiled = new Runtime("TEST", { mode: "compile" }).run(
+          src,
+          BARS,
+        );
+        const interpreted = new Runtime("TEST").run(src, BARS);
+        expect(compiled.error, `${spec.name} compile`).toBeUndefined();
+        expect(interpreted.error, `${spec.name} interpret`).toBeUndefined();
+        expect(compiled.plots, `${spec.name} ${src}`).toEqual(
+          interpreted.plots,
+        );
+      }
     }
   });
 

@@ -216,3 +216,47 @@ export const TA_SRC_LEN_SPECS: readonly TaSrcLenSpec[] = [
 export const TA_SRC_LEN_BY_NAME: ReadonlyMap<string, TaSrcLenSpec> = new Map(
   TA_SRC_LEN_SPECS.map((spec) => [spec.name, spec]),
 );
+
+export type TaContextArg = "high" | "low" | "close" | "volume";
+
+export interface TaOhlcvArgSpec {
+  /** Accepted keyword names, in resolution order. */
+  readonly names: readonly string[];
+  /** Context fallback when the argument is omitted. */
+  readonly context: TaContextArg;
+}
+
+export interface TaOhlcvSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  readonly args: readonly TaOhlcvArgSpec[];
+}
+
+const OHLCV: readonly TaOhlcvArgSpec[] = [
+  { names: ["high"], context: "high" },
+  { names: ["low"], context: "low" },
+  { names: ["close"], context: "close" },
+  { names: ["volume"], context: "volume" },
+];
+
+const CLOSE_VOLUME: readonly TaOhlcvArgSpec[] = [
+  { names: ["source", "close"], context: "close" },
+  { names: ["volume"], context: "volume" },
+];
+
+export const TA_OHLCV_SPECS: readonly TaOhlcvSpec[] = [
+  { name: "obv", method: "obv", args: CLOSE_VOLUME },
+  { name: "nvi", method: "nvi", args: CLOSE_VOLUME },
+  { name: "pvi", method: "pvi", args: CLOSE_VOLUME },
+  { name: "pvt", method: "pvt", args: CLOSE_VOLUME },
+  { name: "vpt", method: "pvt", args: CLOSE_VOLUME },
+  { name: "accdist", method: "accdist", args: OHLCV },
+  { name: "ad", method: "accdist", args: OHLCV },
+  { name: "wad", method: "wad", args: OHLCV },
+];
+
+export const TA_OHLCV_BY_NAME: ReadonlyMap<string, TaOhlcvSpec> = new Map(
+  TA_OHLCV_SPECS.map((spec) => [spec.name, spec]),
+);
