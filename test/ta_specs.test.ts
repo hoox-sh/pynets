@@ -178,6 +178,13 @@ describe("TA source/length specs", () => {
       "ta.cci(close, 3)",
       "ta.cci(source=close, length=3)",
       "ta.cci(high + 1, low + 1, close + 1, 3)",
+      "ta.adx(3)",
+      "ta.adx()",
+      "ta.adx(7.5)",
+      "ta.adx(5, 7)",
+      "ta.adx(5, 7.5)",
+      "ta.adx(high + 1, low + 1, close + 1, 3)",
+      "ta.adx(high + 1, low + 1, close + 1)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

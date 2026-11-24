@@ -4500,6 +4500,13 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
     }
     case "typicalContext":
       return hlc3(env);
+    case "periodPair": {
+      const first = periodLikeArg(node, env, arg.firstIndex, [arg.firstName]);
+      const second = periodLikeArg(node, env, arg.secondIndex, [
+        arg.secondName,
+      ]);
+      return first != null && second != null ? second : arg.fallback;
+    }
     case "number":
       return arg.periodLike
         ? (periodLikeArg(node, env, arg.callIndex, [...arg.names]) ??
@@ -4606,6 +4613,7 @@ function evalExtraTa(
     const variant = overload.variants.find(
       (v) =>
         (v.minPositional == null || positional >= v.minPositional) &&
+        (v.positional == null || positional === v.positional) &&
         (v.requiresKwarg == null || hasKwarg(node, [...v.requiresKwarg])) &&
         (v.forbidsKwarg == null || !hasKwarg(node, [...v.forbidsKwarg])),
     );
@@ -5016,51 +5024,7 @@ function evalExtraTa(
     );
     return tupleOf([r.plus, r.minus, r.adx]);
   }
-  if (fname === "ta.adx" || fname === "adx") {
-    if (typeof ta.adx !== "function") return NA;
-    if (positionalCount(node) >= 4) {
-      // Python legacy 4-arg form (common.py:718-726): (high, low, close,
-      // length) with explicit series.
-      return (ta.adx as TaEngine["adx"]).call(
-        env.ta,
-        site,
-        srcArg(node, env),
-        unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
-        unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
-        lenArg(node, env, 3),
-      );
-    }
-    if (
-      positionalCount(node) === 2 &&
-      !hasKwarg(node, ["high", "low", "close"])
-    ) {
-      // Python 2-arg form (diLength, adxSmoothing) (common.py:709-717): both
-      // slots gate on _is_period_like and the ADX period is the SECOND slot —
-      // diLength is accepted but unused by the kernel dispatch. A
-      // non-period-like slot → treated as absent → default 14 (same
-      // convention as the 1-arg form below).
-      const di = periodLikeArg(node, env, 0, ["diLength", "length"]);
-      const smooth = periodLikeArg(node, env, 1, ["adxSmoothing", "adxlen"]);
-      return (ta.adx as TaEngine["adx"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        num(env.ctx.low),
-        num(env.ctx.close),
-        di != null && smooth != null ? smooth : 14,
-      );
-    }
-    // Python 1-arg period-only form gates length via _is_period_like
-    // (common.py ~701): non-period-like → ignored → default 14 (as absent).
-    return (ta.adx as TaEngine["adx"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      periodLikeArg(node, env, 0, ["length"]) ?? 14,
-    );
-  }
+
   if (fname === "ta.correlation" || fname === "correlation") {
     if (typeof ta.correlation !== "function") return NA;
     return (ta.correlation as TaEngine["correlation"]).call(

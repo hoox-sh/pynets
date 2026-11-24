@@ -374,7 +374,15 @@ export type TaCallArgSpec =
       readonly lowIndex: number;
       readonly closeIndex: number;
     }
-  | { readonly kind: "typicalContext" };
+  | { readonly kind: "typicalContext" }
+  | {
+      readonly kind: "periodPair";
+      readonly firstIndex: number;
+      readonly secondIndex: number;
+      readonly firstName: string;
+      readonly secondName: string;
+      readonly fallback: number;
+    };
 
 export interface TaContextCallSpec {
   /** Pine name without the `ta.` prefix. */
@@ -425,6 +433,20 @@ const typical = (
   closeIndex,
 });
 const typicalContext = (): TaCallArgSpec => ({ kind: "typicalContext" });
+const periodPair = (
+  firstIndex: number,
+  secondIndex: number,
+  firstName: string,
+  secondName: string,
+  fallback: number,
+): TaCallArgSpec => ({
+  kind: "periodPair",
+  firstIndex,
+  secondIndex,
+  firstName,
+  secondName,
+  fallback,
+});
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   {
@@ -485,6 +507,8 @@ export const TA_CONDITION_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
 export interface TaOverloadVariant {
   /** Select when the call has at least this many positional arguments. */
   readonly minPositional?: number;
+  /** Select only when the call has exactly this many positional arguments. */
+  readonly positional?: number;
   /** Select only when at least one of these keywords is present. */
   readonly requiresKwarg?: readonly string[];
   /** Select only when none of these keywords is present. */
@@ -525,6 +549,34 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "adx",
+    method: "adx",
+    variants: [
+      {
+        minPositional: 4,
+        args: [
+          v(0, ["source", "series"]),
+          v(1, ["low"]),
+          v(2, ["close"]),
+          n(3, ["length"], 0),
+        ],
+      },
+      {
+        positional: 2,
+        forbidsKwarg: ["high", "low", "close"],
+        args: [
+          c("high"),
+          c("low"),
+          c("close"),
+          periodPair(0, 1, "diLength", "adxSmoothing", 14),
+        ],
+      },
+      {
+        args: [c("high"), c("low"), c("close"), n(0, ["length"], 14, true)],
+      },
+    ],
+  },
   {
     name: "cci",
     method: "cci",

@@ -553,6 +553,11 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
     }
     case "typicalContext":
       return TP;
+    case "periodPair": {
+      const first = pick(args, arg.firstIndex, [arg.firstName], "null");
+      const second = pick(args, arg.secondIndex, [arg.secondName], "null");
+      return `(((__a, __b) => ((Number.isInteger(__a) && Number.isInteger(__b)) ? __b : ${arg.fallback}))(${first}, ${second}))`;
+    }
     case "number": {
       const expr = pick(args, arg.callIndex, [...arg.names], "null");
       return arg.periodLike
@@ -1873,6 +1878,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     const variant = overload.variants.find(
       (v) =>
         (v.minPositional == null || args.pos.length >= v.minPositional) &&
+        (v.positional == null || args.pos.length === v.positional) &&
         (v.requiresKwarg == null || hasAnyKw(args, [...v.requiresKwarg])) &&
         (v.forbidsKwarg == null || !hasAnyKw(args, [...v.forbidsKwarg])),
     );
@@ -2133,34 +2139,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 2, ["maximum", "max"], "0.2"),
     ]);
   }
-  if (method === "adx") {
-    if (args.pos.length >= 4) {
-      // Python legacy 4-arg form (common.py:718-726): (high, low, close,
-      // length) with explicit series. Slots resolve kwarg-first.
-      return taCall("adx", site, [
-        pick(args, 0, ["source", "series"], "null"),
-        pick(args, 1, ["low"], "null"),
-        pick(args, 2, ["close"], "null"),
-        finiteOr(pick(args, 3, ["length"], "null"), "0"),
-      ]);
-    }
-    if (args.pos.length === 2 && !hasAnyKw(args, ["high", "low", "close"])) {
-      // Python 2-arg form (diLength, adxSmoothing) (common.py:709-717): both
-      // slots gate on _is_period_like (kwarg-first resolution) and the ADX
-      // period is the SECOND slot — diLength is accepted but unused. A
-      // non-period-like slot → default 14.
-      const period = `(((__di, __sm) => ((Number.isInteger(__di) && Number.isInteger(__sm)) ? __sm : 14))(${pick(args, 0, ["diLength", "length"], "null")}, ${pick(args, 1, ["adxSmoothing", "adxlen"], "null")}))`;
-      return taCall("adx", site, [HIGH, LOW, CLOSE, period]);
-    }
-    // Python 1-arg period-only form gates length via _is_period_like
-    // (common.py ~701): non-period-like → ignored → default 14 (as absent).
-    return taCall("adx", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      periodGate(pick(args, 0, ["length"], "null"), "14"),
-    ]);
-  }
+
   if (method === "correlation") {
     return taCall("correlation", site, [
       pick(args, 0, ["source1", "source", "a"], CLOSE),
