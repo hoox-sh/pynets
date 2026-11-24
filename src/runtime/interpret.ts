@@ -4843,44 +4843,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.highestbars" || fname === "highestbars") {
-    if (typeof ta.highestbars !== "function") return NA;
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:248-269): source defaults to
-      // the context high series; length gates on _is_period_like.
-      return (ta.highestbars as TaEngine["highestbars"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    return (ta.highestbars as TaEngine["highestbars"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.lowestbars" || fname === "lowestbars") {
-    if (typeof ta.lowestbars !== "function") return NA;
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:271-291): source defaults to
-      // the context low series; length gates like ta.highestbars.
-      return (ta.lowestbars as TaEngine["lowestbars"]).call(
-        env.ta,
-        site,
-        num(env.ctx.low),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    return (ta.lowestbars as TaEngine["lowestbars"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
   if (fname === "ta.alma" || fname === "alma") {
     if (typeof ta.alma !== "function") return NA;
     return (ta.alma as TaEngine["alma"]).call(

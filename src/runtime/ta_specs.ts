@@ -556,6 +556,30 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
   {
+    name: "highestbars",
+    method: "highestbars",
+    variants: [
+      {
+        maxPositional: 1,
+        forbidsKwarg: ["source", "series"],
+        args: [c("high"), n(0, ["length"], 0, true)],
+      },
+      { args: [source(0), n(1, ["length"], 0)] },
+    ],
+  },
+  {
+    name: "lowestbars",
+    method: "lowestbars",
+    variants: [
+      {
+        maxPositional: 1,
+        forbidsKwarg: ["source", "series"],
+        args: [c("low"), n(0, ["length"], 0, true)],
+      },
+      { args: [source(0), n(1, ["length"], 0)] },
+    ],
+  },
+  {
     name: "stoch",
     method: "stoch",
     variants: [

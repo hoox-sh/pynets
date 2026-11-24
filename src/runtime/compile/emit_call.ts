@@ -1908,21 +1908,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
     ]);
   }
-  if (method === "highestbars" || method === "lowestbars") {
-    const defSrc = method === "lowestbars" ? LOW : HIGH;
-    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
-      // Python 1-arg period-only form (basic.py:248-291): context high/low
-      // source, length gated like ta.highest (interpret evalExtraTa).
-      return taCall(method, site, [
-        defSrc,
-        periodGate(pick(args, 0, ["length"], "null"), "0"),
-      ]);
-    }
-    return taCall(method, site, [
-      src(),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
+
   if (method === "max" || method === "min") {
     const defSrc = method === "min" ? LOW : HIGH;
     if (

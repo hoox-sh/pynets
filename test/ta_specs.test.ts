@@ -192,6 +192,13 @@ describe("TA source/length specs", () => {
       "ta.stoch(7, 3.5)",
       "ta.stoch(close, high, low, 7)",
       "ta.stoch(close, high, low)",
+      "ta.highestbars(3)",
+      "ta.highestbars()",
+      "ta.highestbars(7.5)",
+      "ta.highestbars(close, 3)",
+      "ta.highestbars(source=close, length=3)",
+      "ta.lowestbars(3)",
+      "ta.lowestbars(close, 3)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
