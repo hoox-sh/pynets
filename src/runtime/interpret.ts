@@ -209,6 +209,7 @@ import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
 import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
 import {
+  TA_CONDITION_CALL_BY_NAME,
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
@@ -4550,11 +4551,52 @@ function evalExtraTa(
   if (callSpec != null) {
     const fn = (ta as Record<string, unknown>)[callSpec.method];
     if (typeof fn !== "function") return NA;
-    const values = callSpec.args.map((arg) =>
-      arg.kind === "context"
-        ? num(env.ctx[arg.context])
-        : lenOrDefault(node, env, arg.callIndex, [...arg.names], arg.default),
+    const values = callSpec.args.map((arg) => {
+      if (arg.kind === "context") return num(env.ctx[arg.context]);
+      if (arg.kind === "number")
+        return lenOrDefault(
+          node,
+          env,
+          arg.callIndex,
+          [...arg.names],
+          arg.default,
+        );
+      return NA;
+    });
+    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
     );
+  }
+  const conditionSpec = TA_CONDITION_CALL_BY_NAME.get(base);
+  if (conditionSpec != null) {
+    const fn = (ta as Record<string, unknown>)[conditionSpec.method];
+    if (typeof fn !== "function") return NA;
+    const values = conditionSpec.args.map((arg) => {
+      switch (arg.kind) {
+        case "context":
+          return num(env.ctx[arg.context]);
+        case "condition":
+          return unwrap(
+            evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
+          );
+        case "source": {
+          const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
+          if (valueArg == null)
+            return arg.default === "close" ? num(env.ctx.close) : NA;
+          return unwrap(evalExpr(valueArg, env));
+        }
+        case "number":
+          return lenOrDefault(
+            node,
+            env,
+            arg.callIndex,
+            [...arg.names],
+            arg.default,
+          );
+      }
+    });
     return (fn as (site: string, ...args: Cell[]) => Cell).call(
       env.ta,
       site,
@@ -5176,24 +5218,6 @@ function evalExtraTa(
   if (fname === "ta.cum" || fname === "cum") {
     if (typeof ta.cum !== "function") return NA;
     return (ta.cum as TaEngine["cum"]).call(env.ta, site, srcArg(node, env));
-  }
-  if (fname === "ta.barssince" || fname === "barssince") {
-    if (typeof ta.barssince !== "function") return NA;
-    return (ta.barssince as TaEngine["barssince"]).call(
-      env.ta,
-      site,
-      unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env)),
-    );
-  }
-  if (fname === "ta.valuewhen" || fname === "valuewhen") {
-    if (typeof ta.valuewhen !== "function") return NA;
-    return (ta.valuewhen as TaEngine["valuewhen"]).call(
-      env.ta,
-      site,
-      unwrap(evalExpr(callArg(node.args, 0, ["condition", "cond"]), env)),
-      unwrap(evalExpr(callArg(node.args, 1, ["source"]), env)),
-      lenOrDefault(node, env, 2, ["occurrence"], 0),
-    );
   }
 
   if (

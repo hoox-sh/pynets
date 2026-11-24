@@ -7,6 +7,7 @@
 import type { Attribute, Call, Constant, expr, Name } from "../../ast/nodes.ts";
 import { TA_BARE_ATTRS, TA_METHODS } from "../ta_names.ts";
 import {
+  TA_CONDITION_CALL_BY_NAME,
   TA_CONTEXT_CALL_BY_NAME,
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
@@ -1817,15 +1818,42 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   const callSpec = TA_CONTEXT_CALL_BY_NAME.get(method);
   if (callSpec != null) {
-    const parts = callSpec.args.map((arg) =>
-      arg.kind === "context"
-        ? CTX_EXPR[arg.context]
-        : finiteOr(
+    const parts = callSpec.args.map((arg) => {
+      if (arg.kind === "context") return CTX_EXPR[arg.context];
+      if (arg.kind === "number")
+        return finiteOr(
+          pick(args, arg.callIndex, [...arg.names], "null"),
+          String(arg.default),
+        );
+      return "null";
+    });
+    return taCall(callSpec.method, site, parts);
+  }
+  const conditionSpec = TA_CONDITION_CALL_BY_NAME.get(method);
+  if (conditionSpec != null) {
+    const parts = conditionSpec.args.map((arg) => {
+      switch (arg.kind) {
+        case "context":
+          return CTX_EXPR[arg.context];
+        case "condition":
+          // Compile comparisons produce JS booleans; TA kernels expect a
+          // numeric cell (0/1), matching interpret's comparison result.
+          return `((${pick(args, arg.callIndex, [...arg.names], "null")}) ? 1 : 0)`;
+        case "source":
+          return pick(
+            args,
+            arg.callIndex,
+            [...arg.names],
+            arg.default === "close" ? CLOSE : "null",
+          );
+        case "number":
+          return finiteOr(
             pick(args, arg.callIndex, [...arg.names], "null"),
             String(arg.default),
-          ),
-    );
-    return taCall(callSpec.method, site, parts);
+          );
+      }
+    });
+    return taCall(conditionSpec.method, site, parts);
   }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
@@ -2075,18 +2103,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 3, ["slowLength", "slow", "slowlen"], "30"),
     ]);
   }
-  if (method === "barssince") {
-    return taCall("barssince", site, [
-      pick(args, 0, ["condition", "cond"], "null"),
-    ]);
-  }
-  if (method === "valuewhen") {
-    return taCall("valuewhen", site, [
-      pick(args, 0, ["condition", "cond"], "null"),
-      pick(args, 1, ["source", "series"], CLOSE),
-      pick(args, 2, ["occurrence", "occ"], "0"),
-    ]);
-  }
+
   if (method === "pivothigh" || method === "pivotlow") {
     if (args.pos.length === 2 && !hasAnyKw(args, ["source", "series"])) {
       // Python period-first form (basic.py:1007-1039): both slots gate on

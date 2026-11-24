@@ -349,6 +349,17 @@ export type TaCallArgSpec =
       readonly names: readonly string[];
       readonly callIndex: number;
       readonly default: number;
+    }
+  | {
+      readonly kind: "condition";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+    }
+  | {
+      readonly kind: "source";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+      readonly default: "na" | "close";
     };
 
 export interface TaContextCallSpec {
@@ -373,6 +384,15 @@ const n = (
   callIndex,
   default: def,
 });
+const cond = (
+  callIndex: number,
+  names: readonly string[] = ["condition", "cond"],
+): TaCallArgSpec => ({ kind: "condition", names, callIndex });
+const source = (
+  callIndex: number,
+  names: readonly string[] = ["source", "series"],
+  def: "na" | "close" = "na",
+): TaCallArgSpec => ({ kind: "source", names, callIndex, default: def });
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   {
@@ -412,3 +432,15 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
 
 export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
   new Map(TA_CONTEXT_CALL_SPECS.map((spec) => [spec.name, spec]));
+
+export const TA_CONDITION_CALL_SPECS: readonly TaContextCallSpec[] = [
+  { name: "barssince", method: "barssince", args: [cond(0)] },
+  {
+    name: "valuewhen",
+    method: "valuewhen",
+    args: [cond(0), source(1), n(2, ["occurrence", "occ"], 0)],
+  },
+];
+
+export const TA_CONDITION_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
+  new Map(TA_CONDITION_CALL_SPECS.map((spec) => [spec.name, spec]));

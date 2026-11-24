@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { Runtime, TaEngine } from "../src/index.ts";
 import { TA_METHODS } from "../src/runtime/ta_names.ts";
 import {
+  TA_CONDITION_CALL_SPECS,
   TA_CONTEXT_CALL_SPECS,
   TA_LEN_EXTRA_SPECS,
   TA_OHLCV_SPECS,
@@ -114,6 +115,38 @@ describe("TA source/length specs", () => {
         expect(compiled.plots, `${spec.name} ${args}`).toEqual(
           interpreted.plots,
         );
+      }
+    }
+  });
+
+  test("condition/source descriptors match omitted and explicit args", () => {
+    const cases: Array<{ name: string; calls: string[] }> = [
+      {
+        name: "barssince",
+        calls: ["ta.barssince(close > open)", "ta.barssince()"],
+      },
+      {
+        name: "valuewhen",
+        calls: [
+          "ta.valuewhen(close > open, close, 0)",
+          "ta.valuewhen(close > open, close)",
+          "ta.valuewhen(close > open)",
+        ],
+      },
+    ];
+    for (const spec of TA_CONDITION_CALL_SPECS) {
+      const entry = cases.find((c) => c.name === spec.name);
+      expect(entry, spec.name).toBeDefined();
+      for (const call of entry!.calls) {
+        const src = `indicator("t")\nplot(${call}, "v")`;
+        const compiled = new Runtime("TEST", { mode: "compile" }).run(
+          src,
+          BARS,
+        );
+        const interpreted = new Runtime("TEST").run(src, BARS);
+        expect(compiled.error, `${call} compile`).toBeUndefined();
+        expect(interpreted.error, `${call} interpret`).toBeUndefined();
+        expect(compiled.plots, call).toEqual(interpreted.plots);
       }
     }
   });
