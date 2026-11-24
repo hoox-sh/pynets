@@ -4932,73 +4932,7 @@ function evalExtraTa(
   // wave12-start — risk / sizing / timing analytics
   const wave12s = (index: number, names: string[], message: string): Value =>
     evalExpr(wave10aArg(index, names, message), env);
-  if (fname === "ta.position_sizing" || fname === "position_sizing") {
-    const msg = "ta.position_sizing() requires 4 arguments";
-    return env.ta.positionSizing(
-      wave11n(0, ["account", "account_size"], msg),
-      wave11n(1, ["risk_pct", "risk_percent"], msg),
-      wave11n(2, ["entry", "entry_price"], msg),
-      wave11n(3, ["stop", "stop_price"], msg),
-    );
-  }
-  if (fname === "ta.kelly_criterion" || fname === "kelly_criterion") {
-    const msg = "ta.kelly_criterion() requires 3 arguments";
-    return env.ta.kellyCriterion(
-      wave11n(0, ["win_rate"], msg),
-      wave11n(1, ["avg_win"], msg),
-      wave11n(2, ["avg_loss"], msg),
-    );
-  }
-  if (fname === "ta.risk_reward_ratio" || fname === "risk_reward_ratio") {
-    const msg = "ta.risk_reward_ratio() requires 3 arguments";
-    return env.ta.riskRewardRatio(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["stop", "stop_price"], msg),
-      wave11n(2, ["target", "target_price"], msg),
-    );
-  }
-  if (
-    fname === "ta.risk_reward_asymmetry" ||
-    fname === "risk_reward_asymmetry"
-  ) {
-    const msg = "ta.risk_reward_asymmetry() requires 4 arguments";
-    return env.ta.riskRewardAsymmetry(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["stop", "stop_price"], msg),
-      wave11n(2, ["target", "target_price"], msg),
-      wave11n(3, ["win_rate"], msg),
-    );
-  }
-  if (
-    fname === "ta.probability_of_movement" ||
-    fname === "probability_of_movement"
-  ) {
-    const msg = "ta.probability_of_movement() requires 4 arguments";
-    return env.ta.probabilityOfMovement(
-      wave11n(0, ["current", "current_price"], msg),
-      wave11n(1, ["target", "target_price"], msg),
-      wave11n(2, ["atr"], msg),
-      wave11n(3, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.trend_strength" || fname === "trend_strength") {
-    const msg = "ta.trend_strength() requires 3 arguments";
-    return env.ta.trendStrength(
-      wave11n(0, ["price", "source"], msg),
-      wave11n(1, ["adx"], msg),
-      wave11n(2, ["rsi"], msg),
-    );
-  }
-  if (fname === "ta.breakeven_level" || fname === "breakeven_level") {
-    const msg = "ta.breakeven_level() requires 5 arguments";
-    return env.ta.breakevenLevel(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["quantity", "qty"], msg),
-      wave11n(2, ["commission"], msg),
-      wave11n(3, ["slippage"], msg),
-      wave11n(4, ["direction"], msg),
-    );
-  }
+
   if (
     fname === "ta.market_structure_pivot" ||
     fname === "market_structure_pivot"
@@ -5011,28 +4945,7 @@ function evalExtraTa(
     const mode = wave11n(4, ["mode", "right", "right_bars"], msg);
     return env.ta.marketStructurePivot(site, high, low, period, mode);
   }
-  if (
-    fname === "ta.position_sizing_score" ||
-    fname === "position_sizing_score"
-  ) {
-    const msg = "ta.position_sizing_score() requires 4 arguments";
-    return env.ta.positionSizingScore(
-      wave11n(0, ["account_risk", "risk"], msg),
-      wave11n(1, ["volatility"], msg),
-      wave11n(2, ["conviction"], msg),
-      wave11n(3, ["correlation"], msg),
-    );
-  }
-  if (fname === "ta.trailing_exit_level" || fname === "trailing_exit_level") {
-    const msg = "ta.trailing_exit_level() requires 5 arguments";
-    return env.ta.trailingExitLevel(
-      wave11n(0, ["entry", "entry_price"], msg),
-      wave11n(1, ["current", "current_price"], msg),
-      wave11n(2, ["atr"], msg),
-      wave11n(3, ["multiplier", "mult"], msg),
-      wave11n(4, ["step"], msg),
-    );
-  }
+
   if (fname === "ta.optimal_entry_zone" || fname === "optimal_entry_zone") {
     const msg = "ta.optimal_entry_zone() requires 4 arguments";
     wave11n(0, ["high"], msg);
@@ -5051,29 +4964,7 @@ function evalExtraTa(
       wave11n(4, ["threshold"], msg),
     );
   }
-  if (
-    fname === "ta.multi_timeframe_signal" ||
-    fname === "multi_timeframe_signal"
-  ) {
-    const msg = "ta.multi_timeframe_signal() requires 6 arguments";
-    return env.ta.multiTimeframeSignal(
-      wave11n(0, ["s1", "signal1"], msg),
-      wave11n(1, ["s2", "signal2"], msg),
-      wave11n(2, ["s3", "signal3"], msg),
-      wave11n(3, ["w1", "weight1"], msg),
-      wave11n(4, ["w2", "weight2"], msg),
-      wave11n(5, ["w3", "weight3"], msg),
-    );
-  }
-  if (fname === "ta.market_timing_index" || fname === "market_timing_index") {
-    const msg = "ta.market_timing_index() requires 4 arguments";
-    return env.ta.marketTimingIndex(
-      wave11n(0, ["trend"], msg),
-      wave11n(1, ["momentum"], msg),
-      wave11n(2, ["volatility"], msg),
-      wave11n(3, ["sentiment"], msg),
-    );
-  }
+
   if (
     fname === "ta.regime_adaptive_signal" ||
     fname === "regime_adaptive_signal"
@@ -5085,15 +4976,7 @@ function evalExtraTa(
     wave11n(3, ["period", "length"], msg);
     return env.ta.regimeAdaptiveSignal(strength, volRegime, trendRegime);
   }
-  if (fname === "ta.strategy_score" || fname === "strategy_score") {
-    const msg = "ta.strategy_score() requires 4 arguments";
-    return env.ta.strategyScore(
-      wave11n(0, ["rsi"], msg),
-      wave11n(1, ["macd"], msg),
-      wave11n(2, ["ema_cross"], msg),
-      wave11n(3, ["trend"], msg),
-    );
-  }
+
   if (fname === "ta.breakout_detection" || fname === "breakout_detection") {
     const msg = "ta.breakout_detection() requires 3 arguments";
     const arg = (i: number, names: string[]): Cell => {
@@ -5108,63 +4991,7 @@ function evalExtraTa(
   }
   // wave12-end
   // wave13-start — history / sentiment / macro analytics
-  if (fname === "ta.ema_cross_signal" || fname === "ema_cross_signal") {
-    const msg = "ta.ema_cross_signal() requires 3 arguments";
-    return env.ta.emaCrossSignal(
-      site,
-      wave11n(0, ["fast_ema", "fast"], msg),
-      wave11n(1, ["slow_ema", "slow"], msg),
-      wave11n(2, ["threshold"], msg),
-    );
-  }
-  if (fname === "ta.momentum_filter" || fname === "momentum_filter") {
-    const msg = "ta.momentum_filter() requires 3 arguments";
-    return env.ta.momentumFilter(
-      site,
-      wave11n(0, ["momentum_raw", "momentum"], msg),
-      wave11n(1, ["volume"], msg),
-      wave11n(2, ["period", "length"], msg),
-    );
-  }
-  if (fname === "ta.volatility_regime" || fname === "volatility_regime") {
-    const msg = "ta.volatility_regime() requires 2 arguments";
-    return env.ta.volatilityRegime(
-      site,
-      wave11n(0, ["atr_series", "atr", "source"], msg),
-      wave11n(1, ["period", "length"], msg),
-    );
-  }
-  if (
-    fname === "ta.economic_impact_score" ||
-    fname === "economic_impact_score"
-  ) {
-    const msg = "ta.economic_impact_score() requires 3 arguments";
-    return env.ta.economicImpactScore(
-      wave11n(0, ["price_change"], msg),
-      wave11n(1, ["volatility"], msg),
-      wave11n(2, ["volume_change"], msg),
-    );
-  }
-  if (fname === "ta.contrarian_signal" || fname === "contrarian_signal") {
-    const msg = "ta.contrarian_signal() requires 3 arguments";
-    return env.ta.contrarianSignal(
-      wave11n(0, ["sentiment"], msg),
-      wave11n(1, ["volatility"], msg),
-      wave11n(2, ["time_since_extreme", "time_extreme"], msg),
-    );
-  }
-  if (
-    fname === "ta.drawdown_recovery_level" ||
-    fname === "drawdown_recovery_level"
-  ) {
-    const msg = "ta.drawdown_recovery_level() requires 4 arguments";
-    return env.ta.drawdownRecoveryLevel(
-      wave11n(0, ["peak"], msg),
-      wave11n(1, ["current", "current_price"], msg),
-      wave11n(2, ["recovery_factor", "factor"], msg),
-      wave11n(3, ["period", "length"], msg),
-    );
-  }
+
   if (fname === "ta.pivot_point_levels" || fname === "pivot_point_levels") {
     const msg =
       "ta.pivot_point_levels() requires type+anchor or high, low, close";

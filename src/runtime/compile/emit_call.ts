@@ -2119,60 +2119,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `__h.ta.trendConfirmationScore(${cellOf(pick(args, 0, ["momentum"], "null"))}, ${cellOf(pick(args, 1, ["trend_alignment"], "null"))}, ${cellOf(pick(args, 2, ["strength"], "null"))}, ${cellOf(pick(args, 3, ["rsi"], "null"))}, ${cellOf(pick(args, 4, ["rsi_alignment"], "null"))})`;
   }
 
-  if (method === "position_sizing") {
-    return taPure("positionSizing", [
-      cellOf(pick(args, 0, ["account", "account_size"], "null")),
-      cellOf(pick(args, 1, ["risk_pct", "risk_percent"], "null")),
-      cellOf(pick(args, 2, ["entry", "entry_price"], "null")),
-      cellOf(pick(args, 3, ["stop", "stop_price"], "null")),
-    ]);
-  }
-  if (method === "kelly_criterion") {
-    return taPure("kellyCriterion", [
-      cellOf(pick(args, 0, ["win_rate"], "null")),
-      cellOf(pick(args, 1, ["avg_win"], "null")),
-      cellOf(pick(args, 2, ["avg_loss"], "null")),
-    ]);
-  }
-  if (method === "risk_reward_ratio") {
-    return taPure("riskRewardRatio", [
-      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
-      cellOf(pick(args, 1, ["stop", "stop_price"], "null")),
-      cellOf(pick(args, 2, ["target", "target_price"], "null")),
-    ]);
-  }
-  if (method === "risk_reward_asymmetry") {
-    return taPure("riskRewardAsymmetry", [
-      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
-      cellOf(pick(args, 1, ["stop", "stop_price"], "null")),
-      cellOf(pick(args, 2, ["target", "target_price"], "null")),
-      cellOf(pick(args, 3, ["win_rate"], "null")),
-    ]);
-  }
-  if (method === "probability_of_movement") {
-    return taPure("probabilityOfMovement", [
-      cellOf(pick(args, 0, ["current", "current_price"], "null")),
-      cellOf(pick(args, 1, ["target", "target_price"], "null")),
-      cellOf(pick(args, 2, ["atr"], "null")),
-      cellOf(pick(args, 3, ["period", "length"], "null")),
-    ]);
-  }
-  if (method === "trend_strength") {
-    return taPure("trendStrength", [
-      cellOf(pick(args, 0, ["price", "source"], "null")),
-      cellOf(pick(args, 1, ["adx"], "null")),
-      cellOf(pick(args, 2, ["rsi"], "null")),
-    ]);
-  }
-  if (method === "breakeven_level") {
-    return taPure("breakevenLevel", [
-      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
-      cellOf(pick(args, 1, ["quantity", "qty"], "null")),
-      cellOf(pick(args, 2, ["commission"], "null")),
-      cellOf(pick(args, 3, ["slippage"], "null")),
-      cellOf(pick(args, 4, ["direction"], "null")),
-    ]);
-  }
   if (method === "market_structure_pivot") {
     return taCall("marketStructurePivot", site, [
       arrOrCell(pick(args, 0, ["high_list", "high"], "null")),
@@ -2181,23 +2127,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       cellOf(pick(args, 4, ["mode", "right", "right_bars"], "null")),
     ]);
   }
-  if (method === "position_sizing_score") {
-    return taPure("positionSizingScore", [
-      cellOf(pick(args, 0, ["account_risk", "risk"], "null")),
-      cellOf(pick(args, 1, ["volatility"], "null")),
-      cellOf(pick(args, 2, ["conviction"], "null")),
-      cellOf(pick(args, 3, ["correlation"], "null")),
-    ]);
-  }
-  if (method === "trailing_exit_level") {
-    return taPure("trailingExitLevel", [
-      cellOf(pick(args, 0, ["entry", "entry_price"], "null")),
-      cellOf(pick(args, 1, ["current", "current_price"], "null")),
-      cellOf(pick(args, 2, ["atr"], "null")),
-      cellOf(pick(args, 3, ["multiplier", "mult"], "null")),
-      cellOf(pick(args, 4, ["step"], "null")),
-    ]);
-  }
+
   if (method === "optimal_entry_zone") {
     return taCall("optimalEntryZone", site, [
       arrOrCell(pick(args, 2, ["close"], "null")),
@@ -2211,24 +2141,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       cellOf(pick(args, 4, ["threshold"], "null")),
     ]);
   }
-  if (method === "multi_timeframe_signal") {
-    return taPure("multiTimeframeSignal", [
-      cellOf(pick(args, 0, ["s1", "signal1"], "null")),
-      cellOf(pick(args, 1, ["s2", "signal2"], "null")),
-      cellOf(pick(args, 2, ["s3", "signal3"], "null")),
-      cellOf(pick(args, 3, ["w1", "weight1"], "null")),
-      cellOf(pick(args, 4, ["w2", "weight2"], "null")),
-      cellOf(pick(args, 5, ["w3", "weight3"], "null")),
-    ]);
-  }
-  if (method === "market_timing_index") {
-    return taPure("marketTimingIndex", [
-      cellOf(pick(args, 0, ["trend"], "null")),
-      cellOf(pick(args, 1, ["momentum"], "null")),
-      cellOf(pick(args, 2, ["volatility"], "null")),
-      cellOf(pick(args, 3, ["sentiment"], "null")),
-    ]);
-  }
+
   if (method === "regime_adaptive_signal") {
     return taPure("regimeAdaptiveSignal", [
       cellOf(pick(args, 0, ["signal_strength", "strength"], "null")),
@@ -2236,14 +2149,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 2, ["trend_regime"], '""'),
     ]);
   }
-  if (method === "strategy_score") {
-    return taPure("strategyScore", [
-      cellOf(pick(args, 0, ["rsi"], "null")),
-      cellOf(pick(args, 1, ["macd"], "null")),
-      cellOf(pick(args, 2, ["ema_cross"], "null")),
-      cellOf(pick(args, 3, ["trend"], "null")),
-    ]);
-  }
+
   if (method === "breakout_detection") {
     const arg = (i: number, names: string[]): string =>
       isSeriesNode(args.posNodes[i])
@@ -2255,48 +2161,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       arg(2, ["support"]),
     ]);
   }
-  if (method === "ema_cross_signal") {
-    return taCall("emaCrossSignal", site, [
-      cellOf(pick(args, 0, ["fast_ema", "fast"], "null")),
-      cellOf(pick(args, 1, ["slow_ema", "slow"], "null")),
-      cellOf(pick(args, 2, ["threshold"], "null")),
-    ]);
-  }
-  if (method === "momentum_filter") {
-    return taCall("momentumFilter", site, [
-      cellOf(pick(args, 0, ["momentum_raw", "momentum"], "null")),
-      cellOf(pick(args, 1, ["volume"], "null")),
-      cellOf(pick(args, 2, ["period", "length"], "null")),
-    ]);
-  }
-  if (method === "volatility_regime") {
-    return taCall("volatilityRegime", site, [
-      cellOf(pick(args, 0, ["atr_series", "atr", "source"], "null")),
-      cellOf(pick(args, 1, ["period", "length"], "null")),
-    ]);
-  }
-  if (method === "economic_impact_score") {
-    return taPure("economicImpactScore", [
-      cellOf(pick(args, 0, ["price_change"], "null")),
-      cellOf(pick(args, 1, ["volatility"], "null")),
-      cellOf(pick(args, 2, ["volume_change"], "null")),
-    ]);
-  }
-  if (method === "contrarian_signal") {
-    return taPure("contrarianSignal", [
-      cellOf(pick(args, 0, ["sentiment"], "null")),
-      cellOf(pick(args, 1, ["volatility"], "null")),
-      cellOf(pick(args, 2, ["time_since_extreme", "time_extreme"], "null")),
-    ]);
-  }
-  if (method === "drawdown_recovery_level") {
-    return taPure("drawdownRecoveryLevel", [
-      cellOf(pick(args, 0, ["peak"], "null")),
-      cellOf(pick(args, 1, ["current", "current_price"], "null")),
-      cellOf(pick(args, 2, ["recovery_factor", "factor"], "null")),
-      cellOf(pick(args, 3, ["period", "length"], "null")),
-    ]);
-  }
+
   if (method === "pivot_point_levels") {
     return taPure("pivotPointLevels", [
       cellOf(pick(args, 0, ["high"], "null")),

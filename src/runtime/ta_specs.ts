@@ -886,6 +886,196 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
       ],
     ),
   },
+  {
+    name: "position_sizing",
+    method: "positionSizing",
+    hasSite: false,
+    args: requiredArgs("ta.position_sizing() requires 4 arguments", [
+      { index: 0, names: ["account", "account_size"] },
+      { index: 1, names: ["risk_pct", "risk_percent"] },
+      { index: 2, names: ["entry", "entry_price"] },
+      { index: 3, names: ["stop", "stop_price"] },
+    ]),
+  },
+  {
+    name: "kelly_criterion",
+    method: "kellyCriterion",
+    hasSite: false,
+    args: requiredArgs("ta.kelly_criterion() requires 3 arguments", [
+      { index: 0, names: ["win_rate"] },
+      { index: 1, names: ["avg_win"] },
+      { index: 2, names: ["avg_loss"] },
+    ]),
+  },
+  {
+    name: "risk_reward_ratio",
+    method: "riskRewardRatio",
+    hasSite: false,
+    args: requiredArgs("ta.risk_reward_ratio() requires 3 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["stop", "stop_price"] },
+      { index: 2, names: ["target", "target_price"] },
+    ]),
+  },
+  {
+    name: "risk_reward_asymmetry",
+    method: "riskRewardAsymmetry",
+    hasSite: false,
+    args: requiredArgs("ta.risk_reward_asymmetry() requires 4 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["stop", "stop_price"] },
+      { index: 2, names: ["target", "target_price"] },
+      { index: 3, names: ["win_rate"] },
+    ]),
+  },
+  {
+    name: "probability_of_movement",
+    method: "probabilityOfMovement",
+    hasSite: false,
+    args: requiredArgs("ta.probability_of_movement() requires 4 arguments", [
+      { index: 0, names: ["current", "current_price"] },
+      { index: 1, names: ["target", "target_price"] },
+      { index: 2, names: ["atr"] },
+      { index: 3, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "trend_strength",
+    method: "trendStrength",
+    hasSite: false,
+    args: requiredArgs("ta.trend_strength() requires 3 arguments", [
+      { index: 0, names: ["price", "source"] },
+      { index: 1, names: ["adx"] },
+      { index: 2, names: ["rsi"] },
+    ]),
+  },
+  {
+    name: "breakeven_level",
+    method: "breakevenLevel",
+    hasSite: false,
+    args: requiredArgs("ta.breakeven_level() requires 5 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["quantity", "qty"] },
+      { index: 2, names: ["commission"] },
+      { index: 3, names: ["slippage"] },
+      { index: 4, names: ["direction"] },
+    ]),
+  },
+  {
+    name: "position_sizing_score",
+    method: "positionSizingScore",
+    hasSite: false,
+    args: requiredArgs("ta.position_sizing_score() requires 4 arguments", [
+      { index: 0, names: ["account_risk", "risk"] },
+      { index: 1, names: ["volatility"] },
+      { index: 2, names: ["conviction"] },
+      { index: 3, names: ["correlation"] },
+    ]),
+  },
+  {
+    name: "trailing_exit_level",
+    method: "trailingExitLevel",
+    hasSite: false,
+    args: requiredArgs("ta.trailing_exit_level() requires 5 arguments", [
+      { index: 0, names: ["entry", "entry_price"] },
+      { index: 1, names: ["current", "current_price"] },
+      { index: 2, names: ["atr"] },
+      { index: 3, names: ["multiplier", "mult"] },
+      { index: 4, names: ["step"] },
+    ]),
+  },
+  {
+    name: "multi_timeframe_signal",
+    method: "multiTimeframeSignal",
+    hasSite: false,
+    args: requiredArgs("ta.multi_timeframe_signal() requires 6 arguments", [
+      { index: 0, names: ["s1", "signal1"] },
+      { index: 1, names: ["s2", "signal2"] },
+      { index: 2, names: ["s3", "signal3"] },
+      { index: 3, names: ["w1", "weight1"] },
+      { index: 4, names: ["w2", "weight2"] },
+      { index: 5, names: ["w3", "weight3"] },
+    ]),
+  },
+  {
+    name: "market_timing_index",
+    method: "marketTimingIndex",
+    hasSite: false,
+    args: requiredArgs("ta.market_timing_index() requires 4 arguments", [
+      { index: 0, names: ["trend"] },
+      { index: 1, names: ["momentum"] },
+      { index: 2, names: ["volatility"] },
+      { index: 3, names: ["sentiment"] },
+    ]),
+  },
+  {
+    name: "strategy_score",
+    method: "strategyScore",
+    hasSite: false,
+    args: requiredArgs("ta.strategy_score() requires 4 arguments", [
+      { index: 0, names: ["rsi"] },
+      { index: 1, names: ["macd"] },
+      { index: 2, names: ["ema_cross"] },
+      { index: 3, names: ["trend"] },
+    ]),
+  },
+  {
+    name: "ema_cross_signal",
+    method: "emaCrossSignal",
+    args: requiredArgs("ta.ema_cross_signal() requires 3 arguments", [
+      { index: 0, names: ["fast_ema", "fast"] },
+      { index: 1, names: ["slow_ema", "slow"] },
+      { index: 2, names: ["threshold"] },
+    ]),
+  },
+  {
+    name: "momentum_filter",
+    method: "momentumFilter",
+    args: requiredArgs("ta.momentum_filter() requires 3 arguments", [
+      { index: 0, names: ["momentum_raw", "momentum"] },
+      { index: 1, names: ["volume"] },
+      { index: 2, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "volatility_regime",
+    method: "volatilityRegime",
+    args: requiredArgs("ta.volatility_regime() requires 2 arguments", [
+      { index: 0, names: ["atr_series", "atr", "source"] },
+      { index: 1, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "economic_impact_score",
+    method: "economicImpactScore",
+    hasSite: false,
+    args: requiredArgs("ta.economic_impact_score() requires 3 arguments", [
+      { index: 0, names: ["price_change"] },
+      { index: 1, names: ["volatility"] },
+      { index: 2, names: ["volume_change"] },
+    ]),
+  },
+  {
+    name: "contrarian_signal",
+    method: "contrarianSignal",
+    hasSite: false,
+    args: requiredArgs("ta.contrarian_signal() requires 3 arguments", [
+      { index: 0, names: ["sentiment"] },
+      { index: 1, names: ["volatility"] },
+      { index: 2, names: ["time_since_extreme", "time_extreme"] },
+    ]),
+  },
+  {
+    name: "drawdown_recovery_level",
+    method: "drawdownRecoveryLevel",
+    hasSite: false,
+    args: requiredArgs("ta.drawdown_recovery_level() requires 4 arguments", [
+      { index: 0, names: ["peak"] },
+      { index: 1, names: ["current", "current_price"] },
+      { index: 2, names: ["recovery_factor", "factor"] },
+      { index: 3, names: ["period", "length"] },
+    ]),
+  },
 ];
 
 export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
