@@ -545,6 +545,14 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
       );
     case "value":
       return pick(args, arg.callIndex, [...arg.names], "null");
+    case "typicalExplicit": {
+      const h = pick(args, arg.highIndex, ["high"], "null");
+      const l = pick(args, arg.lowIndex, ["low"], "null");
+      const c = pick(args, arg.closeIndex, ["close"], "null");
+      return `((__h, __l, __c) => ((__h != null && __l != null && __c != null) ? (__h + __l + __c) / 3 : __c))(${h}, ${l}, ${c})`;
+    }
+    case "typicalContext":
+      return TP;
     case "number": {
       const expr = pick(args, arg.callIndex, [...arg.names], "null");
       return arg.periodLike
@@ -1863,7 +1871,10 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   const overload = TA_OVERLOAD_BY_NAME.get(method);
   if (overload != null) {
     const variant = overload.variants.find(
-      (v) => v.minPositional == null || args.pos.length >= v.minPositional,
+      (v) =>
+        (v.minPositional == null || args.pos.length >= v.minPositional) &&
+        (v.requiresKwarg == null || hasAnyKw(args, [...v.requiresKwarg])) &&
+        (v.forbidsKwarg == null || !hasAnyKw(args, [...v.forbidsKwarg])),
     );
     if (variant != null) {
       return taCall(
@@ -2018,30 +2029,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return taCall("vwma", site, [
       src(),
       VOL,
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-    ]);
-  }
-  if (method === "cci") {
-    if (args.pos.length >= 4) {
-      // Python legacy 4-arg form (oscillators.py:178-187): typical price of
-      // the given (high, low, close) series. Slots resolve kwarg-first.
-      const tp = `((__h, __l, __c) => ((__h != null && __l != null && __c != null) ? (__h + __l + __c) / 3 : __c))(${pick(args, 0, ["high"], "null")}, ${pick(args, 1, ["low"], "null")}, ${pick(args, 2, ["close"], "null")})`;
-      return taCall("cci", site, [
-        tp,
-        finiteOr(pick(args, 3, ["length"], "null"), "0"),
-      ]);
-    }
-    if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
-      // Python 1-arg period-only form (oscillators.py:159-171): typical price
-      // from the context high/low/close; length gates on _is_period_like.
-      return taCall("cci", site, [
-        TP,
-        periodGate(pick(args, 0, ["length"], "null"), "0"),
-      ]);
-    }
-    // Python 2-arg form (oscillators.py:172-177): CCI over the source alone.
-    return taCall("cci", site, [
-      src(),
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
     ]);
   }

@@ -4486,6 +4486,20 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       return unwrap(
         evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
       );
+    case "typicalExplicit": {
+      const h = unwrap(
+        evalExpr(callArg(node.args, arg.highIndex, ["high"]), env),
+      );
+      const l = unwrap(
+        evalExpr(callArg(node.args, arg.lowIndex, ["low"]), env),
+      );
+      const c = unwrap(
+        evalExpr(callArg(node.args, arg.closeIndex, ["close"]), env),
+      );
+      return h != null && l != null && c != null ? (h + l + c) / 3 : c;
+    }
+    case "typicalContext":
+      return hlc3(env);
     case "number":
       return arg.periodLike
         ? (periodLikeArg(node, env, arg.callIndex, [...arg.names]) ??
@@ -4590,7 +4604,10 @@ function evalExtraTa(
     if (typeof fn !== "function") return NA;
     const positional = positionalCount(node);
     const variant = overload.variants.find(
-      (v) => v.minPositional == null || positional >= v.minPositional,
+      (v) =>
+        (v.minPositional == null || positional >= v.minPositional) &&
+        (v.requiresKwarg == null || hasKwarg(node, [...v.requiresKwarg])) &&
+        (v.forbidsKwarg == null || !hasKwarg(node, [...v.forbidsKwarg])),
     );
     if (variant != null) {
       const values = variant.args.map((arg) => evalSpecArg(arg, node, env));
@@ -4773,44 +4790,6 @@ function evalExtraTa(
       site,
       srcArg(node, env),
       num(env.ctx.volume),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.cci" || fname === "cci") {
-    if (typeof ta.cci !== "function") return NA;
-    if (positionalCount(node) >= 4) {
-      // Python legacy 4-arg form (oscillators.py:178-187): typical price of
-      // the given (high, low, close) series.
-      const h = unwrap(evalExpr(callArg(node.args, 0, ["high"]), env));
-      const l = unwrap(evalExpr(callArg(node.args, 1, ["low"]), env));
-      const c = unwrap(evalExpr(callArg(node.args, 2, ["close"]), env));
-      const tp = h != null && l != null && c != null ? (h + l + c) / 3 : c;
-      return (ta.cci as TaEngine["cci"]).call(
-        env.ta,
-        site,
-        tp,
-        lenArg(node, env, 3),
-      );
-    }
-    if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
-      // Python 1-arg period-only form (oscillators.py:159-171): typical price
-      // from the context high/low/close (hlc3 fallback); length gates on
-      // _is_period_like → non-period-like → na period 0.
-      return (ta.cci as TaEngine["cci"]).call(
-        env.ta,
-        site,
-        hlc3(env),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    // Python 2-arg form (oscillators.py:172-177): CCI over the source itself
-    // (_cci(series, series, series, period) → tp = series). SoT correction:
-    // the previous blend of context high/low into the source matched no
-    // Python dispatch arm.
-    return (ta.cci as TaEngine["cci"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
       lenArg(node, env, 1),
     );
   }

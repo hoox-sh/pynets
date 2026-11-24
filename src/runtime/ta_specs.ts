@@ -367,7 +367,14 @@ export type TaCallArgSpec =
       readonly kind: "value";
       readonly names: readonly string[];
       readonly callIndex: number;
-    };
+    }
+  | {
+      readonly kind: "typicalExplicit";
+      readonly highIndex: number;
+      readonly lowIndex: number;
+      readonly closeIndex: number;
+    }
+  | { readonly kind: "typicalContext" };
 
 export interface TaContextCallSpec {
   /** Pine name without the `ta.` prefix. */
@@ -407,6 +414,17 @@ const v = (callIndex: number, names: readonly string[]): TaCallArgSpec => ({
   names,
   callIndex,
 });
+const typical = (
+  highIndex: number,
+  lowIndex: number,
+  closeIndex: number,
+): TaCallArgSpec => ({
+  kind: "typicalExplicit",
+  highIndex,
+  lowIndex,
+  closeIndex,
+});
+const typicalContext = (): TaCallArgSpec => ({ kind: "typicalContext" });
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
   {
@@ -467,6 +485,10 @@ export const TA_CONDITION_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
 export interface TaOverloadVariant {
   /** Select when the call has at least this many positional arguments. */
   readonly minPositional?: number;
+  /** Select only when at least one of these keywords is present. */
+  readonly requiresKwarg?: readonly string[];
+  /** Select only when none of these keywords is present. */
+  readonly forbidsKwarg?: readonly string[];
   readonly args: readonly TaCallArgSpec[];
 }
 
@@ -503,6 +525,28 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "cci",
+    method: "cci",
+    variants: [
+      {
+        minPositional: 4,
+        args: [typical(0, 1, 2), n(3, ["length"], 0)],
+      },
+      {
+        minPositional: 2,
+        args: [source(0), n(1, ["length"], 0)],
+      },
+      {
+        requiresKwarg: ["source", "series"],
+        args: [source(0), n(1, ["length"], 0)],
+      },
+      {
+        forbidsKwarg: ["source", "series"],
+        args: [typicalContext(), n(0, ["length"], 0, true)],
+      },
+    ],
+  },
   {
     name: "mfi",
     method: "mfi",
