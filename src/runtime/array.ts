@@ -7,8 +7,8 @@
  * Python `ArrayBuiltinsMixin` remains the source of truth.
  */
 
-import { UdtInstance } from "./udt.ts";
 import { cloneValue } from "./clone.ts";
+import { isSortNa, looksLikeUdt, udtFieldKey } from "./udt_value.ts";
 
 /** Numeric/na cell. Arrays may also store UDT instances, strings, and bools. */
 export type Cell = number | null;
@@ -31,71 +31,6 @@ function isFiniteCell(v: unknown): v is number {
 /** Python `bool` on array cells: only `na` and `0` are false (`NaN` is true). */
 function pineTruthy(v: unknown): boolean {
   return v !== null && v !== 0;
-}
-
-function isSortNa(v: unknown): boolean {
-  if (v == null) return true;
-  if (typeof v === "number") return !Number.isFinite(v);
-  return false;
-}
-
-/** Python `_looks_like_udt` — ObjectInstance or compile-path `{__type__}` dict. */
-function looksLikeUdt(item: unknown): boolean {
-  if (item == null || typeof item !== "object") return false;
-  if (item instanceof UdtInstance) return true;
-  return (
-    !Array.isArray(item) &&
-    Object.prototype.hasOwnProperty.call(item, "__type__")
-  );
-}
-
-function udtFieldNames(item: object): string[] | null {
-  if (item instanceof UdtInstance) return item.type.fields.map((f) => f.name);
-  const rec = item as Record<string, unknown>;
-  if (Object.prototype.hasOwnProperty.call(rec, "__type__")) {
-    return Object.keys(rec).filter((k) => k !== "__type__");
-  }
-  const udt = (
-    item as {
-      udt?: { fields?: Record<string, unknown> | Array<{ name: string }> };
-    }
-  ).udt;
-  const fields = udt?.fields;
-  if (fields == null) return null;
-  if (Array.isArray(fields)) return fields.map((f) => f.name);
-  return Object.keys(fields);
-}
-
-function readUdtField(item: object, name: string): unknown {
-  if (item instanceof UdtInstance) return item.get(name);
-  const getField = (item as { get_field?: (n: string) => unknown }).get_field;
-  if (typeof getField === "function") {
-    try {
-      return getField.call(item, name);
-    } catch {
-      return item;
-    }
-  }
-  return (item as Record<string, unknown>)[name];
-}
-
-/** Python `_udt_field_key` — field name or int index; missing field → item. */
-function udtFieldKey(item: unknown, sortField: unknown): unknown {
-  if (item == null || sortField == null) return item;
-  if (typeof item !== "object") return item;
-  if (typeof sortField === "string") {
-    const names = udtFieldNames(item);
-    if (names != null && !names.includes(sortField)) return item;
-    return readUdtField(item, sortField);
-  }
-  if (typeof sortField === "number" && Number.isFinite(sortField)) {
-    const names = udtFieldNames(item);
-    if (names == null) return item;
-    const idx = Math.trunc(sortField);
-    if (idx < 0 || idx >= names.length) return item;
-    return readUdtField(item, names[idx]!);
-  }
-  return item;
 }
 
 /** Python `_resolve_search_field` — default `0` (first field) on UDT arrays. */

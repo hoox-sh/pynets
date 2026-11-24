@@ -65,6 +65,13 @@ export function tickerPointfigure(symbol: string): TickerId {
   return t;
 }
 
+/** Python `split_symbol` / `extract_prefix`: text before the first `:`, else `""`. */
+export function extractPrefix(symbol: string): string {
+  const s = symbol.trim();
+  const i = s.indexOf(":");
+  return i < 0 ? "" : s.slice(0, i);
+}
+
 /** Optional fields keep the previous value. `adjustment` is a Python alias for `adjust`. */
 export function tickerModify(
   ticker: TickerId | string,

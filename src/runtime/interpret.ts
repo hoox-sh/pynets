@@ -63,9 +63,9 @@ import {
   udtTypeFromAssigns,
 } from "./udt.ts";
 import {
+  timeframeChangeValue,
   timeframeFromSeconds,
   timeframeInSeconds,
-  timeframePeriodChanged,
   timeframeIsDaily,
   timeframeIsDwm,
   timeframeIsHours,
@@ -89,6 +89,7 @@ import {
 } from "./log.ts";
 import { MemoryProvider, type BarProvider } from "./provider.ts";
 import {
+  extractPrefix,
   TickerId,
   tickerHeikinashi,
   tickerKagi,
@@ -206,6 +207,7 @@ import {
 import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
+import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
 import {
   CompileError,
   compileEligible,
@@ -334,6 +336,26 @@ type Value =
 
 const LOOP_BREAK = Object.freeze({ __loop: "break" as const });
 const LOOP_CONTINUE = Object.freeze({ __loop: "continue" as const });
+
+/** Parsed ASTs are immutable; repeated `Runtime.run` calls reuse this LRU. */
+const AST_CACHE_MAX = 32;
+const AST_CACHE = new Map<string, AST>();
+
+function parseCached(source: string): AST {
+  const hit = AST_CACHE.get(source);
+  if (hit !== undefined) {
+    AST_CACHE.delete(source);
+    AST_CACHE.set(source, hit);
+    return hit;
+  }
+  const tree = parse(source);
+  AST_CACHE.set(source, tree);
+  if (AST_CACHE.size > AST_CACHE_MAX) {
+    const first = AST_CACHE.keys().next().value;
+    if (first != null) AST_CACHE.delete(first);
+  }
+  return tree;
+}
 
 /**
  * Dispatch map for high-frequency `ta.*` builtins.
@@ -603,6 +625,8 @@ interface Env {
   ta: TaEngine;
   callSites: WeakMap<object, string>;
   plotKeys: WeakMap<object, string>;
+  /** Static plot title per `plot*` call node (avoids re-scanning args each bar). */
+  plotTitles: WeakMap<object, string>;
   nextSite: number;
   plots: Record<string, Array<number | null>>;
   plot_meta: Array<{ title: string }>;
@@ -621,7 +645,9 @@ interface Env {
   barTimes: number[];
   libraries: LibraryRegistry;
   pendingExports: Map<string, Value>;
-  onceFired: WeakSet<object>;
+  onceFired: Set<object>;
+  scriptName: string | null;
+  scriptType: string;
   /** Python `_max_bars_back_decls` — recorded only; evaluation is unbounded. */
   maxBarsBackDecls: Array<{ var: Value; num: Value }>;
   /** Python `_alert_fire_bars` keys for `alert` / `alertcondition` freq gating. */
@@ -689,22 +715,6 @@ export class Runtime {
     ohlcv: OHLCVBar[],
     extra?: RuntimeOptions | InputOverrides,
   ): RuntimeResult {
-    let tree: AST;
-    try {
-      tree = parse(source);
-    } catch (err) {
-      return {
-        series: {},
-        plots: [],
-        plot_meta: [],
-        count: 0,
-        script_name: null,
-        script_type: "indicator",
-        mode: "interpret",
-        error: formatRunError(err),
-        error_kind: "parse",
-      };
-    }
     const extraOpts = extra && !isPlainInputs(extra) ? extra : undefined;
     const mode = extraOpts?.mode ?? this.mode;
     const inputs = mergeInputs(this.inputs, extra);
@@ -743,8 +753,26 @@ export class Runtime {
       whileCap: extraOpts?.whileCap ?? this.whileCap,
       forCap: extraOpts?.forCap ?? this.forCap,
     };
+    // Compile mode transpiles (and parses) internally — skip the redundant
+    // AST parse on the hot repeated-run path.
     if (mode === "compile") {
       return runCompiled(source, ohlcv, host);
+    }
+    let tree: AST;
+    try {
+      tree = parseCached(source);
+    } catch (err) {
+      return {
+        series: {},
+        plots: [],
+        plot_meta: [],
+        count: 0,
+        script_name: null,
+        script_type: "indicator",
+        mode: "interpret",
+        error: formatRunError(err),
+        error_kind: "parse",
+      };
     }
     if (mode === "auto") {
       return runAuto(source, tree, ohlcv, host);
@@ -785,19 +813,207 @@ export class Runtime {
   }
 }
 
+/**
+ * Incremental interpret session. Parses once, keeps `Env`, and advances one
+ * bar at a time. A forming bar is snapshotted so it can be replayed as history
+ * when the next bar arrives, or re-ticked via `updateLastBar`.
+ */
+export class RuntimeSession {
+  private readonly body: stmt[];
+  private readonly declPlan: Array<ReturnType<typeof captureDecl>>;
+  private readonly env: Env;
+  private readonly bars: OHLCVBar[] = [];
+  private readonly barTimes: number[] = [];
+  private forming: BarSnapshot | null = null;
+  private closed = false;
+  private runError: { error: string; error_kind: string } | undefined;
+  private readonly parseError: string | undefined;
+
+  constructor(
+    private readonly runtime: Runtime,
+    source: string,
+  ) {
+    let tree: AST | null = null;
+    try {
+      tree = parseCached(source);
+    } catch (err) {
+      this.parseError = formatRunError(err);
+    }
+    const scriptNode = tree?.kind === "Script" ? (tree as Script) : null;
+    this.body = scriptNode?.body ?? [];
+    this.declPlan = this.body.map((stmt) => captureDecl(stmt));
+    this.env = createEnv(
+      {
+        symbol: runtime.symbol,
+        inputs: runtime.inputs,
+        broker: runtime.broker,
+        timeframe: runtime.timeframe,
+        libraries: runtime.libraries,
+        timeout_seconds: runtime.timeout_seconds,
+        realtime_first: null,
+        realtime_ticks: 1,
+        whileCap: runtime.whileCap,
+        forCap: runtime.forCap,
+      },
+      0,
+      this.barTimes,
+      0,
+    );
+  }
+
+  get barCount(): number {
+    return this.bars.length;
+  }
+
+  private emptyError(error: string, kind: string): RuntimeResult {
+    return {
+      series: {},
+      plots: [],
+      plot_meta: [],
+      count: 0,
+      script_name: null,
+      script_type: "indicator",
+      mode: "interpret",
+      error,
+      error_kind: kind,
+    };
+  }
+
+  private result(): RuntimeResult {
+    if (this.parseError != null)
+      return this.emptyError(this.parseError, "parse");
+    return packInterpretResult(this.env, this.bars.length, this.runError);
+  }
+
+  push(bar: OHLCVBar): RuntimeResult | undefined {
+    if (this.closed) return undefined;
+    if (this.parseError != null) return this.result();
+    if (this.bars.length >= this.runtime.maxBars) {
+      this.closed = true;
+      return this.emptyError(
+        `ohlcv length (${this.bars.length + 1}) exceeds maxBars (${this.runtime.maxBars})`,
+        "runtime",
+      );
+    }
+
+    const i = this.bars.length;
+    if (this.forming != null) {
+      const prevIndex = i - 1;
+      const prevBar = this.bars[prevIndex]!;
+      // Commit the previous forming bar as history, then form the new bar.
+      restoreBarState(this.env, this.forming);
+      this.forming = null;
+      this.bars.push(bar);
+      this.barTimes.push(bar.time ?? i * 60_000);
+      this.env.barCount = this.bars.length;
+      this.env.lastBarTime = this.barTimes[i]!;
+      const committed = runBar(
+        this.env,
+        prevBar,
+        prevIndex,
+        this.body,
+        this.declPlan,
+        false,
+        1,
+      );
+      if (committed.error) {
+        this.runError = committed.error;
+        this.closed = true;
+        return this.result();
+      }
+      this.forming = snapshotBarState(this.env);
+      const formed = runBar(
+        this.env,
+        bar,
+        i,
+        this.body,
+        this.declPlan,
+        true,
+        1,
+      );
+      if (formed.error) {
+        this.runError = formed.error;
+        this.closed = true;
+      }
+      return this.result();
+    }
+
+    this.bars.push(bar);
+    this.barTimes.push(bar.time ?? 0);
+    this.env.barCount = 1;
+    this.env.lastBarTime = this.barTimes[0]!;
+    this.forming = snapshotBarState(this.env);
+    const formed = runBar(this.env, bar, 0, this.body, this.declPlan, true, 1);
+    if (formed.error) {
+      this.runError = formed.error;
+      this.closed = true;
+    }
+    return this.result();
+  }
+
+  updateLastBar(bar: OHLCVBar): RuntimeResult {
+    if (this.closed) throw new Error("stream is closed");
+    if (this.forming == null)
+      throw new Error("updateLastBar requires at least one bar");
+    const i = this.bars.length - 1;
+    restoreBarState(this.env, this.forming);
+    this.bars[i] = bar;
+    this.barTimes[i] = bar.time ?? i * 60_000;
+    this.env.barCount = this.bars.length;
+    this.env.lastBarTime = this.barTimes[i]!;
+    this.forming = snapshotBarState(this.env);
+    const formed = runBar(this.env, bar, i, this.body, this.declPlan, true, 1);
+    if (formed.error) {
+      this.runError = formed.error;
+      this.closed = true;
+    }
+    return this.result();
+  }
+
+  close(): RuntimeResult {
+    if (this.forming != null) {
+      const i = this.bars.length - 1;
+      const bar = this.bars[i]!;
+      restoreBarState(this.env, this.forming);
+      this.forming = null;
+      this.env.barCount = this.bars.length;
+      this.env.lastBarTime = this.barTimes[i]!;
+      const committed = runBar(
+        this.env,
+        bar,
+        i,
+        this.body,
+        this.declPlan,
+        false,
+        1,
+      );
+      if (committed.error) this.runError = committed.error;
+    }
+    this.closed = true;
+    return this.result();
+  }
+}
+
 export type StreamEvent = "bar" | "error" | "end";
 
 export class RuntimeStream {
+  /** Fallback prefix cache for compile/auto mode. */
   private readonly bars: OHLCVBar[] = [];
   private readonly barHandlers: Array<(out: RuntimeResult) => void> = [];
   private readonly errorHandlers: Array<(err: Error) => void> = [];
   private readonly endHandlers: Array<(out: RuntimeResult) => void> = [];
+  private readonly useSession: boolean;
+  private session: RuntimeSession | null = null;
   private closed = false;
 
   constructor(
     private readonly runtime: Runtime,
     private readonly source: string,
-  ) {}
+  ) {
+    // Incremental session is interpret-only; compile/auto keep the proven
+    // prefix re-run path until a compiled session lands.
+    this.useSession = runtime.mode === "interpret";
+  }
 
   on(event: "bar", handler: (out: RuntimeResult) => void): this;
   on(event: "error", handler: (err: Error) => void): this;
@@ -816,12 +1032,18 @@ export class RuntimeStream {
 
   push(bar: OHLCVBar): RuntimeResult | undefined {
     if (this.closed) return undefined;
-    this.bars.push(bar);
     try {
-      const out = this.runtime.run(this.source, this.bars, {
-        realtimeLastBar: true,
-      });
-      for (const h of this.barHandlers) h(out);
+      let out: RuntimeResult | undefined;
+      if (this.useSession) {
+        this.session ??= new RuntimeSession(this.runtime, this.source);
+        out = this.session.push(bar);
+      } else {
+        this.bars.push(bar);
+        out = this.runtime.run(this.source, this.bars, {
+          realtimeLastBar: true,
+        });
+      }
+      if (out != null) for (const h of this.barHandlers) h(out);
       return out;
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
@@ -830,18 +1052,24 @@ export class RuntimeStream {
     }
   }
 
-  /** Number of committed bars in the stream. */
+  /** Number of bars seen by the stream. */
   get barCount(): number {
-    return this.bars.length;
+    return this.useSession ? (this.session?.barCount ?? 0) : this.bars.length;
   }
 
   /**
    * Re-tick the forming last bar with revised OHLCV. The bar count does not
-   * advance; the script is re-evaluated from bar 0, so `once`, TA state, and
-   * broker fills naturally roll back to the revised history.
+   * advance; interpret mode restores the pre-bar snapshot and re-executes one
+   * bar, while compile/auto re-run the prefix.
    */
   updateLastBar(bar: OHLCVBar): RuntimeResult {
     if (this.closed) throw new Error("stream is closed");
+    if (this.useSession) {
+      this.session ??= new RuntimeSession(this.runtime, this.source);
+      const out = this.session.updateLastBar(bar);
+      for (const h of this.barHandlers) h(out);
+      return out;
+    }
     if (this.bars.length === 0)
       throw new Error("updateLastBar requires at least one bar");
     this.bars[this.bars.length - 1] = bar;
@@ -860,6 +1088,13 @@ export class RuntimeStream {
   }
 
   close(): RuntimeResult {
+    if (this.useSession) {
+      this.session ??= new RuntimeSession(this.runtime, this.source);
+      const out = this.session.close();
+      this.closed = true;
+      for (const h of this.endHandlers) h(out);
+      return out;
+    }
     this.closed = true;
     const out = this.runtime.run(this.source, this.bars, {
       realtimeLastBar: false,
@@ -951,17 +1186,22 @@ function snapshotTickState(env: Env): TickSnapshot {
  * windows (Python `_restore_ta_state`), and broker state. History pushes are
  * intentionally left alone — the start-of-bar commit already ran.
  */
-function restoreTickState(env: Env, snap: TickSnapshot): void {
+function restoreTickState(
+  env: Env,
+  snap: TickSnapshot,
+  preserveVarip = true,
+): void {
   const varips = env.varipNames;
+  const keepVarip = (key: string): boolean => preserveVarip && varips.has(key);
   for (const key of Object.keys(env.ctx)) {
-    if (!(key in snap.ctx) && !varips.has(key)) delete env.ctx[key];
+    if (!(key in snap.ctx) && !keepVarip(key)) delete env.ctx[key];
   }
   for (const [key, value] of Object.entries(snap.ctx)) {
-    if (varips.has(key)) continue;
+    if (keepVarip(key)) continue;
     env.ctx[key] = value;
   }
   for (const [id, contents] of snap.containers) {
-    if (varips.has(id)) continue;
+    if (keepVarip(id)) continue;
     const cur = env.ctx[id];
     if (isRestoreContainer(cur)) {
       (
@@ -970,8 +1210,10 @@ function restoreTickState(env: Env, snap: TickSnapshot): void {
     }
   }
   const restoredInited = new Set(snap.varInited);
-  for (const id of varips) {
-    if (env.varInited.has(id)) restoredInited.add(id);
+  if (preserveVarip) {
+    for (const id of varips) {
+      if (env.varInited.has(id)) restoredInited.add(id);
+    }
   }
   env.varInited = restoredInited;
   for (const key of Object.keys(env.plots)) {
@@ -990,10 +1232,10 @@ function restoreTickState(env: Env, snap: TickSnapshot): void {
     const f = env.udfSites.get(key);
     if (f == null) continue;
     for (const k of Object.keys(f.ctx)) {
-      if (!(k in ctx) && !varips.has(k)) delete f.ctx[k];
+      if (!(k in ctx) && !keepVarip(k)) delete f.ctx[k];
     }
     for (const [k, v] of Object.entries(ctx)) {
-      if (varips.has(k)) continue;
+      if (keepVarip(k)) continue;
       f.ctx[k] = v;
     }
     // Roll back per-tick series pushes so the next tick's carry reads the
@@ -1003,47 +1245,122 @@ function restoreTickState(env: Env, snap: TickSnapshot): void {
       if (s != null && s.length > len) s.truncate(len);
     }
     const restored = new Set(varInited);
-    for (const id of varips) {
-      if (f.varInited.has(id)) restored.add(id);
+    if (preserveVarip) {
+      for (const id of varips) {
+        if (f.varInited.has(id)) restored.add(id);
+      }
     }
     f.varInited = restored;
   }
 }
 
-export function interpretTree(
-  tree: AST,
-  ohlcv: OHLCVBar[],
-  host?: {
-    symbol?: string;
-    inputs?: InputOverrides;
-    broker?: BrokerSettings;
-    timeframe?: string | null;
-    libraries?: LibraryRegistry;
-    timeout_seconds?: number | null;
-    realtime_first?: number | null;
-    realtime_ticks?: number;
-    whileCap?: number;
-    forCap?: number;
-  },
-): RuntimeResult {
-  const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
-  const body = scriptNode?.body ?? [];
-  const plots: Record<string, Array<number | null>> = {};
-  const plot_meta: Array<{ title: string }> = [];
-  let script_name: string | null = null;
-  let script_type = "indicator";
+/**
+ * Full per-bar rollback state. Unlike a realtime tick, committing/replaying a
+ * forming bar must also restore `varip` values, series lengths, script
+ * metadata, alerts, drawings, logs, and export declarations.
+ */
+interface BarSnapshot {
+  tick: TickSnapshot;
+  seriesLens: Map<string, number>;
+  barTimesLen: number;
+  barCount: number;
+  lastBarTime: number;
+  barIndex: number;
+  barRealtime: boolean;
+  tickIndex: number;
+  tickCount: number;
+  scriptName: string | null;
+  scriptType: string;
+  onceFired: Set<object>;
+  alertFireBars: Map<string, number>;
+  pendingExports: Map<string, Value>;
+  maxBarsBackLen: number;
+  pineArrayIds: Set<PineArray>;
+  drawings: ReturnType<DrawingBook["snapshotContents"]>;
+  logs: LogRecord[];
+}
 
-  const env: Env = {
-    ctx: {},
+function snapshotBarState(env: Env): BarSnapshot {
+  const seriesLens = new Map<string, number>();
+  for (const [name, series] of env.series) seriesLens.set(name, series.length);
+  return {
+    tick: snapshotTickState(env),
+    seriesLens,
+    barTimesLen: env.barTimes.length,
+    barCount: env.barCount,
+    lastBarTime: env.lastBarTime,
+    barIndex: env.barIndex,
+    barRealtime: env.barRealtime,
+    tickIndex: env.tickIndex,
+    tickCount: env.tickCount,
+    scriptName: env.scriptName,
+    scriptType: env.scriptType,
+    onceFired: new Set(env.onceFired),
+    alertFireBars: new Map(env.alertFireBars),
+    pendingExports: new Map(env.pendingExports),
+    maxBarsBackLen: env.maxBarsBackDecls.length,
+    pineArrayIds: new Set(env.pineArrayIds),
+    drawings: env.drawings.snapshotContents(),
+    logs: env.logs.snapshot(),
+  };
+}
+
+function restoreBarState(env: Env, snap: BarSnapshot): void {
+  restoreTickState(env, snap.tick, false);
+  for (const [name, series] of env.series) {
+    const len = snap.seriesLens.get(name);
+    if (len === undefined) env.series.delete(name);
+    else if (series.length > len) series.truncate(len);
+  }
+  env.barTimes.length = snap.barTimesLen;
+  env.barCount = snap.barCount;
+  env.lastBarTime = snap.lastBarTime;
+  env.barIndex = snap.barIndex;
+  env.barRealtime = snap.barRealtime;
+  env.tickIndex = snap.tickIndex;
+  env.tickCount = snap.tickCount;
+  env.scriptName = snap.scriptName;
+  env.scriptType = snap.scriptType;
+  env.onceFired = new Set(snap.onceFired);
+  env.alertFireBars = new Map(snap.alertFireBars);
+  env.pendingExports = new Map(snap.pendingExports);
+  env.maxBarsBackDecls.length = snap.maxBarsBackLen;
+  env.pineArrayIds = new Set(snap.pineArrayIds);
+  env.drawings.restoreContents(snap.drawings);
+  env.logs.restoreContents(snap.logs);
+}
+
+export interface InterpretHost {
+  symbol?: string;
+  inputs?: InputOverrides;
+  broker?: BrokerSettings;
+  timeframe?: string | null;
+  libraries?: LibraryRegistry;
+  timeout_seconds?: number | null;
+  realtime_first?: number | null;
+  realtime_ticks?: number;
+  whileCap?: number;
+  forCap?: number;
+}
+
+function createEnv(
+  host: InterpretHost | undefined,
+  barCount: number,
+  barTimes: number[],
+  lastBarTime: number,
+): Env {
+  return {
+    ctx: Object.create(null) as Record<string, Value>,
     series: new Map(),
     varInited: new Set(),
     barIndex: 0,
     ta: new TaEngine(),
     callSites: new WeakMap(),
     plotKeys: new WeakMap(),
+    plotTitles: new WeakMap(),
     nextSite: 0,
-    plots,
-    plot_meta,
+    plots: Object.create(null) as Record<string, Array<number | null>>,
+    plot_meta: [],
     book: new StrategyBook(host?.broker),
     drawings: new DrawingBook(),
     symbol: host?.symbol ?? "AAPL",
@@ -1053,16 +1370,15 @@ export function interpretTree(
     udfs: new Map(),
     udfSites: new Map(),
     frames: [],
-    barCount: ohlcv.length,
-    lastBarTime:
-      ohlcv.length === 0
-        ? 0
-        : (ohlcv[ohlcv.length - 1]!.time ?? (ohlcv.length - 1) * 60_000),
+    barCount,
+    lastBarTime,
     logs: new LogBook(),
-    barTimes: ohlcv.map((b, i) => b.time ?? i * 60_000),
+    barTimes,
     libraries: host?.libraries ?? new LibraryRegistry(),
     pendingExports: new Map(),
-    onceFired: new WeakSet(),
+    onceFired: new Set(),
+    scriptName: null,
+    scriptType: "indicator",
     maxBarsBackDecls: [],
     alertFireBars: new Map(),
     realtimeFirst: host?.realtime_first ?? null,
@@ -1075,99 +1391,97 @@ export function interpretTree(
     whileCap: host?.whileCap ?? 10_000,
     forCap: host?.forCap ?? 1_000_000,
   };
+}
 
-  const n = ohlcv.length;
-  let runError: { error: string; error_kind: string } | undefined;
-  let timedOut = false;
-  let barsDone = n;
-  const timeoutSec = host?.timeout_seconds;
-  const deadline =
-    timeoutSec != null && Number.isFinite(timeoutSec)
-      ? performance.now() + timeoutSec * 1000
-      : null;
-  let aborted = false;
-  try {
-    for (let i = 0; i < n && !aborted; i++) {
-      if (deadline != null && (i & 31) === 0 && performance.now() > deadline) {
-        timedOut = true;
-        barsDone = i;
-        break;
-      }
-      beginBar(env, ohlcv[i]!, i);
-      env.book.processPending(i, {
-        open: num(env.ctx.open) ?? undefined,
-        high: num(env.ctx.high) ?? undefined,
-        low: num(env.ctx.low) ?? undefined,
-        close: num(env.ctx.close) ?? undefined,
-        time: num(env.ctx.time) ?? undefined,
-      });
-      env.book.markOpenTrades(
-        num(env.ctx.high) ?? num(env.ctx.close) ?? 0,
-        num(env.ctx.low) ?? num(env.ctx.close) ?? 0,
-        num(env.ctx.close) ?? 0,
-      );
+interface BarRunOutcome {
+  error?: { error: string; error_kind: string };
+  aborted: boolean;
+}
 
-      // Python `_run_batch`: bars in the realtime window are visited once per
-      // tick; intermediate ticks roll back var scope, TA windows, the broker,
-      // and plot cells (varip persists).
-      const barRt = env.realtimeFirst != null && i >= env.realtimeFirst;
-      const ticks = barRt ? env.realtimeTicks : 1;
-      env.barRealtime = barRt;
-      env.tickCount = ticks;
-      for (let tick = 0; tick < ticks; tick++) {
-        env.tickIndex = tick;
-        const snap = barRt && tick < ticks - 1 ? snapshotTickState(env) : null;
-        try {
-          for (const stmt of body) {
-            const decl = captureDecl(stmt);
-            if (decl) {
-              if (script_name == null) script_name = decl.name;
-              if (decl.kind === "strategy") {
-                script_type = "strategy";
-                applyStrategyDecl(stmt, env);
-              } else if (decl.kind === "library") {
-                script_type = "library";
-                applyDrawingDecl(stmt, env);
-              } else {
-                applyDrawingDecl(stmt, env);
-              }
-              continue;
-            }
-            execStmt(stmt, env);
+function runBar(
+  env: Env,
+  bar: OHLCVBar,
+  i: number,
+  body: stmt[],
+  declPlan: Array<ReturnType<typeof captureDecl>>,
+  realtime: boolean,
+  ticks = 1,
+): BarRunOutcome {
+  beginBar(env, bar, i);
+  env.book.processPending(i, {
+    open: num(env.ctx.open) ?? undefined,
+    high: num(env.ctx.high) ?? undefined,
+    low: num(env.ctx.low) ?? undefined,
+    close: num(env.ctx.close) ?? undefined,
+    time: num(env.ctx.time) ?? undefined,
+  });
+  env.book.markOpenTrades(
+    num(env.ctx.high) ?? num(env.ctx.close) ?? 0,
+    num(env.ctx.low) ?? num(env.ctx.close) ?? 0,
+    num(env.ctx.close) ?? 0,
+  );
+
+  env.barRealtime = realtime;
+  env.tickCount = Math.max(1, ticks);
+  for (let tick = 0; tick < env.tickCount; tick++) {
+    env.tickIndex = tick;
+    const snap =
+      realtime && tick < env.tickCount - 1 ? snapshotTickState(env) : null;
+    try {
+      for (let si = 0; si < body.length; si++) {
+        const decl = declPlan[si];
+        if (decl) {
+          if (env.scriptName == null) env.scriptName = decl.name;
+          if (decl.kind === "strategy") {
+            env.scriptType = "strategy";
+            applyStrategyDecl(body[si]!, env);
+          } else if (decl.kind === "library") {
+            env.scriptType = "library";
+            applyDrawingDecl(body[si]!, env);
+          } else {
+            applyDrawingDecl(body[si]!, env);
           }
-          if (i === 0 && script_type === "library" && script_name) {
-            finalizeLibrary(env, script_name);
-          }
-        } catch (err) {
-          if (err === LOOP_BREAK || err === LOOP_CONTINUE) break;
-          runError = { error: formatRunError(err), error_kind: "runtime" };
-          aborted = true;
-          break;
+          continue;
         }
-        if (snap) restoreTickState(env, snap);
+        execStmt(body[si]!, env);
       }
+      if (i === 0 && env.scriptType === "library" && env.scriptName) {
+        finalizeLibrary(env, env.scriptName);
+      }
+    } catch (err) {
+      if (err === LOOP_BREAK || err === LOOP_CONTINUE) break;
+      return {
+        error: { error: formatRunError(err), error_kind: "runtime" },
+        aborted: true,
+      };
     }
-  } catch (err) {
-    if (err !== LOOP_BREAK && err !== LOOP_CONTINUE) {
-      runError = { error: formatRunError(err), error_kind: "runtime" };
-    }
+    if (snap) restoreTickState(env, snap);
   }
+  return { aborted: false };
+}
 
-  const firstTitle = plot_meta[0]?.title;
+function packInterpretResult(
+  env: Env,
+  count: number,
+  runError?: { error: string; error_kind: string },
+  timedOut = false,
+  barsDone = count,
+): RuntimeResult {
+  const firstTitle = env.plot_meta[0]?.title;
   return {
-    series: plots,
-    plots: firstTitle ? (plots[firstTitle] ?? []) : [],
-    plot_meta,
-    count: timedOut ? barsDone : n,
-    script_name,
-    script_type,
+    series: env.plots,
+    plots: firstTitle ? (env.plots[firstTitle] ?? []) : [],
+    plot_meta: env.plot_meta,
+    count: timedOut ? barsDone : count,
+    script_name: env.scriptName,
+    script_type: env.scriptType,
     mode: "interpret",
     events: env.book.events,
     fills: packFills(env.book),
     drawings: packDrawings(env.drawings),
     logs: env.logs.records.length ? env.logs.records : undefined,
-    plot_data: packPlotData(plots, env.barTimes),
-    ...(script_type === "strategy" || env.book.fills.length > 0
+    plot_data: packPlotData(env.plots, env.barTimes),
+    ...(env.scriptType === "strategy" || env.book.fills.length > 0
       ? { strategy: env.book.summary(num(env.ctx.close) ?? 0) }
       : {}),
     ...(runError ?? {}),
@@ -1181,6 +1495,55 @@ export function interpretTree(
   };
 }
 
+export function interpretTree(
+  tree: AST,
+  ohlcv: OHLCVBar[],
+  host?: InterpretHost,
+): RuntimeResult {
+  const scriptNode = tree.kind === "Script" ? (tree as Script) : null;
+  const body = scriptNode?.body ?? [];
+  const n = ohlcv.length;
+  const barTimes = ohlcv.map((b, i) => b.time ?? i * 60_000);
+  const lastBarTime = n === 0 ? 0 : (ohlcv[n - 1]!.time ?? (n - 1) * 60_000);
+  const env = createEnv(host, n, barTimes, lastBarTime);
+
+  let runError: { error: string; error_kind: string } | undefined;
+  let timedOut = false;
+  let barsDone = n;
+  const timeoutSec = host?.timeout_seconds;
+  const deadline =
+    timeoutSec != null && Number.isFinite(timeoutSec)
+      ? performance.now() + timeoutSec * 1000
+      : null;
+  let aborted = false;
+  // Script declarations (`indicator` / `strategy` / `library`) are static per
+  // AST; resolve them once instead of re-scanning every top-level statement on
+  // every bar.
+  const declPlan = body.map((stmt) => captureDecl(stmt));
+  try {
+    for (let i = 0; i < n && !aborted; i++) {
+      if (deadline != null && (i & 31) === 0 && performance.now() > deadline) {
+        timedOut = true;
+        barsDone = i;
+        break;
+      }
+      const barRt = env.realtimeFirst != null && i >= env.realtimeFirst;
+      const ticks = barRt ? env.realtimeTicks : 1;
+      const outcome = runBar(env, ohlcv[i]!, i, body, declPlan, barRt, ticks);
+      if (outcome.error) {
+        runError = outcome.error;
+        aborted = true;
+      }
+    }
+  } catch (err) {
+    if (err !== LOOP_BREAK && err !== LOOP_CONTINUE) {
+      runError = { error: formatRunError(err), error_kind: "runtime" };
+    }
+  }
+
+  return packInterpretResult(env, n, runError, timedOut, barsDone);
+}
+
 function packPlotData(
   plots: Record<string, Array<number | null>>,
   times: number[],
@@ -1188,7 +1551,10 @@ function packPlotData(
   const out: Record<
     string,
     { data: Array<{ value: number | null; time?: number }> }
-  > = {};
+  > = Object.create(null) as Record<
+    string,
+    { data: Array<{ value: number | null; time?: number }> }
+  >;
   for (const [title, series] of Object.entries(plots)) {
     out[title] = {
       data: series.map((value, i) => {
@@ -1301,8 +1667,15 @@ function attrPath(node: expr): string | null {
   return null;
 }
 
+/** AST nodes are immutable after parse: memoize the dotted callee name. */
+const CALL_NAME_CACHE = new WeakMap<object, string | null>();
+
 function callName(node: Call): string | null {
-  return attrPath(node.func);
+  const cached = CALL_NAME_CACHE.get(node);
+  if (cached !== undefined) return cached;
+  const name = attrPath(node.func);
+  CALL_NAME_CACHE.set(node, name);
+  return name;
 }
 
 function asArgs(args: Arg | Arg[] | null | undefined): Arg[] {
@@ -1830,14 +2203,18 @@ function execStmt(
     ) {
       const plotArgs = asArgs(value.args);
       const ohlc = fname === "plotcandle" || fname === "plotbar";
-      const title = resolvePlotTitle(plotArgs, fname);
+      let title = env.plotTitles.get(value);
+      if (title == null) {
+        title = resolvePlotTitle(plotArgs, fname);
+        env.plotTitles.set(value, title);
+      }
       const key = uniquifyPlotKey(env, value, title);
       // Python primary column is close (arg 3), not open.
       const seriesExpr = ohlc
         ? callArg(value.args, 3, ["close"])
         : (callArg(value.args, 0, ["series", "source"]) ?? plotArgs[0]?.value);
       const cell = unwrap(evalExpr(seriesExpr, env));
-      if (!env.plots[key]) {
+      if (!Object.prototype.hasOwnProperty.call(env.plots, key)) {
         env.plots[key] = [];
         env.plot_meta.push({ title: key });
       }
@@ -2287,6 +2664,7 @@ function taRecordField(obj: TaRecord, attr: string): Value {
 }
 
 function evalTaAttr(attr: string, env: Env): Value | undefined {
+  if (!TA_BARE_ATTRS.has(attr)) return undefined;
   const ta = env.ta;
   const site = `attr:ta.${attr}`;
   if (attr === "accdist" || attr === "ad") {
@@ -2477,7 +2855,10 @@ function evalCall(node: Call, env: Env): Value {
         return evalUdf(meth.body, node, env, obj);
     }
     if (obj instanceof UdtType && callee.attr === "new") {
-      const overrides: Record<string, unknown> = {};
+      const overrides: Record<string, unknown> = Object.create(null) as Record<
+        string,
+        unknown
+      >;
       let pos = 0;
       for (const a of asArgs(node.args)) {
         const key = argKeyword(a);
@@ -2906,7 +3287,10 @@ function evalCall(node: Call, env: Env): Value {
     const typeName = fname.slice(0, -4);
     const t = ctxGet(env, typeName);
     if (t instanceof UdtType) {
-      const overrides: Record<string, unknown> = {};
+      const overrides: Record<string, unknown> = Object.create(null) as Record<
+        string,
+        unknown
+      >;
       for (const a of asArgs(node.args)) {
         const key = argKeyword(a);
         if (key) overrides[key] = evalExpr(a.value, env);
@@ -3456,8 +3840,12 @@ function mergeInputs(
   extra?: RuntimeOptions | InputOverrides,
 ): InputOverrides {
   const more = pickInputs(extra);
-  if (more == null) return base;
-  return { ...base, ...more };
+  // Null prototype: input titles are user-controlled and may collide with
+  // Object.prototype (`constructor`, `__proto__`, …).
+  const merged = Object.create(null) as InputOverrides;
+  Object.assign(merged, base);
+  if (more != null) Object.assign(merged, more);
+  return merged;
 }
 
 function pickInputs(
@@ -3565,7 +3953,18 @@ function fireAlertCondition(env: Env, title: string, message: string): void {
   });
 }
 
+/** Static input title per call node; avoids re-scanning args every bar. */
+const INPUT_TITLE_CACHE = new WeakMap<object, string | null>();
+
 function inputTitle(node: Call): string | null {
+  const cached = INPUT_TITLE_CACHE.get(node);
+  if (cached !== undefined) return cached;
+  const title = resolveInputTitle(node);
+  INPUT_TITLE_CACHE.set(node, title);
+  return title;
+}
+
+function resolveInputTitle(node: Call): string | null {
   const named = namedStringArg(node.args, "title");
   if (named != null) return named;
   const list = asArgs(node.args);
@@ -3598,7 +3997,10 @@ function evalInput(node: Call, env: Env, fname: string): Value {
   if (stored !== undefined) return inputAsCell(stored);
 
   const positional: unknown[] = [];
-  const named: Record<string, unknown> = {};
+  const named: Record<string, unknown> = Object.create(null) as Record<
+    string,
+    unknown
+  >;
   for (const a of asArgs(node.args)) {
     const raw = rawArgValue(argValue(a), env);
     const kw = argKeyword(a);
@@ -3607,7 +4009,10 @@ function evalInput(node: Call, env: Env, fname: string): Value {
   }
 
   let value = resolveInputDefault(fname, positional, named);
-  if (title != null && env.inputs[title] !== undefined) {
+  if (
+    title != null &&
+    Object.prototype.hasOwnProperty.call(env.inputs, title)
+  ) {
     value = env.inputs[title] as InputValue;
   }
   env.inputStore.set(key, value);
@@ -4128,6 +4533,8 @@ function evalExtraTa(
   env: Env,
   site: string,
 ): Value | undefined {
+  // Most calls are not extra TA builtins; skip the 300+ branch chain entirely.
+  if (fname == null || !EXTRA_TA_NAMES.has(fname)) return undefined;
   const ta = env.ta as TaAny;
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
@@ -8224,7 +8631,11 @@ function registerEnumDef(node: EnumDef, env: Env): void {
 function pushUdfFrame(env: Env, site: string): void {
   let state = env.udfSites.get(site);
   if (!state) {
-    state = { ctx: {}, series: new Map(), varInited: new Set() };
+    state = {
+      ctx: Object.create(null) as Record<string, Value>,
+      series: new Map(),
+      varInited: new Set(),
+    };
     env.udfSites.set(site, state);
   }
   for (const id of state.varInited) {
@@ -8362,25 +8773,10 @@ function timeframeChange(node: Call, env: Env): Cell {
   const arg = callArg(node.args, 0, ["timeframe", "tf"]);
   if (arg == null) return 0;
   const raw = evalExpr(arg, env);
-  const tf =
-    typeof raw === "string"
-      ? raw
-      : typeof raw === "number" && Number.isFinite(raw)
-        ? String(raw)
-        : null;
-  if (tf == null || tf.trim() === "") return 0;
   const curr = env.ctx.time;
-  if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
   const hist = env.series.get("time");
   const prev = hist != null && hist.length >= 2 ? hist.get(1) : null;
-  return timeframePeriodChanged(curr, prev, tf, env.barIndex) ? 1 : 0;
-}
-
-/** Python `split_symbol` / `extract_prefix`: text before the first `:`, else `""`. */
-function extractPrefix(symbol: string): string {
-  const s = symbol.trim();
-  const i = s.indexOf(":");
-  return i < 0 ? "" : s.slice(0, i);
+  return timeframeChangeValue(raw, curr, prev, env.barIndex);
 }
 
 function syminfoPrefix(node: Call, env: Env): string {
@@ -8497,7 +8893,7 @@ function loadLibrarySource(
 ): void {
   let tree: AST;
   try {
-    tree = parse(source);
+    tree = parseCached(source);
   } catch {
     return;
   }

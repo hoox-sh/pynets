@@ -210,6 +210,29 @@ export function timeframePeriodChanged(
   return currId !== prevId;
 }
 
+/**
+ * Normalized `timeframe.change` result: 1 when the period changed, else 0.
+ * Accepts raw interpreter/compile arguments; empty / unknown tf → 0.
+ */
+export function timeframeChangeValue(
+  tf: unknown,
+  curr: unknown,
+  prev: unknown,
+  barIndex: unknown,
+): number {
+  const s =
+    typeof tf === "string"
+      ? tf
+      : typeof tf === "number" && Number.isFinite(tf)
+        ? String(tf)
+        : null;
+  if (s == null || s.trim() === "") return 0;
+  if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
+  const idx =
+    typeof barIndex === "number" && Number.isFinite(barIndex) ? barIndex : null;
+  return timeframePeriodChanged(curr, prev, s, idx) ? 1 : 0;
+}
+
 function periodId(
   ts: unknown,
   timeframeStr: string | null | undefined,

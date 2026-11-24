@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  extractPrefix,
   tickerHeikinashi,
   tickerKagi,
   tickerLinebreak,
@@ -13,6 +14,15 @@ import {
   tickerRenko,
   tickerStandard,
 } from "../src/runtime/ticker.ts";
+
+describe("extractPrefix", () => {
+  test("text before the first colon; no colon is empty", () => {
+    expect(extractPrefix("NASDAQ:AAPL")).toBe("NASDAQ");
+    expect(extractPrefix("  EURUSD  ")).toBe("");
+    expect(extractPrefix(" A:B:C ")).toBe("A");
+    expect(extractPrefix("")).toBe("");
+  });
+});
 
 describe("ticker constructors", () => {
   test("ticker.new sets symbol and optional session/adjust", () => {

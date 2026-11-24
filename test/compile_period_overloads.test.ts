@@ -18,23 +18,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
-
-// Non-monotonic fractional closes so window aggregates distinguish lengths
-// and so series args (close/high/low) are never "period-like" at Python's
-// last-sample check. Volume mixes whole and fractional values.
-function bars(n: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const close = 100 + 10 * Math.sin(i * 1.7) + (i % 5) * 0.5;
-    return {
-      open: close - 0.25,
-      high: close + 1.5,
-      low: close - 1.5,
-      close,
-      volume: 10 + (i % 3) * 2.5,
-      time: i * 86_400_000,
-    };
-  });
-}
+import { periodBars as bars } from "./helpers/bars.ts";
 
 type RunResult = ReturnType<Runtime["run"]>;
 

@@ -55,7 +55,7 @@ import {
   strTrim,
   strUpper,
 } from "../str.ts";
-import { LogBook, formatLogParts } from "../log.ts";
+import { LogBook, RuntimeError, formatLogParts } from "../log.ts";
 import { PineArray } from "../array.ts";
 import {
   createFootprint,
@@ -87,8 +87,8 @@ import {
   timeTradingDay,
   type UtcParts,
 } from "../time.ts";
-import { TickerId } from "../ticker.ts";
-import { timeframeInSeconds, timeframePeriodChanged } from "../timeframe.ts";
+import { TickerId, extractPrefix } from "../ticker.ts";
+import { timeframeChangeValue, timeframeInSeconds } from "../timeframe.ts";
 import { compileArray, compileMap, compileMatrix } from "./collections.ts";
 import { createCompileDraw } from "./draw.ts";
 import {
@@ -213,7 +213,7 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
     weekOfYear: calendarWeekOfYear,
     timeTradingDay: calendarTimeTradingDay,
     timeframeInSeconds: timeframeInSecondsOrDaily,
-    timeframeChange,
+    timeframeChange: timeframeChangeValue,
     timeClose,
     roundToMintick,
     syminfoPrefix,
@@ -279,7 +279,7 @@ export function createCompileHelpers(opts?: CompileHelperOpts) {
       },
     },
     runtimeError(msg: unknown): never {
-      throw new Error(String(msg));
+      throw new RuntimeError(String(msg));
     },
   };
 }
@@ -404,26 +404,6 @@ function logBar(bar: unknown): number {
   return typeof bar === "number" && Number.isFinite(bar) ? bar : 0;
 }
 
-/** `timeframe.change`: bar 0 is a new period; empty / unknown tf → false. */
-function timeframeChange(
-  tf: unknown,
-  curr: unknown,
-  prev: unknown,
-  barIndex: unknown,
-): number {
-  const s =
-    typeof tf === "string"
-      ? tf
-      : typeof tf === "number" && Number.isFinite(tf)
-        ? String(tf)
-        : null;
-  if (s == null || s.trim() === "") return 0;
-  if (typeof curr !== "number" || !Number.isFinite(curr)) return 0;
-  const idx =
-    typeof barIndex === "number" && Number.isFinite(barIndex) ? barIndex : null;
-  return timeframePeriodChanged(curr, prev, s, idx) ? 1 : 0;
-}
-
 /**
  * Next bar open, last bar `time + 86400000`. `0` next-open counts as missing
  * (interpret beginBar). Compile has no per-bar `time_close` column.
@@ -447,13 +427,6 @@ function timeClose(barIdx: unknown, timeArr: unknown): number {
 
 function roundToMintick(x: unknown): number | null {
   return mathRoundToMintick(naNum(x), 0.01);
-}
-
-/** Python `split_symbol` / `extract_prefix`: text before the first `:`, else `""`. */
-function extractPrefix(symbol: string): string {
-  const s = symbol.trim();
-  const i = s.indexOf(":");
-  return i < 0 ? "" : s.slice(0, i);
 }
 
 function syminfoPrefix(tickerid?: unknown): string {

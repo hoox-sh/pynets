@@ -8,6 +8,9 @@
  * Alerts / tables / linefills are uncapped. Interpret wiring is out of scope.
  */
 
+import { cloneValue } from "./clone.ts";
+import { isFiniteNumber } from "./num.ts";
+
 export type DrawingKind =
   "line" | "label" | "box" | "alert" | "table" | "polyline" | "linefill";
 
@@ -29,10 +32,6 @@ export interface DrawingLimits {
 const DEFAULT_DRAWING_LIMIT = 50;
 const HARD_CAP_LINES_LABELS_BOXES = 500;
 const HARD_CAP_POLYLINES = 100;
-
-function isFiniteNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
-}
 
 function clampLimit(value: unknown, fallback: number, hardCap: number): number {
   if (value == null || typeof value !== "number" || !Number.isFinite(value)) {
@@ -127,6 +126,43 @@ export class DrawingBook {
 
   constructor(limits?: DrawingLimits) {
     if (limits != null) this.configure(limits);
+  }
+
+  /**
+   * Bar/rollback snapshot. `byId` stores indices into the cloned `items`
+   * array so `get(id)` and `items` keep object identity after restore.
+   */
+  snapshotContents(): {
+    items: DrawingEvent[];
+    byId: Array<[number, number]>;
+    nextId: number;
+  } {
+    const items = this.items.map((e) => cloneValue(e) as DrawingEvent);
+    const indexByEvent = new Map<DrawingEvent, number>();
+    for (let i = 0; i < this.items.length; i++) {
+      indexByEvent.set(this.items[i]!, i);
+    }
+    const byId: Array<[number, number]> = [];
+    for (const [id, e] of this.byId) {
+      const idx = indexByEvent.get(e);
+      if (idx !== undefined) byId.push([id, idx]);
+    }
+    return { items, byId, nextId: this.nextId };
+  }
+
+  restoreContents(snap: {
+    items: DrawingEvent[];
+    byId: Array<[number, number]>;
+    nextId: number;
+  }): void {
+    this.items.length = 0;
+    for (const e of snap.items) this.items.push(cloneValue(e) as DrawingEvent);
+    this.byId.clear();
+    for (const [id, idx] of snap.byId) {
+      const e = this.items[idx];
+      if (e != null) this.byId.set(id, e);
+    }
+    this.nextId = snap.nextId;
   }
 
   configure(limits: DrawingLimits): void {

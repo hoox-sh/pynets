@@ -7,8 +7,8 @@
  * Python `Matrix` remains the source of truth.
  */
 
-import { UdtInstance } from "./udt.ts";
 import { cloneValue } from "./clone.ts";
+import { isSortNa, looksLikeUdt, udtFieldKey } from "./udt_value.ts";
 
 export type Cell = number | null;
 
@@ -40,51 +40,8 @@ function padOrTrunc(values: unknown[] | undefined, n: number): unknown[] {
   return out;
 }
 
-function looksLikeUdt(item: unknown): boolean {
-  if (item == null || typeof item !== "object") return false;
-  if (item instanceof UdtInstance) return true;
-  return (
-    !Array.isArray(item) &&
-    Object.prototype.hasOwnProperty.call(item, "__type__")
-  );
-}
-
-function udtFieldNames(item: object): string[] | null {
-  if (item instanceof UdtInstance) return item.type.fields.map((f) => f.name);
-  const rec = item as Record<string, unknown>;
-  if (Object.prototype.hasOwnProperty.call(rec, "__type__")) {
-    return Object.keys(rec).filter((k) => k !== "__type__");
-  }
-  return null;
-}
-
-function readUdtField(item: object, name: string): unknown {
-  if (item instanceof UdtInstance) return item.get(name);
-  return (item as Record<string, unknown>)[name];
-}
-
-function udtFieldKey(item: unknown, sortField: unknown): unknown {
-  if (item == null || sortField == null || typeof item !== "object")
-    return item;
-  if (typeof sortField === "string") return readUdtField(item, sortField);
-  if (typeof sortField === "number" && Number.isFinite(sortField)) {
-    const names = udtFieldNames(item);
-    if (names == null) return item;
-    const idx = Math.trunc(sortField);
-    if (idx < 0 || idx >= names.length) return item;
-    return readUdtField(item, names[idx]!);
-  }
-  return item;
-}
-
 function cellSortValue(cell: unknown, sortField: unknown): unknown {
   return sortField != null ? udtFieldKey(cell, sortField) : cell;
-}
-
-function isSortNa(v: unknown): boolean {
-  if (v == null) return true;
-  if (typeof v === "number") return !Number.isFinite(v);
-  return false;
 }
 
 function asFiniteNumber(v: unknown): number | null {

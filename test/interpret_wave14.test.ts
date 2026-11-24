@@ -7,23 +7,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 import { pythonAvailable, pythonBin } from "./helpers/python_runtime.ts";
+import { waveBars as makeBars } from "./helpers/bars.ts";
 
 const PY = pythonBin();
-
-function makeBars(n: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const c = 100 + 8 * Math.sin(i * 0.37) + (i % 7) * 0.4;
-    const o = c - 0.3 + (i % 3) * 0.1;
-    return {
-      open: o,
-      high: Math.max(o, c) + 0.8 + (i % 5) * 0.15,
-      low: Math.min(o, c) - 0.6 - (i % 4) * 0.1,
-      close: c,
-      volume: 1000 + ((i * 37) % 500),
-      time: i * 86_400_000,
-    };
-  });
-}
 
 type SeriesMap = Record<string, Array<number | null>>;
 

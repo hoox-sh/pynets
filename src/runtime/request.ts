@@ -13,6 +13,7 @@
  */
 
 import { createFootprint, seedFootprintRng } from "./footprint.ts";
+import { finiteOrNull } from "./num.ts";
 
 export type Cell = number | null;
 
@@ -173,9 +174,7 @@ export function timeframeMinutes(tf: string | null | undefined): number | null {
 }
 
 /** Chart cell: finite number stays; NaN / Inf / non-number → na. */
-function finiteCell(value: Cell): Cell {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
+const finiteCell = finiteOrNull;
 
 /**
  * Same-symbol last-close → `sameSymbolValue` (same TF, empty TF, or HTF).

@@ -275,14 +275,17 @@ function assemble(ctx: EmitCtx, body: string[]): string {
     lines.push(indentBlock(line, 4));
   }
   lines.push("  }");
-  const plotObj = ctx.plots.length
-    ? `{ ${ctx.plots.map((p, i) => `${JSON.stringify(p.title)}: plot_${i}`).join(", ")} }`
-    : "{}";
+  lines.push("  const __plots = Object.create(null);");
+  for (let i = 0; i < ctx.plots.length; i++) {
+    lines.push(
+      `  __plots[${JSON.stringify(ctx.plots[i]!.title)}] = plot_${i};`,
+    );
+  }
   const extras: string[] = [];
   if (ctx.usesStrategy) extras.push("__h.strategy.extras()");
   extras.push("((__h.draw && __h.draw.extras()) || {})");
   extras.push("((__h.log && __h.log.extras && __h.log.extras()) || {})");
-  lines.push(`  return Object.assign(${plotObj}, ${extras.join(", ")});`);
+  lines.push(`  return Object.assign(__plots, ${extras.join(", ")});`);
   lines.push("}");
   return lines.join("\n");
 }

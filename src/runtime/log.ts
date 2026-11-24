@@ -37,6 +37,12 @@ export class LogBook {
   snapshot(): LogRecord[] {
     return this.records.slice();
   }
+
+  /** Realtime/bar rollback: replace the buffer with a previous copy. */
+  restoreContents(snap: LogRecord[]): void {
+    this.records.length = 0;
+    this.records.push(...snap);
+  }
 }
 
 /** Pine `runtime.error` abort (Python `RuntimeError`). */

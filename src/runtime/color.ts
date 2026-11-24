@@ -5,13 +5,11 @@
  * Pine `color.*` helpers. Transparency is 0–100 (0 = opaque).
  */
 
+import { isFiniteNumber } from "./num.ts";
+
 export type Color = { r: number; g: number; b: number; a: number };
 
 const HEX = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-
-function finite(n: unknown): n is number {
-  return typeof n === "number" && Number.isFinite(n);
-}
 
 function clampByte(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)));
@@ -24,7 +22,12 @@ function pack(r: number, g: number, b: number, a: number): Color {
 function isColor(c: unknown): c is Color {
   if (typeof c !== "object" || c === null) return false;
   const col = c as Color;
-  return finite(col.r) && finite(col.g) && finite(col.b) && finite(col.a);
+  return (
+    isFiniteNumber(col.r) &&
+    isFiniteNumber(col.g) &&
+    isFiniteNumber(col.b) &&
+    isFiniteNumber(col.a)
+  );
 }
 
 function hexByte(n: number): string {
@@ -60,8 +63,9 @@ export function colorNew(
   b: number | null,
   t?: number | null,
 ): Color | null {
-  if (!finite(r) || !finite(g) || !finite(b)) return null;
-  const a = finite(t) ? transpToAlpha(t) : 255;
+  if (!isFiniteNumber(r) || !isFiniteNumber(g) || !isFiniteNumber(b))
+    return null;
+  const a = isFiniteNumber(t) ? transpToAlpha(t) : 255;
   return pack(r, g, b, a);
 }
 
@@ -86,7 +90,8 @@ export function colorFromGradient(
   c1: Color | null,
   c2: Color | null,
 ): Color | null {
-  if (!finite(value) || !finite(bottom) || !finite(top)) return null;
+  if (!isFiniteNumber(value) || !isFiniteNumber(bottom) || !isFiniteNumber(top))
+    return null;
   if (!isColor(c1) || !isColor(c2)) return null;
   const span = top - bottom;
   const ratio =

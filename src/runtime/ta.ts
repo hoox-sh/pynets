@@ -10,6 +10,8 @@ export type Cell = number | null;
 
 import { PineArray } from "./array.ts";
 import { cloneValue } from "./clone.ts";
+import { runtimeError } from "./log.ts";
+import { finiteOrNull } from "./num.ts";
 
 interface SmaState {
   period: number;
@@ -260,14 +262,14 @@ interface VolIndexState {
 
 interface WvadState {
   period: number;
-  vols: number[];
+  vols: RingBuffer<number>;
   volSum: number;
 }
 
 interface CmfState {
   period: number;
-  mf: number[];
-  vol: number[];
+  mf: RingBuffer<number>;
+  vol: RingBuffer<number>;
   mfSum: number;
   volSum: number;
 }
@@ -283,7 +285,7 @@ interface UoState {
   n2: number;
   n3: number;
   prev: Cell;
-  window: Array<[Cell, Cell]>;
+  window: RingBuffer<[Cell, Cell]>;
 }
 
 interface RciState {
@@ -321,7 +323,7 @@ interface EmvState {
   prevH: Cell;
   prevL: Cell;
   started: boolean;
-  valid: number[];
+  valid: RingBuffer<number>;
 }
 
 interface FractalState {
@@ -348,8 +350,8 @@ interface InsideBarState {
 }
 
 interface DoubleTopBottomState {
-  highs: Cell[];
-  lows: Cell[];
+  highs: RingBuffer<Cell>;
+  lows: RingBuffer<Cell>;
   count: number;
 }
 
@@ -433,9 +435,9 @@ export type PivotPoints = {
   s2: Cell;
 };
 
-function finiteCell(value: Cell): Cell {
-  return value !== null && Number.isFinite(value) ? value : null;
-}
+/** Local TA names for the shared na guard. */
+const finiteCell = finiteOrNull;
+const finiteOut = finiteOrNull;
 
 /** Plain dict returned by `ta.*` handlers. Attribute reads are brand-gated. */
 export interface TaRecord {
@@ -449,31 +451,26 @@ function taRec(
   return { __taRecord: true, ...fields };
 }
 
-function pushCap<T>(window: T[], value: T, cap: number): void {
-  if (window.length === cap) window.shift();
-  window.push(value);
-}
-
 /**
  * Fixed-capacity ring buffer with O(1) push and indexed access (oldest first).
  * Replaces `Array.shift()` + `push()` patterns in TA windows to eliminate
  * O(n) element movement per bar per call site.
  */
-class RingBuffer {
-  private readonly data: Cell[];
+class RingBuffer<T = Cell> {
+  private readonly data: Array<T | null>;
   private head = 0; // index of oldest element
   private count = 0; // number of valid entries
   private readonly cap: number;
 
   constructor(capacity: number) {
     this.cap = capacity;
-    this.data = new Array(capacity).fill(null);
+    this.data = new Array<T | null>(capacity).fill(null);
   }
 
   /** Push a value, evicting the oldest if full. Returns the evicted value (or null). */
-  push(v: Cell): Cell | null {
+  push(v: T): T | null {
     const tail = (this.head + this.count) % this.cap;
-    const evicted = this.count === this.cap ? this.data[tail] : null;
+    const evicted = this.count === this.cap ? this.data[tail]! : null;
     this.data[tail] = v;
     if (this.count < this.cap) {
       this.count++;
@@ -484,9 +481,9 @@ class RingBuffer {
   }
 
   /** Get the i-th oldest element (0 = oldest). */
-  get(i: number): Cell | null {
+  get(i: number): T | null {
     if (i < 0 || i >= this.count) return null;
-    return this.data[(this.head + i) % this.cap];
+    return this.data[(this.head + i) % this.cap]!;
   }
 
   get length(): number {
@@ -497,11 +494,11 @@ class RingBuffer {
     return this.count === this.cap;
   }
 
-  [Symbol.iterator](): Iterator<Cell, undefined> {
+  [Symbol.iterator](): Iterator<T | null, undefined> {
     let i = 0;
     const self = this;
     return {
-      next(): IteratorResult<Cell, undefined> {
+      next(): IteratorResult<T | null, undefined> {
         if (i < self.count) return { value: self.get(i++), done: false };
         return { value: undefined, done: true };
       },
@@ -517,17 +514,13 @@ class RingBuffer {
   }
 
   /** Deep clone for realtime tick snapshots (duck-type `clone()` in clone.ts). */
-  clone(): RingBuffer {
-    const out = new RingBuffer(this.cap);
+  clone(): RingBuffer<T> {
+    const out = new RingBuffer<T>(this.cap);
     out.head = this.head;
     out.count = this.count;
     for (let i = 0; i < this.cap; i++) out.data[i] = this.data[i];
     return out;
   }
-}
-
-function finiteOut(value: number): Cell {
-  return Number.isFinite(value) ? value : null;
 }
 
 /** Python `_sma` last sample: strict window, any `na` → `na`. */
@@ -688,45 +681,26 @@ export class TaEngine {
     string,
     { momentum: RingBuffer; volume: RingBuffer }
   >();
-  private readonly volatilityRegimeSites = new Map<string, Cell[]>();
-
-  /** Sites modified since the last snapshot (for efficient realtime tick rollback). */
-  private readonly dirtySites = new Set<string>();
-
-  /** Mark a call site as modified during the current bar/tick. */
-  markDirty(site: string): void {
-    this.dirtySites.add(site);
-  }
-
-  /** Clear dirty tracking (call at the start of each bar). */
-  clearDirty(): void {
-    this.dirtySites.clear();
-  }
+  private readonly volatilityRegimeSites = new Map<string, RingBuffer<Cell>>();
 
   /**
-   * Snapshot only dirty per-site windows (Python `_snapshot_ta_state`).
+   * Snapshot every per-site window (Python `_snapshot_ta_state`).
    * Intermediate realtime ticks push one sample per call site; without
    * rollback the same bar would be counted N times.
+   *
+   * A dirty-set optimization was tried in 9763a3c, but only `sma` / `ema` /
+   * `rsi` marked their sites. Every stateful kernel must participate, so the
+   * full copy is the only correct contract until state access is centralized.
    */
   snapshot(): Array<[string, Map<string, unknown>]> {
     const out: Array<[string, Map<string, unknown>]> = [];
-    const dirty = [...this.dirtySites];
-    this.dirtySites.clear();
-    if (dirty.length === 0) return out;
     for (const [key, value] of Object.entries(
       this as unknown as Record<string, unknown>,
     )) {
-      if (!(value instanceof Map)) continue;
+      if (!(value instanceof Map) || value.size === 0) continue;
       const copy = new Map<string, unknown>();
-      let anyDirty = false;
-      for (const site of dirty) {
-        const state = value.get(site);
-        if (state !== undefined) {
-          copy.set(site, cloneValue(state));
-          anyDirty = true;
-        }
-      }
-      if (anyDirty) out.push([key, copy]);
+      for (const [site, state] of value) copy.set(site, cloneValue(state));
+      out.push([key, copy]);
     }
     return out;
   }
@@ -734,6 +708,12 @@ export class TaEngine {
   /** Copy-on-restore (Python `_restore_ta_state`); never throws. */
   restore(snap: Array<[string, Map<string, unknown>]>): void {
     const self = this as unknown as Record<string, unknown>;
+    // `snapshot()` omits empty maps, so absence means "was empty". Clear
+    // every live map first; otherwise rolling back to a pre-first-bar state
+    // would leave later samples in place.
+    for (const value of Object.values(self)) {
+      if (value instanceof Map) value.clear();
+    }
     for (const [key, copy] of snap) {
       const live = self[key];
       if (!(live instanceof Map)) continue;
@@ -750,7 +730,6 @@ export class TaEngine {
       st = { period: n, window: new RingBuffer(n), sum: 0, count: 0 };
       this.smaSites.set(site, st);
     }
-    this.markDirty(site);
 
     const x = finiteCell(source);
     const evicted = st.window.push(x);
@@ -777,7 +756,6 @@ export class TaEngine {
       st = { period: n, ema: null, seeded: false, seedBuf: [] };
       this.emaSites.set(site, st);
     }
-    this.markDirty(site);
     const x = finiteCell(source);
     const alpha = 2 / (n + 1);
     if (!st.seeded) {
@@ -860,7 +838,6 @@ export class TaEngine {
       };
       this.rsiSites.set(site, st);
     }
-    this.markDirty(site);
 
     const x = finiteCell(source);
     // NA source: emit na and leave Wilder state untouched.
@@ -1969,32 +1946,33 @@ export class TaEngine {
     st.b.push(finiteCell(b));
     if (st.a.length < n) return null;
 
-    const xs: number[] = [];
-    const ys: number[] = [];
-    for (let i = 0; i < n; i++) {
-      const x = st.a.get(i)!;
-      const y = st.b.get(i)!;
-      if (x !== null && y !== null) {
-        xs.push(x);
-        ys.push(y);
-      }
-    }
-    if (xs.length < 2) return null;
-    const m = xs.length;
+    // Two passes over the ring (oldest → newest) without intermediate arrays.
+    // Arithmetic order matches the previous implementation, so results are
+    // bit-identical while avoiding two array allocations per bar.
+    let m = 0;
     let mx = 0;
     let my = 0;
-    for (let i = 0; i < m; i++) {
-      mx += xs[i]!;
-      my += ys[i]!;
+    for (let i = 0; i < n; i++) {
+      const x = st.a.get(i);
+      const y = st.b.get(i);
+      if (x !== null && y !== null) {
+        m++;
+        mx += x;
+        my += y;
+      }
     }
+    if (m < 2) return null;
     mx /= m;
     my /= m;
     let num = 0;
     let denx = 0;
     let deny = 0;
-    for (let i = 0; i < m; i++) {
-      const dx = xs[i]! - mx;
-      const dy = ys[i]! - my;
+    for (let i = 0; i < n; i++) {
+      const x = st.a.get(i);
+      const y = st.b.get(i);
+      if (x === null || y === null) continue;
+      const dx = x - mx;
+      const dy = y - my;
       num += dx * dy;
       denx += dx * dx;
       deny += dy * dy;
@@ -2172,12 +2150,12 @@ export class TaEngine {
     if (n <= 0) return 0;
     let st = this.wvadSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, vols: [], volSum: 0 };
+      st = { period: n, vols: new RingBuffer<number>(n), volSum: 0 };
       this.wvadSites.set(site, st);
     }
     const vv = finiteCell(volume) ?? 0;
-    if (st.vols.length === n) st.volSum -= st.vols.shift()!;
-    st.vols.push(vv);
+    const evicted = st.vols.push(vv);
+    if (evicted !== null) st.volSum -= evicted;
     st.volSum += vv;
     if (st.volSum > 0 && wad !== null) return wad / st.volSum;
     return 0;
@@ -2199,7 +2177,13 @@ export class TaEngine {
     if (n <= 0) return null;
     let st = this.cmfSites.get(site);
     if (st === undefined || st.period !== n) {
-      st = { period: n, mf: [], vol: [], mfSum: 0, volSum: 0 };
+      st = {
+        period: n,
+        mf: new RingBuffer<number>(n),
+        vol: new RingBuffer<number>(n),
+        mfSum: 0,
+        volSum: 0,
+      };
       this.cmfSites.set(site, st);
     }
     const h = finiteCell(high);
@@ -2212,12 +2196,10 @@ export class TaEngine {
       clv = rng === 0 ? 0 : (c - l - (h - c)) / rng;
     }
     const mf = clv * vv;
-    if (st.mf.length === n) {
-      st.mfSum -= st.mf.shift()!;
-      st.volSum -= st.vol.shift()!;
-    }
-    st.mf.push(mf);
-    st.vol.push(vv);
+    const evictedMf = st.mf.push(mf);
+    const evictedVol = st.vol.push(vv);
+    if (evictedMf !== null) st.mfSum -= evictedMf;
+    if (evictedVol !== null) st.volSum -= evictedVol;
     st.mfSum += mf;
     st.volSum += vv;
     return st.volSum > 0 ? st.mfSum / st.volSum : 0;
@@ -2774,7 +2756,13 @@ export class TaEngine {
     const need = Math.max(a, b, c);
     let st = this.uoSites.get(site);
     if (st === undefined || st.n1 !== a || st.n2 !== b || st.n3 !== c) {
-      st = { n1: a, n2: b, n3: c, prev: null, window: [] };
+      st = {
+        n1: a,
+        n2: b,
+        n3: c,
+        prev: null,
+        window: new RingBuffer<[Cell, Cell]>(need),
+      };
       this.uoSites.set(site, st);
     }
     const h = finiteCell(high);
@@ -2790,15 +2778,15 @@ export class TaEngine {
       bp = cl - lowRef;
       tr = highRef - lowRef;
     }
-    pushCap(st.window, [bp, tr], need);
+    st.window.push([bp, tr]);
     if (st.window.length < need) return null;
     const avg = (length: number): Cell => {
       let bpS = 0;
       let trS = 0;
       const start = st.window.length - length;
       for (let i = start; i < st.window.length; i++) {
-        const pair = st.window[i]!;
-        if (pair[0] === null || pair[1] === null) return null;
+        const pair = st.window.get(i);
+        if (pair == null || pair[0] === null || pair[1] === null) return null;
         bpS += pair[0];
         trS += pair[1];
       }
@@ -2819,7 +2807,7 @@ export class TaEngine {
   rci(site: string, source: Cell, length: number): Cell {
     const n = pinePeriod(length);
     if (n === null || n < 2) {
-      throw new Error("ta.rci length must be at least 2");
+      runtimeError("ta.rci length must be at least 2");
     }
     let st = this.rciSites.get(site);
     if (st === undefined || st.length !== n) {
@@ -3054,7 +3042,13 @@ export class TaEngine {
     if (n === null) return null;
     let st = this.emvSites.get(site);
     if (st === undefined || st.length !== n) {
-      st = { length: n, prevH: null, prevL: null, started: false, valid: [] };
+      st = {
+        length: n,
+        prevH: null,
+        prevL: null,
+        started: false,
+        valid: new RingBuffer<number>(n),
+      };
       this.emvSites.set(site, st);
     }
     const h = finiteCell(high);
@@ -3084,10 +3078,10 @@ export class TaEngine {
     }
     st.prevH = h;
     st.prevL = l;
-    if (sample !== null) pushCap(st.valid, sample, n);
+    if (sample !== null) st.valid.push(sample);
     if (st.valid.length < n) return null;
     let sum = 0;
-    for (const v of st.valid) sum += v;
+    for (const v of st.valid) if (v !== null) sum += v;
     return finiteOut(sum / n);
   }
 
@@ -3174,12 +3168,12 @@ export class TaEngine {
     return { high: recentHigh, low: recentLow, dir: pct > th ? 1 : direction };
   }
 
-  private readonly accelSites = new Map<string, Cell[]>();
+  private readonly accelSites = new Map<string, RingBuffer<Cell>>();
 
   /** Python `pine_expect_int`: near-integers round, other finites floor. `na` throws. */
   private coerceTaInt(value: Cell, message: string): number {
     if (value === null || !Number.isFinite(value))
-      throw new Error(`${message}. Got: na`);
+      runtimeError(`${message}. Got: na`);
     const nearest = Math.round(value);
     if (Math.abs(value - nearest) <= PERIOD_INT_EPS) return nearest;
     return Math.floor(value);
@@ -3191,7 +3185,7 @@ export class TaEngine {
    */
   hammer(open: Cell, high: Cell, low: Cell, close: Cell): TaRecord {
     if (open === null || high === null || low === null || close === null) {
-      throw new Error("bad operand type for abs(): 'NoneType'");
+      runtimeError("bad operand type for abs(): 'NoneType'");
     }
     const body = Math.abs(close - open);
     const range = high - low;
@@ -3218,9 +3212,7 @@ export class TaEngine {
     const none = taRec({ gap_size: 0, gap_type: 0, gap_percent: 0 });
     if (prevClose === null) return none;
     if (high === null || low === null) {
-      throw new Error(
-        "unsupported operand type(s) for -: 'float' and 'NoneType'",
-      );
+      runtimeError("unsupported operand type(s) for -: 'float' and 'NoneType'");
     }
     const upside = Math.max(0, low - prevClose);
     const downside = Math.max(0, prevClose - high);
@@ -3263,10 +3255,10 @@ export class TaEngine {
     const key = `${site}:${p}`;
     let samples = this.accelSites.get(key);
     if (samples === undefined) {
-      samples = [];
+      samples = new RingBuffer<Cell>(p + 1);
       this.accelSites.set(key, samples);
     }
-    pushCap(samples, finiteCell(source), p + 1);
+    samples.push(finiteCell(source));
     if (samples.length < p + 1) return 0;
     const clean: number[] = [];
     for (const v of samples) {
@@ -3424,11 +3416,15 @@ export class TaEngine {
     const key = `${site}:${n}`;
     let st = this.doubleTopBottomSites.get(key);
     if (st === undefined) {
-      st = { highs: [], lows: [], count: 0 };
+      st = {
+        highs: new RingBuffer<Cell>(n),
+        lows: new RingBuffer<Cell>(n),
+        count: 0,
+      };
       this.doubleTopBottomSites.set(key, st);
     }
-    pushCap(st.highs, finiteCell(high), n);
-    pushCap(st.lows, finiteCell(low), n);
+    st.highs.push(finiteCell(high));
+    st.lows.push(finiteCell(low));
     st.count += 1;
     if (st.count < n) return off;
     const recentHigh: number[] = [];
@@ -4658,10 +4654,10 @@ export class TaEngine {
     if (n < 1) return "medium";
     let w = this.volatilityRegimeSites.get(`${site}:${n}`);
     if (w === undefined) {
-      w = [];
+      w = new RingBuffer<Cell>(n);
       this.volatilityRegimeSites.set(`${site}:${n}`, w);
     }
-    pushCap(w, finiteCell(atr), n);
+    w.push(finiteCell(atr));
     if (w.length < n) return "medium";
     const recent: number[] = [];
     for (const v of w) if (v !== null) recent.push(v);

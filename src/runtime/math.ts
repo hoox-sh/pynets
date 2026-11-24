@@ -6,15 +6,9 @@
  * `null` is `na`. Non-finite in/out is `na`.
  */
 
+import { finiteOrNull } from "./num.ts";
+
 export type Cell = number | null;
-
-function finite(value: Cell): number | null {
-  return value !== null && Number.isFinite(value) ? value : null;
-}
-
-function finiteOut(value: number): Cell {
-  return Number.isFinite(value) ? value : null;
-}
 
 /** Half away from 0 (Pine `math.round` ties). */
 function roundHalfAwayFromZero(x: number): number {
@@ -22,13 +16,13 @@ function roundHalfAwayFromZero(x: number): number {
 }
 
 export function mathAbs(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   return n === null ? null : Math.abs(n);
 }
 
 /** `-1`, `0`, or `1`. */
 export function mathSign(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null) return null;
   if (n > 0) return 1;
   if (n < 0) return -1;
@@ -37,39 +31,39 @@ export function mathSign(x: Cell): Cell {
 
 /** `na` if `x < 0`. */
 export function mathSqrt(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null || n < 0) return null;
-  return finiteOut(Math.sqrt(n));
+  return finiteOrNull(Math.sqrt(n));
 }
 
 /** Natural log, or log base `base` when given; `na` if `x <= 0` (or base <= 0). */
 export function mathLog(x: Cell, base?: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null || n <= 0) return null;
-  if (base === undefined) return finiteOut(Math.log(n));
-  const b = finite(base);
+  if (base === undefined) return finiteOrNull(Math.log(n));
+  const b = finiteOrNull(base);
   if (b === null || b <= 0 || b === 1) return null;
-  return finiteOut(Math.log(n) / Math.log(b));
+  return finiteOrNull(Math.log(n) / Math.log(b));
 }
 
 /** `na` if `x <= 0`. */
 export function mathLog10(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null || n <= 0) return null;
-  return finiteOut(Math.log10(n));
+  return finiteOrNull(Math.log10(n));
 }
 
 export function mathExp(x: Cell): Cell {
-  const n = finite(x);
-  return n === null ? null : finiteOut(Math.exp(n));
+  const n = finiteOrNull(x);
+  return n === null ? null : finiteOrNull(Math.exp(n));
 }
 
 export function mathPow(base: Cell, exp: Cell): Cell {
-  const b = finite(base);
-  const e = finite(exp);
+  const b = finiteOrNull(base);
+  const e = finiteOrNull(exp);
   if (b === null || e === null) return null;
   // JS `Math.pow` yields NaN for e.g. (-1)**0.5; map that (and Inf) to na.
-  return finiteOut(Math.pow(b, e));
+  return finiteOrNull(Math.pow(b, e));
 }
 
 /** `na` if any arg is `na` or the list is empty. */
@@ -77,11 +71,11 @@ export function mathMax(...xs: Cell[]): Cell {
   if (xs.length === 0) return null;
   let max = -Infinity;
   for (const x of xs) {
-    const n = finite(x);
+    const n = finiteOrNull(x);
     if (n === null) return null;
     if (n > max) max = n;
   }
-  return finiteOut(max);
+  return finiteOrNull(max);
 }
 
 /** `na` if any arg is `na` or the list is empty. */
@@ -89,31 +83,31 @@ export function mathMin(...xs: Cell[]): Cell {
   if (xs.length === 0) return null;
   let min = Infinity;
   for (const x of xs) {
-    const n = finite(x);
+    const n = finiteOrNull(x);
     if (n === null) return null;
     if (n < min) min = n;
   }
-  return finiteOut(min);
+  return finiteOrNull(min);
 }
 
 export function mathRound(x: Cell, precision?: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null) return null;
   if (precision === undefined) return roundHalfAwayFromZero(n);
-  const p = finite(precision);
+  const p = finiteOrNull(precision);
   if (p === null) return null;
   const factor = 10 ** Math.trunc(p);
   if (!Number.isFinite(factor)) return null;
-  return finiteOut(roundHalfAwayFromZero(n * factor) / factor);
+  return finiteOrNull(roundHalfAwayFromZero(n * factor) / factor);
 }
 
 export function mathFloor(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   return n === null ? null : Math.floor(n);
 }
 
 export function mathCeil(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   return n === null ? null : Math.ceil(n);
 }
 
@@ -122,27 +116,27 @@ export function mathAvg(...xs: Cell[]): Cell {
   if (xs.length === 0) return null;
   let sum = 0;
   for (const x of xs) {
-    const n = finite(x);
+    const n = finiteOrNull(x);
     if (n === null) return null;
     sum += n;
   }
-  return finiteOut(sum / xs.length);
+  return finiteOrNull(sum / xs.length);
 }
 
 export function mathSum(...xs: Cell[]): Cell {
   if (xs.length === 0) return null;
   let sum = 0;
   for (const x of xs) {
-    const n = finite(x);
+    const n = finiteOrNull(x);
     if (n === null) return null;
     sum += n;
   }
-  return finiteOut(sum);
+  return finiteOrNull(sum);
 }
 
 function trig(x: Cell, fn: (n: number) => number): Cell {
-  const n = finite(x);
-  return n === null ? null : finiteOut(fn(n));
+  const n = finiteOrNull(x);
+  return n === null ? null : finiteOrNull(fn(n));
 }
 
 export function mathSin(x: Cell): Cell {
@@ -158,15 +152,15 @@ export function mathTan(x: Cell): Cell {
 }
 
 export function mathAsin(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null || n < -1 || n > 1) return null;
-  return finiteOut(Math.asin(n));
+  return finiteOrNull(Math.asin(n));
 }
 
 export function mathAcos(x: Cell): Cell {
-  const n = finite(x);
+  const n = finiteOrNull(x);
   if (n === null || n < -1 || n > 1) return null;
-  return finiteOut(Math.acos(n));
+  return finiteOrNull(Math.acos(n));
 }
 
 export function mathAtan(x: Cell): Cell {
@@ -174,13 +168,13 @@ export function mathAtan(x: Cell): Cell {
 }
 
 export function mathToDegrees(x: Cell): Cell {
-  const n = finite(x);
-  return n === null ? null : finiteOut((n * 180) / Math.PI);
+  const n = finiteOrNull(x);
+  return n === null ? null : finiteOrNull((n * 180) / Math.PI);
 }
 
 export function mathToRadians(x: Cell): Cell {
-  const n = finite(x);
-  return n === null ? null : finiteOut((n * Math.PI) / 180);
+  const n = finiteOrNull(x);
+  return n === null ? null : finiteOrNull((n * Math.PI) / 180);
 }
 
 /** `na` in → `na`. Else 1 if finite, 0 otherwise. */
@@ -191,11 +185,11 @@ export function mathIsFinite(x: Cell): Cell {
 
 /** Default mintick 0.01 when the host does not supply one. */
 export function mathRoundToMintick(x: Cell, mintick: Cell = 0.01): Cell {
-  const n = finite(x);
-  const tick = finite(mintick);
+  const n = finiteOrNull(x);
+  const tick = finiteOrNull(mintick);
   if (n === null || tick === null || tick <= 0)
-    return n === null ? null : finiteOut(Number(n.toFixed(8)));
-  return finiteOut(Math.round(n / tick) * tick);
+    return n === null ? null : finiteOrNull(Number(n.toFixed(8)));
+  return finiteOrNull(Math.round(n / tick) * tick);
 }
 
 /** Pine v4 `iff(cond, then, else)`. `na` condition → `na`. */
@@ -223,14 +217,14 @@ export function mathRandom(
   b?: Cell,
   rng: () => number = Math.random,
 ): Cell {
-  if (a === undefined && b === undefined) return finiteOut(rng());
+  if (a === undefined && b === undefined) return finiteOrNull(rng());
   if (b === undefined) {
-    const hi = finite(a as Cell);
+    const hi = finiteOrNull(a as Cell);
     if (hi === null) return null;
-    return finiteOut(hi * rng());
+    return finiteOrNull(hi * rng());
   }
-  const lo = finite(a as Cell);
-  const hi = finite(b);
+  const lo = finiteOrNull(a as Cell);
+  const hi = finiteOrNull(b);
   if (lo === null || hi === null) return null;
-  return finiteOut(lo + (hi - lo) * rng());
+  return finiteOrNull(lo + (hi - lo) * rng());
 }

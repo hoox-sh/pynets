@@ -63,6 +63,11 @@ import { parse, Runtime } from "@hoox-sh/pynets";
 </script>
 ```
 
+Browser note: `mode: "compile"` uses `new Function`, so it needs a CSP
+`script-src 'unsafe-eval'` (or a worker with that policy). `mode: "auto"`
+falls back to interpret; use interpret mode under a strict CSP. For parser-only
+use, import `@hoox-sh/pynets/parse` (587 kB standalone bundle vs the full entry).
+
 The CLI still needs Bun on `PATH`. This is not a Cloudflare Worker package.
 
 <p align="center">
@@ -174,7 +179,8 @@ const result = rt.run(source, bars);
 // result.error          set on parse/runtime failure (does not throw)
 ```
 
-Push-driven re-eval:
+Push-driven re-eval (interpret mode advances one bar at a time; compile/auto
+mode replays the prefix):
 
 ```ts
 const stream = rt.stream(source);

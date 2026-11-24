@@ -4,17 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
-
-function bars(n: number) {
-  return Array.from({ length: n }, (_, i) => ({
-    open: 100 + i * 0.1,
-    high: 101 + i * 0.2,
-    low: 99 + i * 0.05,
-    close: 100.5 + i * 0.1,
-    volume: 1000 + i,
-    time: i * 86_400_000,
-  }));
-}
+import { flatBars as bars } from "./helpers/bars.ts";
 
 describe("interpret ta.ao / ta.aroon", () => {
   test("plot(ta.ao) first finite at bar 33", () => {

@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { compileToResult, interpret } from "../src/index.ts";
+import { waveBars as bars } from "./helpers/bars.ts";
 
 type Bar = {
   open: number;
@@ -13,21 +14,6 @@ type Bar = {
   volume: number;
   time: number;
 };
-
-function bars(n: number, step = 86_400_000): Bar[] {
-  return Array.from({ length: n }, (_, i) => {
-    const close = 100 + 8 * Math.sin(i * 0.37) + (i % 7) * 0.4;
-    const open = close - 0.3 + (i % 3) * 0.1;
-    return {
-      open,
-      high: Math.max(open, close) + 0.8 + (i % 5) * 0.15,
-      low: Math.min(open, close) - 0.6 - (i % 4) * 0.1,
-      close,
-      volume: 1000 + ((i * 37) % 500),
-      time: i * step,
-    };
-  });
-}
 
 const BARS40 = bars(40);
 const HOURLY = bars(24, 3_600_000);

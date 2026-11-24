@@ -41,24 +41,26 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "browser": "./dist/browser.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/types/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "bun": "./src/index.ts",
-      "types": "./dist/index.d.ts",
+      "types": "./dist/types/index.d.ts",
       "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./parse": {
       "bun": "./src/ast/helper.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/types/ast/helper.d.ts",
+      "browser": "./dist/parse.js",
+      "import": "./dist/parse.js",
+      "default": "./dist/parse.js"
     },
     "./runtime": {
       "bun": "./src/runtime/interpret.ts",
-      "types": "./dist/index.d.ts",
+      "types": "./dist/types/runtime/interpret.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }

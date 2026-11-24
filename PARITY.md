@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1394 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1452 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -98,14 +98,19 @@ spread, macro proxies) now match Python.
 
 `RuntimeStream` models a forming last bar:
 
-- `push(bar)` re-runs the script with `realtimeLastBar: true`, so the last bar
-  sees `barstate.isrealtime=1`, `barstate.ishistory=0`,
-  `barstate.islastconfirmedhistory=0`.
-- `updateLastBar(bar)` replaces the forming bar and re-runs without advancing
-  `barCount`; `once`, TA state, and broker fills recompute from the revised
-  history (natural rollback).
+- In interpret mode, `push(bar)` advances a persistent `RuntimeSession` one
+  bar at a time: the previous forming bar is replayed as history, then the new
+  bar runs with `barstate.isrealtime=1`, `barstate.ishistory=0`,
+  `barstate.islastconfirmedhistory=0`. Compile/auto mode keeps the prefix
+  re-run path.
+- `updateLastBar(bar)` restores the pre-bar snapshot and re-executes one bar
+  without advancing `barCount`; `once`, TA state, and broker fills recompute
+  from the revised history.
 - `appendBars(bars)` and `barCount` round out the session API.
-- `close()` re-runs with `realtimeLastBar: false`, confirming the last bar.
+- `close()` commits the forming bar as history (`realtimeLastBar: false`).
+- `test/stream_session_parity.test.ts` checks every prefix against the
+  full-run path for TA, `var`/`varip`, `once`, arrays, UDFs, strategy, alerts,
+  drawings, logs, and barstate.
 
 ## Realtime windows (multi-tick)
 
@@ -166,7 +171,8 @@ array-valued names; Python's own compile mode returns na here).
 2. Implement in `src/runtime/ta.ts` (stateful) or as a pure method.
 3. Wire `evalExtraTa` in `src/runtime/interpret.ts` with Python arg order and
    required-arg messages.
-4. Add the method to `TA_METHODS` and an `emitTa` branch in
+4. Add the name to `src/runtime/ta_names.ts` (`TA_METHODS` / `EXTRA_TA_NAMES`;
+   both backends import this manifest) and an `emitTa` branch in
    `src/runtime/compile/emit_call.ts`. Use `taCall` only for methods that take a
    call-site string; stateless methods use `taPure`.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile

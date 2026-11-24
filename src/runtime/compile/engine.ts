@@ -4,7 +4,6 @@
  *
  * Compile engine: eligibility, transpile, sha256 LRU (max 128), load, run.
  */
-import { createHash } from "node:crypto";
 import type {
   CompileCacheStats,
   CompileEligibility,
@@ -98,10 +97,6 @@ export function compileCacheStats(): CompileCacheStats {
   return { source_entries: cache.size, source_max: CACHE_MAX };
 }
 
-function sha256(s: string): string {
-  return createHash("sha256").update(s).digest("hex");
-}
-
 function loadExecute(code: string): CompiledExecuteFn {
   let factory: () => CompiledExecuteFn;
   try {
@@ -110,7 +105,15 @@ function loadExecute(code: string): CompiledExecuteFn {
     ) as typeof factory;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new CompileLoadError(msg);
+    const csp =
+      /content security policy|unsafe-eval|refused to evaluate|eval\(\)/i.test(
+        msg,
+      );
+    throw new CompileLoadError(
+      csp
+        ? "JS compile requires dynamic code generation (CSP unsafe-eval). Use interpret mode or allow unsafe-eval."
+        : msg,
+    );
   }
   const fn = factory();
   if (typeof fn !== "function")
@@ -222,7 +225,9 @@ export function compileScript(
 ): CompiledScript {
   const elig = compileEligible(source);
   if (!elig.ok) throw new CompileIneligibleError(elig.reason ?? "ineligible");
-  const key = sha256(source + libraryCacheTail(source, extras?.getLibrary));
+  // Exact key: no hashing dependency (keeps the browser bundle free of a
+  // crypto polyfill) and no collision risk. The LRU bounds retained sources.
+  const key = source + libraryCacheTail(source, extras?.getLibrary);
   const hit = cache.get(key);
   if (hit) {
     cache.delete(key);

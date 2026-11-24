@@ -690,6 +690,24 @@ describe("PineMatrix sort / reverse / median / mode / extra predicates", () => {
     ).toBe(3);
   });
 
+  test("sort_field uses get_field on compile-path UDT records", () => {
+    const record = (x: number, y: number) => ({
+      udt: { fields: [{ name: "x" }, { name: "y" }] },
+      get_field(name: string) {
+        return name === "x" ? x : y;
+      },
+    });
+    const m = new PineMatrix(3, 1);
+    m.set(0, 0, record(3, 30));
+    m.set(1, 0, record(1, 10));
+    m.set(2, 0, record(2, 20));
+    m.sort(0, "asc", "x");
+    const first = m.get(0, 0) as unknown as {
+      get_field: (n: string) => number;
+    };
+    expect(first.get_field("x")).toBe(1);
+  });
+
   test("reverse flips element order (rows then each row)", () => {
     const m = fill([
       [1, 2, 3],

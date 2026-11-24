@@ -12,6 +12,7 @@
  */
 
 import { cloneValue } from "./clone.ts";
+import { isFiniteNumber } from "./num.ts";
 
 export type StrategyDirection = "long" | "short";
 /** `strategy(..., avg_price_model=)` — stock FIFO reweight / sticky futures AEP. */
@@ -190,10 +191,6 @@ export interface StrategySummary {
   maxRunup: number;
   maxRunupPercent: number;
   initialCapital: number;
-}
-
-function isFiniteNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
 }
 
 function optLevel(v: number | null | undefined): number | null {

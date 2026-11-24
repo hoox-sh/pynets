@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
 import {
+  timeframeChangeValue,
   timeframeFromSeconds,
   timeframeInSeconds,
   timeframeIsDaily,
@@ -53,6 +54,29 @@ describe("timeframeInSeconds", () => {
   test("trims whitespace", () => {
     expect(timeframeInSeconds(" 15 ")).toBe(900);
     expect(timeframeInSeconds(" 1D ")).toBe(86_400);
+  });
+});
+
+describe("timeframeChangeValue", () => {
+  const jan1 = Date.UTC(2024, 0, 1);
+  const jan2 = Date.UTC(2024, 0, 2);
+
+  test("daily boundary changes; same day does not", () => {
+    expect(timeframeChangeValue("D", jan2, jan1, 1)).toBe(1);
+    expect(timeframeChangeValue("D", jan1 + 3_600_000, jan1, 1)).toBe(0);
+  });
+
+  test("bar 0 is a new period; empty / unknown tf is 0", () => {
+    expect(timeframeChangeValue("D", jan1, null, 0)).toBe(1);
+    expect(timeframeChangeValue("", jan2, jan1, 1)).toBe(0);
+    expect(timeframeChangeValue(null, jan2, jan1, 1)).toBe(0);
+    expect(timeframeChangeValue("weird", jan2, jan1, 1)).toBe(0);
+  });
+
+  test("numeric minute tf and non-finite time", () => {
+    expect(timeframeChangeValue(60, jan1 + 3_600_000, jan1, 1)).toBe(1);
+    expect(timeframeChangeValue(60, jan1 + 60_000, jan1, 1)).toBe(0);
+    expect(timeframeChangeValue("D", Number.NaN, jan1, 1)).toBe(0);
   });
 });
 
