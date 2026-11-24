@@ -5012,43 +5012,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.mfi" || fname === "mfi") {
-    if (typeof ta.mfi !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => a.name == null);
-    if (positional.length <= 1) {
-      // Python 1-arg period-only form gates length via _is_period_like
-      // (volume.py ~108): non-period-like → ignored → na period 0.
-      return (ta.mfi as TaEngine["mfi"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        num(env.ctx.low),
-        num(env.ctx.close),
-        num(env.ctx.volume),
-        periodLikeArg(node, env, 0, ["length"]) ?? 0,
-      );
-    }
-    if (positional.length === 2) {
-      return (ta.mfi as TaEngine["mfi"]).call(
-        env.ta,
-        site,
-        srcArg(node, env),
-        srcArg(node, env),
-        srcArg(node, env),
-        num(env.ctx.volume),
-        lenArg(node, env, 1),
-      );
-    }
-    return (ta.mfi as TaEngine["mfi"]).call(
-      env.ta,
-      site,
-      unwrap(evalExpr(callArg(node.args, 0, ["high"]), env)),
-      unwrap(evalExpr(callArg(node.args, 1, ["low"]), env)),
-      unwrap(evalExpr(callArg(node.args, 2, ["close"]), env)),
-      unwrap(evalExpr(callArg(node.args, 3, ["volume"]), env)),
-      lenArg(node, env, 4),
-    );
-  }
   if (fname === "ta.sar" || fname === "sar") {
     if (typeof ta.sar !== "function") return NA;
     return (ta.sar as TaEngine["sar"]).call(

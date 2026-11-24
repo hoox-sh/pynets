@@ -503,6 +503,41 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "mfi",
+    method: "mfi",
+    variants: [
+      {
+        minPositional: 3,
+        args: [
+          v(0, ["high"]),
+          v(1, ["low"]),
+          v(2, ["close"]),
+          v(3, ["volume"]),
+          n(4, ["length"], 0),
+        ],
+      },
+      {
+        minPositional: 2,
+        args: [
+          source(0),
+          source(0),
+          source(0),
+          c("volume"),
+          n(1, ["length"], 0),
+        ],
+      },
+      {
+        args: [
+          c("high"),
+          c("low"),
+          c("close"),
+          c("volume"),
+          n(0, ["length"], 0, true),
+        ],
+      },
+    ],
+  },
 ];
 
 export const TA_OVERLOAD_BY_NAME: ReadonlyMap<string, TaOverloadSpec> = new Map(

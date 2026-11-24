@@ -2045,21 +2045,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       finiteOr(pick(args, 1, ["length"], "null"), "0"),
     ]);
   }
-  if (method === "mfi") {
-    if (args.pos.length <= 1) {
-      return taCall("mfi", site, [HIGH, LOW, CLOSE, VOL, len(0, "14")]);
-    }
-    if (args.pos.length === 2) {
-      return taCall("mfi", site, [src(), src(), src(), VOL, len(1, "14")]);
-    }
-    return taCall("mfi", site, [
-      pick(args, 0, ["high"], HIGH),
-      pick(args, 1, ["low"], LOW),
-      pick(args, 2, ["close"], CLOSE),
-      pick(args, 3, ["volume"], VOL),
-      len(4, "14"),
-    ]);
-  }
+
   if (method === "tsi") {
     if (args.pos.length === 2) {
       return taCall("tsi", site, [

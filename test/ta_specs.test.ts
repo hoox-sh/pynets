@@ -166,6 +166,12 @@ describe("TA source/length specs", () => {
       "ta.atr()",
       "ta.atr(7.5)",
       "ta.atr(high + 1, low + 1, close + 1, 3)",
+      "ta.mfi(3)",
+      "ta.mfi()",
+      "ta.mfi(7.5)",
+      "ta.mfi(close, 3)",
+      "ta.mfi(high + 1, low + 1, close + 1, volume + 1, 3)",
+      "ta.mfi(high + 1, low + 1, close + 1, volume + 1)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
