@@ -382,6 +382,8 @@ export type TaCallArgSpec =
       readonly firstName: string;
       readonly secondName: string;
       readonly fallback: number;
+      /** Which slot wins when both are integer-like. */
+      readonly pick?: "first" | "second";
     };
 
 export interface TaContextCallSpec {
@@ -439,6 +441,7 @@ const periodPair = (
   firstName: string,
   secondName: string,
   fallback: number,
+  pick: "first" | "second" = "second",
 ): TaCallArgSpec => ({
   kind: "periodPair",
   firstIndex,
@@ -446,6 +449,7 @@ const periodPair = (
   firstName,
   secondName,
   fallback,
+  pick,
 });
 
 export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
@@ -507,6 +511,8 @@ export const TA_CONDITION_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
 export interface TaOverloadVariant {
   /** Select when the call has at least this many positional arguments. */
   readonly minPositional?: number;
+  /** Select when the call has at most this many positional arguments. */
+  readonly maxPositional?: number;
   /** Select only when the call has exactly this many positional arguments. */
   readonly positional?: number;
   /** Select only when at least one of these keywords is present. */
@@ -549,6 +555,30 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },
   { name: "wpr", method: "willr", variants: WILLR_VARIANTS },
   { name: "atr", method: "atr", variants: OHLC_LENGTH_VARIANTS },
+  {
+    name: "stoch",
+    method: "stoch",
+    variants: [
+      {
+        positional: 2,
+        forbidsKwarg: ["high"],
+        args: [
+          c("close"),
+          c("high"),
+          c("low"),
+          periodPair(0, 1, "length", "d", 0, "first"),
+        ],
+      },
+      {
+        maxPositional: 1,
+        forbidsKwarg: ["high"],
+        args: [c("close"), c("high"), c("low"), n(0, ["length"], 0, true)],
+      },
+      {
+        args: [source(0), v(1, ["high"]), v(2, ["low"]), n(3, ["length"], 0)],
+      },
+    ],
+  },
   {
     name: "adx",
     method: "adx",

@@ -185,6 +185,13 @@ describe("TA source/length specs", () => {
       "ta.adx(5, 7.5)",
       "ta.adx(high + 1, low + 1, close + 1, 3)",
       "ta.adx(high + 1, low + 1, close + 1)",
+      "ta.stoch(7)",
+      "ta.stoch()",
+      "ta.stoch(7.5)",
+      "ta.stoch(7, 3)",
+      "ta.stoch(7, 3.5)",
+      "ta.stoch(close, high, low, 7)",
+      "ta.stoch(close, high, low)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

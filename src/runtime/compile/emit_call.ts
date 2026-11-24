@@ -556,7 +556,8 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
     case "periodPair": {
       const first = pick(args, arg.firstIndex, [arg.firstName], "null");
       const second = pick(args, arg.secondIndex, [arg.secondName], "null");
-      return `(((__a, __b) => ((Number.isInteger(__a) && Number.isInteger(__b)) ? __b : ${arg.fallback}))(${first}, ${second}))`;
+      const winner = arg.pick === "first" ? "__a" : "__b";
+      return `(((__a, __b) => ((Number.isInteger(__a) && Number.isInteger(__b)) ? ${winner} : ${arg.fallback}))(${first}, ${second}))`;
     }
     case "number": {
       const expr = pick(args, arg.callIndex, [...arg.names], "null");
@@ -1878,6 +1879,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     const variant = overload.variants.find(
       (v) =>
         (v.minPositional == null || args.pos.length >= v.minPositional) &&
+        (v.maxPositional == null || args.pos.length <= v.maxPositional) &&
         (v.positional == null || args.pos.length === v.positional) &&
         (v.requiresKwarg == null || hasAnyKw(args, [...v.requiresKwarg])) &&
         (v.forbidsKwarg == null || !hasAnyKw(args, [...v.forbidsKwarg])),
@@ -1993,24 +1995,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
     return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }
-  if (method === "stoch") {
-    if (args.kw.high == null && args.pos.length <= 2) {
-      // Python period-only / community forms (oscillators.py:58-78): %K over
-      // the context close/high/low. Both slots gate on _is_period_like; in
-      // the 2-arg (kLength, dPeriod) form dPeriod is ignored (Python quirk).
-      const length =
-        args.pos.length === 2
-          ? `(((__k, __d) => ((Number.isInteger(__k) && Number.isInteger(__d)) ? __k : 0))(${pick(args, 0, ["length"], "null")}, ${pick(args, 1, ["d", "smooth"], "null")}))`
-          : periodGate(pick(args, 0, ["length"], "null"), "0");
-      return taCall("stoch", site, [CLOSE, HIGH, LOW, length]);
-    }
-    return taCall("stoch", site, [
-      src(),
-      pick(args, 1, ["high"], HIGH),
-      pick(args, 2, ["low"], LOW),
-      finiteOr(pick(args, 3, ["length"], "null"), "0"),
-    ]);
-  }
+
   if (method === "vwma") {
     if (args.pos.length <= 1 && !hasAnyKw(args, ["volume"])) {
       // Python 1-arg period-only form (basic.py:80-88): close + volume from

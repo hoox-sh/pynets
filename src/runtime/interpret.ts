@@ -4505,7 +4505,8 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       const second = periodLikeArg(node, env, arg.secondIndex, [
         arg.secondName,
       ]);
-      return first != null && second != null ? second : arg.fallback;
+      if (first == null || second == null) return arg.fallback;
+      return arg.pick === "first" ? first : second;
     }
     case "number":
       return arg.periodLike
@@ -4613,6 +4614,7 @@ function evalExtraTa(
     const variant = overload.variants.find(
       (v) =>
         (v.minPositional == null || positional >= v.minPositional) &&
+        (v.maxPositional == null || positional <= v.maxPositional) &&
         (v.positional == null || positional === v.positional) &&
         (v.requiresKwarg == null || hasKwarg(node, [...v.requiresKwarg])) &&
         (v.forbidsKwarg == null || !hasKwarg(node, [...v.forbidsKwarg])),
@@ -4799,43 +4801,6 @@ function evalExtraTa(
       srcArg(node, env),
       num(env.ctx.volume),
       lenArg(node, env, 1),
-    );
-  }
-
-  if (fname === "ta.stoch" || fname === "stoch") {
-    if (typeof ta.stoch !== "function") return NA;
-    const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-    if (!hasKwarg(node, ["high"]) && positional.length <= 2) {
-      let length: number;
-      if (positional.length === 2) {
-        // Python 2-arg community form (kLength, dPeriod) — both slots gate on
-        // _is_period_like (oscillators.py:73-78); dPeriod is ignored and %K
-        // is returned over the context close/high/low.
-        const k = periodLikeArg(node, env, 0, ["length"]);
-        const d = periodLikeArg(node, env, 1, ["d", "smooth"]);
-        length = k != null && d != null ? k : 0;
-      } else {
-        // Python 1-arg period-only form gates length via _is_period_like
-        // (oscillators.py ~58): non-period-like → ignored → na period 0.
-        length = periodLikeArg(node, env, 0, ["length"]) ?? 0;
-      }
-      return (ta.stoch as TaEngine["stoch"]).call(
-        env.ta,
-        site,
-        num(env.ctx.close),
-        num(env.ctx.high),
-        num(env.ctx.low),
-        length,
-      );
-    }
-    // reference Pine form: source, high, low, length
-    return (ta.stoch as TaEngine["stoch"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      unwrap(evalExpr(callArg(node.args, 1, ["high"]), env)),
-      unwrap(evalExpr(callArg(node.args, 2, ["low"]), env)),
-      lenArg(node, env, 3),
     );
   }
 
