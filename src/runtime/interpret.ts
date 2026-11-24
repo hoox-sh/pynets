@@ -208,6 +208,7 @@ import { PineMap } from "./map.ts";
 import { PineMatrix } from "./matrix.ts";
 import { TaEngine, type TaRecord } from "./ta.ts";
 import { EXTRA_TA_NAMES, TA_BARE_ATTRS } from "./ta_names.ts";
+import { TA_SRC_LEN_BY_NAME, TA_SRC_LEN_SPECS } from "./ta_specs.ts";
 import {
   CompileError,
   compileEligible,
@@ -370,84 +371,28 @@ const TA_DISPATCH: Map<
   (node: Call, env: Env, site: string) => Cell | undefined
 > = new Map<string, (node: Call, env: Env, site: string) => Cell | undefined>();
 
-TA_DISPATCH.set("ta.sma", (node, env, site) =>
-  env.ta.sma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("sma", (node, env, site) =>
-  env.ta.sma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.ema", (node, env, site) =>
-  env.ta.ema(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ema", (node, env, site) =>
-  env.ta.ema(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.rsi", (node, env, site) =>
-  env.ta.rsi(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("rsi", (node, env, site) =>
-  env.ta.rsi(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.rma", (node, env, site) =>
-  env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("rma", (node, env, site) =>
-  env.ta.rma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
 TA_DISPATCH.set("ta.tr", (node, env, site) =>
   taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
 );
 TA_DISPATCH.set("tr", (node, env, site) =>
   taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
 );
-TA_DISPATCH.set("ta.change", (node, env, site) =>
-  env.ta.change(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("change", (node, env, site) =>
-  env.ta.change(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.mom", (node, env, site) =>
-  env.ta.mom(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("mom", (node, env, site) =>
-  env.ta.mom(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.roc", (node, env, site) =>
-  env.ta.roc(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("roc", (node, env, site) =>
-  env.ta.roc(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.stdev", (node, env, site) =>
-  env.ta.stdev(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("stdev", (node, env, site) =>
-  env.ta.stdev(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.sum", (node, env, site) =>
-  env.ta.sum(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("sum", (node, env, site) =>
-  env.ta.sum(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.wma", (node, env, site) =>
-  env.ta.wma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("wma", (node, env, site) =>
-  env.ta.wma(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.rising", (node, env, site) =>
-  env.ta.rising(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("rising", (node, env, site) =>
-  env.ta.rising(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("ta.falling", (node, env, site) =>
-  env.ta.falling(site, srcArg(node, env), lenArg(node, env, 1)),
-);
-TA_DISPATCH.set("falling", (node, env, site) =>
-  env.ta.falling(site, srcArg(node, env), lenArg(node, env, 1)),
-);
+
+for (const spec of TA_SRC_LEN_SPECS) {
+  if (!spec.interpretDispatch) continue;
+  const handler = (node: Call, env: Env, site: string): Cell | undefined => {
+    const fn = (env.ta as unknown as Record<string, unknown>)[spec.method];
+    if (typeof fn !== "function") return NA;
+    return (fn as (site: string, source: Cell, length: number) => Cell).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenOrDefault(node, env, 1, ["length"], spec.interpretDefaultLength),
+    );
+  };
+  TA_DISPATCH.set(`ta.${spec.name}`, handler);
+  TA_DISPATCH.set(spec.name, handler);
+}
 TA_DISPATCH.set("ta.crossover", (node, env, site) => {
   const a = srcArg(node, env);
   const b = unwrap(evalExpr(callArg(node.args, 1, ["b"]), env));
@@ -4536,6 +4481,18 @@ function evalExtraTa(
   // Most calls are not extra TA builtins; skip the 300+ branch chain entirely.
   if (fname == null || !EXTRA_TA_NAMES.has(fname)) return undefined;
   const ta = env.ta as TaAny;
+  const base = fname.startsWith("ta.") ? fname.slice(3) : fname;
+  const srcLen = TA_SRC_LEN_BY_NAME.get(base);
+  if (srcLen?.interpretGeneric) {
+    const fn = (ta as Record<string, unknown>)[srcLen.method];
+    if (typeof fn !== "function") return NA;
+    return (fn as (site: string, source: Cell, length: number) => Cell).call(
+      env.ta,
+      site,
+      srcArg(node, env),
+      lenArg(node, env, 1),
+    );
+  }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -4575,33 +4532,7 @@ function evalExtraTa(
       lenArg(node, env, 1),
     );
   }
-  if (fname === "ta.stdev" || fname === "stdev") {
-    if (typeof ta.stdev !== "function") return NA;
-    return (ta.stdev as TaEngine["stdev"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.change" || fname === "change") {
-    if (typeof ta.change !== "function") return NA;
-    return (ta.change as TaEngine["change"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["length"], 1),
-    );
-  }
-  if (fname === "ta.wma" || fname === "wma") {
-    if (typeof ta.wma !== "function") return NA;
-    return (ta.wma as TaEngine["wma"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.crossover" || fname === "crossover") {
     if (typeof ta.crossover !== "function") return NA;
     return (ta.crossover as TaEngine["crossover"]).call(
@@ -4672,15 +4603,7 @@ function evalExtraTa(
     );
     return tupleOf([r.mid, r.up, r.lo]);
   }
-  if (fname === "ta.sum" || fname === "sum") {
-    if (typeof ta.sum !== "function") return NA;
-    return (ta.sum as TaEngine["sum"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.roc" || fname === "roc") {
     if (typeof ta.roc !== "function") return NA;
     return (ta.roc as TaEngine["roc"]).call(
@@ -4901,24 +4824,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 2, ["mult", "multiplier"], 2),
     );
   }
-  if (fname === "ta.dema" || fname === "dema") {
-    if (typeof ta.dema !== "function") return NA;
-    return (ta.dema as TaEngine["dema"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.tema" || fname === "tema") {
-    if (typeof ta.tema !== "function") return NA;
-    return (ta.tema as TaEngine["tema"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.highestbars" || fname === "highestbars") {
     if (typeof ta.highestbars !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -4968,15 +4874,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 3, ["sigma"], 6),
     );
   }
-  if (fname === "ta.cmo" || fname === "cmo") {
-    if (typeof ta.cmo !== "function") return NA;
-    return (ta.cmo as TaEngine["cmo"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.kama" || fname === "kama") {
     if (typeof ta.kama !== "function") return NA;
     return (ta.kama as TaEngine["kama"]).call(
@@ -5074,15 +4972,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
     );
   }
-  if (fname === "ta.hma" || fname === "hma") {
-    if (typeof ta.hma !== "function") return NA;
-    return (ta.hma as TaEngine["hma"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.mfi" || fname === "mfi") {
     if (typeof ta.mfi !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => a.name == null);
@@ -5210,15 +5100,7 @@ function evalExtraTa(
       len == null ? undefined : lenArg(node, env, 1),
     );
   }
-  if (fname === "ta.cog" || fname === "cog") {
-    if (typeof ta.cog !== "function") return NA;
-    return (ta.cog as TaEngine["cog"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (fname === "ta.tsi" || fname === "tsi") {
     if (typeof ta.tsi !== "function") return NA;
     const positional = asArgs(node.args).filter((a) => a.name == null);
@@ -5254,51 +5136,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 1, ["mult", "multiplier"], 2),
     );
   }
-  if (fname === "ta.dev" || fname === "dev") {
-    if (typeof ta.dev !== "function") return NA;
-    return (ta.dev as TaEngine["dev"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.variance" || fname === "variance") {
-    if (typeof ta.variance !== "function") return NA;
-    return (ta.variance as TaEngine["variance"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.median" || fname === "median") {
-    if (typeof ta.median !== "function") return NA;
-    return (ta.median as TaEngine["median"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.mode" || fname === "mode") {
-    if (typeof ta.mode !== "function") return NA;
-    return (ta.mode as TaEngine["mode"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
-  if (fname === "ta.percentrank" || fname === "percentrank") {
-    if (typeof ta.percentrank !== "function") return NA;
-    return (ta.percentrank as TaEngine["percentrank"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (
     fname === "ta.percentile_nearest_rank" ||
     fname === "percentile_nearest_rank"
@@ -5347,15 +5185,7 @@ function evalExtraTa(
       lenOrDefault(node, env, 2, ["occurrence"], 0),
     );
   }
-  if (fname === "ta.range") {
-    if (typeof ta.range !== "function") return NA;
-    return (ta.range as TaEngine["range"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
-    );
-  }
+
   if (
     (fname === "ta.max" || fname === "ta.min") &&
     typeof ta.max === "function"

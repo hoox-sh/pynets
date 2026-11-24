@@ -6,6 +6,7 @@
  */
 import type { Attribute, Call, Constant, expr, Name } from "../../ast/nodes.ts";
 import { TA_BARE_ATTRS, TA_METHODS } from "../ta_names.ts";
+import { TA_SRC_LEN_BY_NAME } from "../ta_specs.ts";
 import { emitUserFuncCall } from "./emit_udf.ts";
 import type { EmitCtx, VisitFn } from "./types.ts";
 
@@ -52,29 +53,6 @@ const NS = new Set([
   "footprint",
   "volume_row",
 ]);
-
-const SRC_LEN = new Set([
-  "sma",
-  "ema",
-  "rma",
-  "rsi",
-  "stdev",
-  "wma",
-  "hma",
-  "cmo",
-  "sum",
-  "dema",
-  "tema",
-  "dev",
-  "variance",
-  "median",
-  "mode",
-  "percentrank",
-  "range",
-  "cog",
-]);
-
-const SRC_LEN1 = new Set(["change", "mom", "roc", "rising", "falling"]);
 
 const PLOT_FUNCS = new Set([
   "plot",
@@ -1796,11 +1774,12 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     names: string[] = ["length", "len", "period"],
   ) => pick(args, index, names, fb);
 
-  if (SRC_LEN.has(method)) {
-    return taCall(method, site, [src(), len(1, "14")]);
-  }
-  if (SRC_LEN1.has(method)) {
-    return taCall(method, site, [src(), len(1, "1")]);
+  const srcLen = TA_SRC_LEN_BY_NAME.get(method);
+  if (srcLen != null) {
+    return taCall(srcLen.method, site, [
+      src(),
+      len(1, String(srcLen.compileDefaultLength)),
+    ]);
   }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;

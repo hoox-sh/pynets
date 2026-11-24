@@ -1,0 +1,62 @@
+/**
+ * Copyright (C) 2024-2026 jango_blockchained
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Shared `(source, length)` TA descriptors must stay reachable on both
+ * backends and point at real TaEngine methods.
+ */
+import { describe, expect, test } from "bun:test";
+import { Runtime, TaEngine } from "../src/index.ts";
+import { TA_METHODS } from "../src/runtime/ta_names.ts";
+import { TA_SRC_LEN_SPECS } from "../src/runtime/ta_specs.ts";
+
+const BARS = Array.from({ length: 40 }, (_, i) => ({
+  open: 100 + i * 0.2,
+  high: 101 + i * 0.35,
+  low: 99 - i * 0.15,
+  close: 100.5 + i * 0.25 + Math.sin(i * 0.4),
+  volume: 1000 + i * 5,
+  time: i * 86_400_000,
+}));
+
+describe("TA source/length specs", () => {
+  test("names are unique, compile-visible, and backed by TaEngine methods", () => {
+    const names = new Set<string>();
+    const proto = TaEngine.prototype as unknown as Record<string, unknown>;
+    for (const spec of TA_SRC_LEN_SPECS) {
+      expect(names.has(spec.name), spec.name).toBe(false);
+      names.add(spec.name);
+      expect(TA_METHODS.has(spec.name), `${spec.name} in TA_METHODS`).toBe(
+        true,
+      );
+      expect(
+        typeof proto[spec.method],
+        `${spec.name} -> TaEngine.${spec.method}`,
+      ).toBe("function");
+    }
+  });
+
+  test("omitted length matches for default-1 kernels", () => {
+    for (const name of ["change", "mom", "roc", "rising", "falling"]) {
+      const src = `indicator("t")\nplot(ta.${name}(close), "v")`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${name} compile`).toBeUndefined();
+      expect(interpreted.error, `${name} interpret`).toBeUndefined();
+      expect(compiled.plots, `${name} omitted length`).toEqual(
+        interpreted.plots,
+      );
+    }
+  });
+
+  test("every descriptor matches interpret and compile", () => {
+    for (const spec of TA_SRC_LEN_SPECS) {
+      const src = `indicator("t")\nplot(ta.${spec.name}(close, 3), "v")`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${spec.name} compile`).toBeUndefined();
+      expect(interpreted.error, `${spec.name} interpret`).toBeUndefined();
+      expect(compiled.plots, `${spec.name} plots`).toEqual(interpreted.plots);
+    }
+  });
+});
