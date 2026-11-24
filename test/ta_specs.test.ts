@@ -15,6 +15,7 @@ import {
   TA_MERGED_KWARG_SPECS,
   TA_OHLCV_SPECS,
   TA_OVERLOAD_SPECS,
+  TA_RUNTIME_PAIR_GATE_SPECS,
   TA_SRC_LEN_SPECS,
 } from "../src/runtime/ta_specs.ts";
 
@@ -269,6 +270,38 @@ describe("TA source/length specs", () => {
       expect(Object.values(compiled.series), call).toEqual(
         Object.values(interpreted.series),
       );
+    }
+  });
+
+  test("pivot pair-gate descriptors fall through on non-period slots", () => {
+    const proto = TaEngine.prototype as unknown as Record<string, unknown>;
+    for (const spec of TA_RUNTIME_PAIR_GATE_SPECS) {
+      expect(
+        typeof proto[spec.method],
+        `${spec.name} -> TaEngine.${spec.method}`,
+      ).toBe("function");
+    }
+    const calls = [
+      "ta.pivothigh(3, 2)",
+      "ta.pivothigh(7.5, 2)",
+      "ta.pivothigh(3, 2.5)",
+      "ta.pivothigh(3)",
+      "ta.pivothigh(close)",
+      "ta.pivothigh(close, 3, 2)",
+      "ta.pivothigh(3, 2, source=close)",
+      "ta.pivotlow(3, 2)",
+      "ta.pivotlow(7.5, 2)",
+      "ta.pivotlow(close)",
+      "ta.pivotlow(close, 3, 2)",
+      "ta.pivotlow(3, 2, source=close)",
+    ];
+    for (const call of calls) {
+      const src = `indicator("t")\nplot(${call}, "v")`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(compiled.plots, call).toEqual(interpreted.plots);
     }
   });
 

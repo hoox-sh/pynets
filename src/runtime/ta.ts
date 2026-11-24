@@ -1609,12 +1609,12 @@ export class TaEngine {
     return st.obv;
   }
 
-  /** Left-only pivothigh (Python incremental). */
+  /** Left+right confirmed pivothigh (Python `_pivothigh_inc_update`). */
   pivothigh(site: string, source: Cell, left: number, right: number): Cell {
     return this.pivotStep(this.pivotHighSites, site, source, left, right, true);
   }
 
-  /** Left-only pivotlow (Python incremental). */
+  /** Left+right confirmed pivotlow (Python `_pivotlow_inc_update`). */
   pivotlow(site: string, source: Cell, left: number, right: number): Cell {
     return this.pivotStep(this.pivotLowSites, site, source, left, right, false);
   }
@@ -1636,23 +1636,32 @@ export class TaEngine {
       return null;
     const L = Math.trunc(left);
     const R = Math.trunc(right);
+    const need = L + R + 1;
     let st = sites.get(site);
     if (st === undefined || st.left !== L || st.right !== R) {
-      st = { left: L, right: R, window: new RingBuffer(L + 1), n: 0 };
+      st = { left: L, right: R, window: new RingBuffer(need), n: 0 };
       sites.set(site, st);
     }
-    const need = L + 1;
     st.window.push(finiteCell(source));
     st.n += 1;
     if (st.n <= L + R || st.window.length < need) return null;
-    const current = st.window.get(st.window.length - 1);
-    if (current === null) return null;
-    for (let i = 1; i <= L; i++) {
-      const leftVal = st.window.get(st.window.length - 1 - i);
-      if (leftVal === null) continue;
-      if (high ? leftVal >= current : leftVal <= current) return null;
+    // Center is `right` bars before the newest sample (Python
+    // `_pivot_confirm_window`): a left tie still confirms, the right side
+    // must be a strict extreme.
+    const center = st.window.length - 1 - R;
+    const value = st.window.get(center);
+    if (value === null) return null;
+    for (let offset = -L; offset <= R; offset++) {
+      if (offset === 0) continue;
+      const other = st.window.get(center + offset);
+      if (other === null) continue;
+      if (high) {
+        if (offset < 0 ? other > value : other >= value) return null;
+      } else if (offset < 0 ? other < value : other <= value) {
+        return null;
+      }
     }
-    return current;
+    return value;
   }
 
   /**

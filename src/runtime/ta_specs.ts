@@ -843,3 +843,61 @@ export const TA_MERGED_KWARG_SPECS: readonly TaMergedKwargSpec[] = [
 
 export const TA_MERGED_KWARG_BY_NAME: ReadonlyMap<string, TaMergedKwargSpec> =
   new Map(TA_MERGED_KWARG_SPECS.map((spec) => [spec.name, spec]));
+
+/**
+ * Two positional period slots that must both be integer-like for the context
+ * form; otherwise the call falls through to the series form (`pivothigh` /
+ * `pivotlow`).
+ */
+export interface TaRuntimePairGateSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  /** Context series used by the gated form. */
+  readonly contextSource: TaContextArg;
+  /** Slots gated on `_is_period_like`; both must pass. */
+  readonly gate: {
+    readonly firstIndex: number;
+    readonly firstNames: readonly string[];
+    readonly secondIndex: number;
+    readonly secondNames: readonly string[];
+  };
+  /** Fallback series-form arguments. */
+  readonly series: readonly TaCallArgSpec[];
+}
+
+const PIVOT_SERIES: readonly TaCallArgSpec[] = [
+  source(0),
+  n(1, ["leftbars", "left"], 5),
+  n(2, ["rightbars", "right"], 5),
+];
+
+const PIVOT_GATE = {
+  firstIndex: 0,
+  firstNames: ["leftbars", "left"],
+  secondIndex: 1,
+  secondNames: ["rightbars", "right"],
+} as const;
+
+export const TA_RUNTIME_PAIR_GATE_SPECS: readonly TaRuntimePairGateSpec[] = [
+  {
+    name: "pivothigh",
+    method: "pivothigh",
+    contextSource: "high",
+    gate: PIVOT_GATE,
+    series: PIVOT_SERIES,
+  },
+  {
+    name: "pivotlow",
+    method: "pivotlow",
+    contextSource: "low",
+    gate: PIVOT_GATE,
+    series: PIVOT_SERIES,
+  },
+];
+
+export const TA_RUNTIME_PAIR_GATE_BY_NAME: ReadonlyMap<
+  string,
+  TaRuntimePairGateSpec
+> = new Map(TA_RUNTIME_PAIR_GATE_SPECS.map((spec) => [spec.name, spec]));

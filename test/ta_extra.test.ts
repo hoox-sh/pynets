@@ -141,18 +141,18 @@ describe("ta.obv incremental", () => {
 });
 
 describe("ta.pivothigh / pivotlow incremental", () => {
-  test("left-only high: current > last `left` bars after left+right warmup", () => {
+  test("high: center confirmed after `right` bars, strict right side", () => {
     const ta = new TaEngine();
     const src = [1, 3, 2, 4, 0];
     const out = src.map((x) => ta.pivothigh("ph:0", x, 1, 1));
-    expect(out).toEqual([null, null, null, 4, null]);
+    expect(out).toEqual([null, null, 3, null, 4]);
   });
 
-  test("left-only low", () => {
+  test("low: center confirmed after `right` bars, strict right side", () => {
     const ta = new TaEngine();
     const src = [3, 1, 2, 0, 4];
     const out = src.map((x) => ta.pivotlow("pl:0", x, 1, 1));
-    expect(out).toEqual([null, null, null, 0, null]);
+    expect(out).toEqual([null, null, 1, null, 0]);
   });
 
   test("negative / non-finite bars → na; left=0 every bar after warmup", () => {

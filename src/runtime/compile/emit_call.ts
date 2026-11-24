@@ -13,6 +13,7 @@ import {
   TA_MERGED_KWARG_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
+  TA_RUNTIME_PAIR_GATE_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   type TaCallArgSpec,
@@ -1962,6 +1963,40 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     const call = `((__p0, __s0) => (Number.isInteger(__p0) ? ${pf} : ${sf}))(${p0}, ${s0})`;
     return wrapTuple(call);
   }
+  const runtimePairGate = TA_RUNTIME_PAIR_GATE_BY_NAME.get(method);
+  if (runtimePairGate != null) {
+    const seriesParts = (sourceExpr?: string): string[] =>
+      runtimePairGate.series.map((arg, i) =>
+        i === 0 && arg.kind === "source"
+          ? (sourceExpr ?? pick(args, 0, ["source", "series"], "null"))
+          : emitSpecArg(arg, args),
+      );
+    const eligible =
+      args.pos.length === 2 && !hasAnyKw(args, ["source", "series"]);
+    if (!eligible) {
+      return taCall(runtimePairGate.method, site, seriesParts());
+    }
+    const first = pick(
+      args,
+      runtimePairGate.gate.firstIndex,
+      [...runtimePairGate.gate.firstNames],
+      "null",
+    );
+    const second = pick(
+      args,
+      runtimePairGate.gate.secondIndex,
+      [...runtimePairGate.gate.secondNames],
+      "null",
+    );
+    const sourceExpr = pick(args, 0, ["source", "series"], "null");
+    const pf = taCall(runtimePairGate.method, site, [
+      CTX_EXPR[runtimePairGate.contextSource],
+      "__l",
+      "__r",
+    ]);
+    const sf = taCall(runtimePairGate.method, site, seriesParts("__s"));
+    return `((__l, __r, __s) => (Number.isInteger(__l) && Number.isInteger(__r) ? ${pf} : ${sf}))(${first}, ${second}, ${sourceExpr})`;
+  }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
@@ -2056,33 +2091,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     ]);
   }
 
-  if (method === "pivothigh" || method === "pivotlow") {
-    if (args.pos.length === 2 && !hasAnyKw(args, ["source", "series"])) {
-      // Python period-first form (basic.py:1007-1039): both slots gate on
-      // _is_period_like and the source defaults to the context high/low
-      // series. A non-period-like slot falls through to the series arm on
-      // the raw slot values (never confirms on a scalar) — mirror interpret.
-      // Slots resolve kwarg-first (leftbars/rightbars), like interpret callArg.
-      const defSrc = method === "pivotlow" ? LOW : HIGH;
-      const lExpr = pick(args, 0, ["leftbars", "left"], "null");
-      const rExpr = pick(args, 1, ["rightbars", "right"], "null");
-      const leftFt = finiteOr(pick(args, 1, ["leftbars", "left"], "null"), "5");
-      const rightFt = finiteOr(
-        pick(args, 2, ["rightbars", "right"], "null"),
-        "5",
-      );
-      const pf = taCall(method, site, [defSrc, "__l", "__r"]);
-      const ft = taCall(method, site, ["__s", leftFt, rightFt]);
-      return `((__l, __r, __s) => (((Number.isInteger(__l) && Number.isInteger(__r))) ? ${pf} : ${ft}))(${lExpr}, ${rExpr}, ${pick(args, 0, ["source", "series"], "null")})`;
-    }
-    // Interpret srcArg: source slot names ["source", "series"], missing → na
-    // (a bare ta.pivothigh() never confirms, like interpret).
-    return taCall(method, site, [
-      pick(args, 0, ["source", "series"], "null"),
-      finiteOr(pick(args, 1, ["leftbars", "left"], "null"), "5"),
-      finiteOr(pick(args, 2, ["rightbars", "right"], "null"), "5"),
-    ]);
-  }
   if (method === "swma") {
     if (hasArg(args, 1, ["length", "period"])) {
       return taCall("swma", site, [src(), len(1, "4")]);

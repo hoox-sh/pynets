@@ -215,18 +215,21 @@ describe("interpret period-only TA overloads (Python _is_period_like dispatch)",
     expectEquivalent(`plot(ta.pivotlow(2, 2))\nplot(ta.pivotlow(low, 2, 2))`);
   });
 
-  test("ta.pivothigh/pivotlow confirmation lag and gate", () => {
-    // right=2 → a pivot needs L+R later bars, so the first bars are always na.
-    expect(
-      plotsOf(`plot(ta.pivothigh(2, 2))`)
-        .slice(0, 2)
-        .every((v) => v == null),
-    ).toBe(true);
-    expect(
-      plotsOf(`plot(ta.pivotlow(2, 2))`)
-        .slice(0, 2)
-        .every((v) => v == null),
-    ).toBe(true);
+  test("ta.pivothigh/pivotlow confirm the center bar after right bars", () => {
+    const highs = bars(60).map((b) => b.high);
+    const lows = bars(60).map((b) => b.low);
+    const ph = plotsOf(`plot(ta.pivothigh(2, 2))`);
+    const pl = plotsOf(`plot(ta.pivotlow(2, 2))`);
+    // right=2 → the first possible confirmation is bar L+R = 4.
+    expect(ph.slice(0, 4).every((v) => v == null)).toBe(true);
+    expect(pl.slice(0, 4).every((v) => v == null)).toBe(true);
+    expect(ph.some((v) => v != null)).toBe(true);
+    expect(pl.some((v) => v != null)).toBe(true);
+    // Confirmed value is the center bar (right bars back), never the newest.
+    for (let i = 0; i < ph.length; i++) {
+      if (ph[i] != null) expect(ph[i]).toBe(highs[i - 2]!);
+      if (pl[i] != null) expect(pl[i]).toBe(lows[i - 2]!);
+    }
     // A non-period-like slot blocks the period-first dispatch (Python
     // raises); the pivot never confirms on the scalar fallthrough → all na.
     expect(plotsOf(`plot(ta.pivothigh(2.5, 2))`).every((v) => v == null)).toBe(

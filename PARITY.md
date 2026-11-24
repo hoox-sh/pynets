@@ -9,12 +9,14 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1462 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1463 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
 - **ATR** seeds bar 0 with `high - low` (`_atr_inc_update`, 0.6.32).
 - **`ta.stdev` / `ta.variance` / `ta.bb`** use population variance (ddof=0).
+- **`ta.pivothigh` / `ta.pivotlow`** confirm the center bar `right` bars back
+  (`_pivot_confirm_window`): left ties confirm, the right side is strict.
 - **Incremental bar-mode detectors** now match `_*_inc_update` rather than the
   full-list path: `ta.zigzag`, `ta.acceleration_factor`, `ta.stoch_smooth`,
   `ta.engulfing`, `ta.inside_bar_pattern`, `ta.double_top_bottom`,
@@ -184,6 +186,8 @@ array-valued names; Python's own compile mode returns na here).
    `TA_CONDITION_CALL_SPECS`. For overloads selected by positional count, add
    a `TaOverloadSpec`. For runtime period-first dispatch (`bb`), add a
    `TaRuntimePeriodFirstSpec`. For Python's legacy positional-then-keyword
-   merge with ignored names (`ao`, `aroon`), add a `TaMergedKwargSpec`.
+   merge with ignored names (`ao`, `aroon`), add a `TaMergedKwargSpec`. For a
+   two-slot runtime period gate with series fallthrough
+   (`pivothigh`/`pivotlow`), add a `TaRuntimePairGateSpec`.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).

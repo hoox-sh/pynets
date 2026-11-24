@@ -215,6 +215,7 @@ import {
   TA_MERGED_KWARG_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
+  TA_RUNTIME_PAIR_GATE_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   TA_SRC_LEN_SPECS,
@@ -4691,6 +4692,42 @@ function evalExtraTa(
     }
     return result;
   }
+  const runtimePairGate = TA_RUNTIME_PAIR_GATE_BY_NAME.get(base);
+  if (runtimePairGate != null) {
+    const fn = (ta as Record<string, unknown>)[runtimePairGate.method];
+    if (typeof fn !== "function") return NA;
+    const first =
+      positionalCount(node) === 2 && !hasKwarg(node, ["source", "series"])
+        ? periodLikeArg(node, env, runtimePairGate.gate.firstIndex, [
+            ...runtimePairGate.gate.firstNames,
+          ])
+        : null;
+    const second =
+      first != null
+        ? periodLikeArg(node, env, runtimePairGate.gate.secondIndex, [
+            ...runtimePairGate.gate.secondNames,
+          ])
+        : null;
+    if (first != null && second != null) {
+      // Both slots are integer-like: source defaults to the context high/low.
+      // A non-period-like slot falls through to the series form.
+      return (fn as (site: string, ...args: Cell[]) => Cell).call(
+        env.ta,
+        site,
+        num(env.ctx[runtimePairGate.contextSource]),
+        first,
+        second,
+      );
+    }
+    const values = runtimePairGate.series.map((arg) =>
+      evalSpecArg(arg, node, env),
+    );
+    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+      env.ta,
+      site,
+      ...values,
+    );
+  }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
     if (positionalCount(node) <= 1 && !hasKwarg(node, ["source", "series"])) {
@@ -4881,65 +4918,6 @@ function evalExtraTa(
       lenArg(node, env, 1),
       lenOrDefault(node, env, 2, ["fastLength", "fast", "fastlen"], 2),
       lenOrDefault(node, env, 3, ["slowLength", "slow", "slowlen"], 30),
-    );
-  }
-
-  if (fname === "ta.pivothigh" || fname === "pivothigh") {
-    if (typeof ta.pivothigh !== "function") return NA;
-    if (
-      positionalCount(node) === 2 &&
-      !hasKwarg(node, ["source", "series"]) &&
-      periodLikeArg(node, env, 0, ["leftbars", "left"]) != null &&
-      periodLikeArg(node, env, 1, ["rightbars", "right"]) != null
-    ) {
-      // Python period-first form (basic.py:1007-1010): both slots gate on
-      // _is_period_like and the source defaults to the context high series.
-      // A non-period-like slot errors in Python; the repo gated-form
-      // convention treats it as absent → the call falls through to na.
-      const left = periodLikeArg(node, env, 0, ["leftbars", "left"])!;
-      const right = periodLikeArg(node, env, 1, ["rightbars", "right"])!;
-      return (ta.pivothigh as TaEngine["pivothigh"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        left,
-        right,
-      );
-    }
-    return (ta.pivothigh as TaEngine["pivothigh"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["leftbars", "left"], 5),
-      lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
-    );
-  }
-  if (fname === "ta.pivotlow" || fname === "pivotlow") {
-    if (typeof ta.pivotlow !== "function") return NA;
-    if (
-      positionalCount(node) === 2 &&
-      !hasKwarg(node, ["source", "series"]) &&
-      periodLikeArg(node, env, 0, ["leftbars", "left"]) != null &&
-      periodLikeArg(node, env, 1, ["rightbars", "right"]) != null
-    ) {
-      // Python period-first form (basic.py:1036-1039): source defaults to
-      // the context low series; slot gating mirrors ta.pivothigh.
-      const left = periodLikeArg(node, env, 0, ["leftbars", "left"])!;
-      const right = periodLikeArg(node, env, 1, ["rightbars", "right"])!;
-      return (ta.pivotlow as TaEngine["pivotlow"]).call(
-        env.ta,
-        site,
-        num(env.ctx.low),
-        left,
-        right,
-      );
-    }
-    return (ta.pivotlow as TaEngine["pivotlow"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      lenOrDefault(node, env, 1, ["leftbars", "left"], 5),
-      lenOrDefault(node, env, 2, ["rightbars", "right"], 5),
     );
   }
 
