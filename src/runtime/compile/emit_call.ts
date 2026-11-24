@@ -1862,11 +1862,16 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
   }
   const callSpec = TA_CONTEXT_CALL_BY_NAME.get(method);
   if (callSpec != null) {
-    return taCall(
+    const call = taCall(
       callSpec.method,
       site,
       callSpec.args.map((arg) => emitSpecArg(arg, args)),
     );
+    if (callSpec.tupleFields != null) {
+      const fields = callSpec.tupleFields.map((field) => `__r.${field}`);
+      return `(() => { const __r = ${call}; return [${fields.join(", ")}]; })()`;
+    }
+    return call;
   }
   const conditionSpec = TA_CONDITION_CALL_BY_NAME.get(method);
   if (conditionSpec != null) {
@@ -1998,16 +2003,7 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 1, ["short", "short_length"], "13"),
     ]);
   }
-  if (method === "dmi") {
-    const call = taCall("dmi", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      pick(args, 0, ["diLength", "length"], "14"),
-      pick(args, 1, ["adxSmoothing", "adxlen"], "14"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.plus, __r.minus, __r.adx]; })()`;
-  }
+
   if (method === "supertrend") {
     const call = taCall("supertrend", site, [
       HIGH,

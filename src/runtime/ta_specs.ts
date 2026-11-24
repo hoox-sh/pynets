@@ -397,6 +397,8 @@ export interface TaContextCallSpec {
   /** `TaEngine` method (camelCase). */
   readonly method: string;
   readonly args: readonly TaCallArgSpec[];
+  /** Record fields to expose as a Pine tuple (e.g. dmi). */
+  readonly tupleFields?: readonly string[];
 }
 
 const c = (context: TaContextArg): TaCallArgSpec => ({
@@ -493,6 +495,18 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
     name: "emv",
     method: "emv",
     args: [c("high"), c("low"), c("volume"), n(0)],
+  },
+  {
+    name: "dmi",
+    method: "dmi",
+    args: [
+      c("high"),
+      c("low"),
+      c("close"),
+      n(0, ["diLength", "length"], 14),
+      n(1, ["adxSmoothing", "adxlen"], 14),
+    ],
+    tupleFields: ["plus", "minus", "adx"],
   },
   { name: "fractal", method: "fractal", args: [c("high"), c("low"), n(0)] },
 ];

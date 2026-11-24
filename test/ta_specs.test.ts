@@ -207,6 +207,10 @@ describe("TA source/length specs", () => {
       "ta.vwma(close, volume * 1.5, 7)",
       "ta.vwma(close, 7, 3)",
       "ta.vwma(close, volume=volume, length=7)",
+      "ta.dmi(3, 4)",
+      "ta.dmi()",
+      "ta.dmi(3)",
+      "ta.dmi(diLength=3, adxSmoothing=4)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

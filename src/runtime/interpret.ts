@@ -4597,11 +4597,16 @@ function evalExtraTa(
     const fn = (ta as Record<string, unknown>)[callSpec.method];
     if (typeof fn !== "function") return NA;
     const values = callSpec.args.map((arg) => evalSpecArg(arg, node, env));
-    return (fn as (site: string, ...args: Cell[]) => Cell).call(
+    const result = (fn as (site: string, ...args: Cell[]) => Cell).call(
       env.ta,
       site,
       ...values,
     );
+    if (callSpec.tupleFields != null) {
+      const record = result as unknown as Record<string, Cell>;
+      return tupleOf(callSpec.tupleFields.map((field) => record[field] ?? NA));
+    }
+    return result;
   }
   const conditionSpec = TA_CONDITION_CALL_BY_NAME.get(base);
   if (conditionSpec != null) {
@@ -4899,19 +4904,6 @@ function evalExtraTa(
       lenOrDefault(node, env, 1, ["increment"], 0.02),
       lenOrDefault(node, env, 2, ["maximum", "max"], 0.2),
     );
-  }
-  if (fname === "ta.dmi" || fname === "dmi") {
-    if (typeof ta.dmi !== "function") return NA;
-    const r = (ta.dmi as TaEngine["dmi"]).call(
-      env.ta,
-      site,
-      num(env.ctx.high),
-      num(env.ctx.low),
-      num(env.ctx.close),
-      lenOrDefault(node, env, 0, ["diLength", "length"], 14),
-      lenOrDefault(node, env, 1, ["adxSmoothing", "adxlen"], 14),
-    );
-    return tupleOf([r.plus, r.minus, r.adx]);
   }
 
   if (fname === "ta.correlation" || fname === "correlation") {
