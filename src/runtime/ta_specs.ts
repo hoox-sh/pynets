@@ -766,3 +766,43 @@ export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
 export const TA_OVERLOAD_BY_NAME: ReadonlyMap<string, TaOverloadSpec> = new Map(
   TA_OVERLOAD_SPECS.map((spec) => [spec.name, spec]),
 );
+
+export interface TaRuntimePeriodFirstSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** `TaEngine` method (camelCase). */
+  readonly method: string;
+  /** Context source used by the period-first form. */
+  readonly contextSource: TaContextArg;
+  /** Period-first `(length, mult)` slot names/default. */
+  readonly periodFirst: {
+    readonly lengthNames: readonly string[];
+    readonly multNames: readonly string[];
+    readonly multDefault: number;
+  };
+  /** Series-form arguments. */
+  readonly series: readonly TaCallArgSpec[];
+  /** Record fields to expose as a Pine tuple. */
+  readonly tupleFields?: readonly string[];
+}
+
+export const TA_RUNTIME_PERIOD_FIRST_SPECS: readonly TaRuntimePeriodFirstSpec[] =
+  [
+    {
+      name: "bb",
+      method: "bb",
+      contextSource: "close",
+      periodFirst: {
+        lengthNames: ["source", "series", "length"],
+        multNames: ["mult", "multiplier"],
+        multDefault: Number.NaN,
+      },
+      series: [source(0), n(1, ["length"], 0), n(2, ["mult", "multiplier"], 2)],
+      tupleFields: ["mid", "up", "lo"],
+    },
+  ];
+
+export const TA_RUNTIME_PERIOD_FIRST_BY_NAME: ReadonlyMap<
+  string,
+  TaRuntimePeriodFirstSpec
+> = new Map(TA_RUNTIME_PERIOD_FIRST_SPECS.map((spec) => [spec.name, spec]));

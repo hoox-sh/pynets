@@ -227,6 +227,26 @@ describe("TA source/length specs", () => {
     }
   });
 
+  test("bb runtime period-first matches the series form", () => {
+    const calls = [
+      "ta.bb(3, 2)",
+      "ta.bb(close, 3, 2)",
+      "ta.bb(3)",
+      "ta.bb(7.5, 2)",
+      "ta.bb(close, 3)",
+    ];
+    for (const call of calls) {
+      const src = `indicator("t")\n[m,u,l] = ${call}\nplot(m)\nplot(u)\nplot(l)`;
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error, `${call} compile`).toBeUndefined();
+      expect(interpreted.error, `${call} interpret`).toBeUndefined();
+      expect(Object.values(compiled.series), call).toEqual(
+        Object.values(interpreted.series),
+      );
+    }
+  });
+
   test("every descriptor matches interpret and compile", () => {
     for (const spec of TA_SRC_LEN_SPECS) {
       const src = `indicator("t")\nplot(ta.${spec.name}(close, 3), "v")`;

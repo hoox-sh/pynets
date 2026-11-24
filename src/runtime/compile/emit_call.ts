@@ -12,6 +12,7 @@ import {
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
+  TA_RUNTIME_PERIOD_FIRST_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   type TaCallArgSpec,
 } from "../ta_specs.ts";
@@ -1904,6 +1905,46 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       return call;
     }
   }
+  const runtimePeriodFirst = TA_RUNTIME_PERIOD_FIRST_BY_NAME.get(method);
+  if (runtimePeriodFirst != null) {
+    const wrapTuple = (call: string): string => {
+      if (runtimePeriodFirst.tupleFields == null) return call;
+      const fields = runtimePeriodFirst.tupleFields.map(
+        (field) => `__r.${field}`,
+      );
+      return `(() => { const __r = ${call}; return [${fields.join(", ")}]; })()`;
+    };
+    const seriesParts = (sourceExpr?: string): string[] =>
+      runtimePeriodFirst.series.map((arg, i) =>
+        i === 0 && arg.kind === "source"
+          ? (sourceExpr ?? pick(args, 0, ["source", "series"], "null"))
+          : emitSpecArg(arg, args),
+      );
+    const eligible =
+      args.pos.length === 2 && !hasAnyKw(args, ["source", "series"]);
+    if (!eligible) {
+      return wrapTuple(taCall(runtimePeriodFirst.method, site, seriesParts()));
+    }
+    const p0 = pick(
+      args,
+      0,
+      [...runtimePeriodFirst.periodFirst.lengthNames],
+      "null",
+    );
+    const s0 = pick(args, 0, ["source", "series"], "null");
+    const mult = finiteOr(
+      pick(args, 1, [...runtimePeriodFirst.periodFirst.multNames], "null"),
+      String(runtimePeriodFirst.periodFirst.multDefault),
+    );
+    const pf = taCall(runtimePeriodFirst.method, site, [
+      CTX_EXPR[runtimePeriodFirst.contextSource],
+      "__p0",
+      mult,
+    ]);
+    const sf = taCall(runtimePeriodFirst.method, site, seriesParts("__s0"));
+    const call = `((__p0, __s0) => (Number.isInteger(__p0) ? ${pf} : ${sf}))(${p0}, ${s0})`;
+    return wrapTuple(call);
+  }
   if (method === "highest" || method === "lowest") {
     const defSrc = method === "lowest" ? LOW : HIGH;
     if (args.pos.length <= 1 && !hasAnyKw(args, ["source", "series"])) {
@@ -1954,34 +1995,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 3, ["signal", "signalLength", "siglen"], "9"),
     ]);
     return `(() => { const __r = ${call}; return [__r.macd, __r.signal, __r.hist]; })()`;
-  }
-  if (method === "bb") {
-    if (args.pos.length === 2 && !hasAnyKw(args, ["source", "series"])) {
-      // Python period-first form (basic.py:394-401): (length, mult) with the
-      // series defaulting to the context close. Dispatch gates slot 0 on
-      // _is_period_like per bar (kwarg-first resolution, like interpret
-      // callArg) — a non-period-like slot falls through to the series arm on
-      // the raw slot-0 value, exactly like interpret.
-      const p0Expr = pick(args, 0, ["source", "series", "length"], "null");
-      const multPf = finiteOr(
-        pick(args, 1, ["mult", "multiplier"], "null"),
-        "NaN",
-      );
-      const lenFt = finiteOr(pick(args, 1, ["length"], "null"), "0");
-      const multFt = finiteOr(
-        pick(args, 2, ["mult", "multiplier"], "null"),
-        "2",
-      );
-      const pf = `(() => { const __r = __h.ta.bb(${site}, close_arr[__bar_idx], __p0, ${multPf}); return [__r.mid, __r.up, __r.lo]; })()`;
-      const ft = `(() => { const __r = __h.ta.bb(${site}, __s0, ${lenFt}, ${multFt}); return [__r.mid, __r.up, __r.lo]; })()`;
-      return `((__p0, __s0) => (Number.isInteger(__p0) ? ${pf} : ${ft}))(${p0Expr}, ${pick(args, 0, ["source", "series"], "null")})`;
-    }
-    const call = taCall("bb", site, [
-      src(),
-      finiteOr(pick(args, 1, ["length"], "null"), "0"),
-      finiteOr(pick(args, 2, ["mult", "multiplier"], "null"), "2"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.mid, __r.up, __r.lo]; })()`;
   }
 
   if (method === "tsi") {

@@ -214,6 +214,7 @@ import {
   TA_LEN_EXTRA_BY_NAME,
   TA_OHLCV_BY_NAME,
   TA_OVERLOAD_BY_NAME,
+  TA_RUNTIME_PERIOD_FIRST_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   TA_SRC_LEN_SPECS,
   type TaCallArgSpec,
@@ -4603,6 +4604,54 @@ function evalExtraTa(
       }
       return result;
     }
+  }
+  const runtimePeriodFirst = TA_RUNTIME_PERIOD_FIRST_BY_NAME.get(base);
+  if (runtimePeriodFirst != null) {
+    const fn = (ta as Record<string, unknown>)[runtimePeriodFirst.method];
+    if (typeof fn !== "function") return NA;
+    const positional = positionalCount(node);
+    const length =
+      positional === 2 && !hasKwarg(node, ["source", "series"])
+        ? periodLikeArg(node, env, 0, [
+            ...runtimePeriodFirst.periodFirst.lengthNames,
+          ])
+        : null;
+    let result: Cell;
+    if (length != null) {
+      const multRaw = unwrap(
+        evalExpr(
+          callArg(node.args, 1, [...runtimePeriodFirst.periodFirst.multNames]),
+          env,
+        ),
+      );
+      const mult =
+        typeof multRaw === "number" && Number.isFinite(multRaw)
+          ? multRaw
+          : runtimePeriodFirst.periodFirst.multDefault;
+      result = (fn as (site: string, ...args: Cell[]) => Cell).call(
+        env.ta,
+        site,
+        num(env.ctx[runtimePeriodFirst.contextSource]),
+        length,
+        mult,
+      );
+    } else {
+      const values = runtimePeriodFirst.series.map((arg) =>
+        evalSpecArg(arg, node, env),
+      );
+      result = (fn as (site: string, ...args: Cell[]) => Cell).call(
+        env.ta,
+        site,
+        ...values,
+      );
+    }
+    if (runtimePeriodFirst.tupleFields != null) {
+      const record = result as unknown as Record<string, Cell>;
+      return tupleOf(
+        runtimePeriodFirst.tupleFields.map((field) => record[field] ?? NA),
+      );
+    }
+    return result;
   }
   if (fname === "ta.highest" || fname === "highest") {
     if (typeof ta.highest !== "function") return NA;
