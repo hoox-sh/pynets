@@ -37,6 +37,7 @@ run_cli() {
 # Check every ref before running the expensive suite. A deletion (all-zero local
 # sha) still needs a push approval: deleting a remote branch is a push.
 blocked=0
+ranges=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ -z "${local_ref:-}" ] && continue
 
@@ -46,6 +47,21 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     *) branch="$remote_ref" ;;
   esac
   resource="push/${1:-remote}/${branch}"
+
+  # Scope verify.sh's format/lint checks to the pushed commits. New branches
+  # diff from the merge-base with the remote default branch; deletions have no
+  # local diff, so they add no range.
+  zero="0000000000000000000000000000000000000000"
+  if [ "$local_sha" != "$zero" ]; then
+    if [ "$remote_sha" != "$zero" ]; then
+      ranges="${ranges}${remote_sha}..${local_sha} "
+    else
+      base="$(git merge-base "$local_sha" "refs/remotes/${1:-origin}/main" 2>/dev/null || true)"
+      if [ -n "$base" ]; then
+        ranges="${ranges}${base}..${local_sha} "
+      fi
+    fi
+  fi
 
   set +e
   output="$(run_cli approval check --action push --resource "$resource" 2>&1)"
@@ -74,6 +90,10 @@ done
 
 if [ "$blocked" -ne 0 ]; then
   exit 1
+fi
+
+if [ -n "$ranges" ]; then
+  export OO_PUSH_RANGES="$ranges"
 fi
 
 exec bash "$ROOT/scripts/verify.sh" pre-push
