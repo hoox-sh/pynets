@@ -194,6 +194,8 @@ array-valued names; Python's own compile mode returns na here).
    two-slot runtime period gate with series fallthrough
    (`pivothigh`/`pivotlow`), add a `TaRuntimePairGateSpec`. For fixed-arity
    analytics with required arguments, add a `TaContextCallSpec` using
-   `required` args (and `hasSite: false` for stateless kernels).
+   `required` args (and `hasSite: false` for stateless kernels). Use `raw`
+   for arrays/strings, `ignored` for required-but-unused slots, and
+   `seriesGuarded` for scalar-only kernels.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).

@@ -107,7 +107,15 @@ describe("TA source/length specs", () => {
     const onlyExplicit = new Set(["rci"]);
     for (const spec of TA_CONTEXT_CALL_SPECS) {
       // Required-argument kernels are covered by the explicit call list below.
-      if (spec.args.some((arg) => arg.kind === "required")) continue;
+      if (
+        spec.args.some(
+          (arg) =>
+            arg.kind === "required" ||
+            arg.kind === "raw" ||
+            arg.kind === "ignored",
+        )
+      )
+        continue;
       const numbers = spec.args.filter((arg) => arg.kind === "number");
       const maxIndex = numbers.reduce(
         (max, arg) => Math.max(max, arg.callIndex),
@@ -323,6 +331,37 @@ describe("TA source/length specs", () => {
       "ta.economic_impact_score(1, 2, 3)",
       "ta.contrarian_signal(50, 2, 3)",
       "ta.drawdown_recovery_level(100, 90, 0.5, 3)",
+      "ta.sma_weighted(close, 3)",
+      'ta.sma_weighted(close, 3, "linear")',
+      "ta.engulfing(open, high, low, close)",
+      "ta.trend_confirmation_score(1, 1, 1, 55, 1, 2)",
+      "ta.optimal_entry_zone(high, low, close, 3)",
+      "ta.mean_reversion_entry(close, ta.sma(close, 3), ta.stdev(close, 3), 0, 1)",
+      'ta.regime_adaptive_signal(1, "low", "up", 3)',
+      "ta.correlation_filter(close, open, high, 3, 0.5)",
+      "ta.market_structure_pivot(high, low, close, 3, 3)",
+      "ta.pullback_bounce_level(high, low, close, 1, 3)",
+      "ta.volatility_regime_score(close, close, close, 3)",
+      "ta.advanced_breakout_detector(close, volume, 100, 3, 1.5)",
+      "ta.divergence_detector(close, ta.rsi(close, 3), 3)",
+      "ta.momentum_divergence(close, ta.mom(close, 3), ta.mom(close, 5))",
+      "ta.spread_analysis(close, open, 3)",
+      "ta.employment_cycle_indicator(close, open, high)",
+      "ta.gdp_growth_proxy(close, volume, close)",
+      "ta.inflation_proxy_indicator(close, open, high)",
+      'ta.intelligent_strategy_synthesizer(close, close, close, close, "ranging", "balanced")',
+      "ta.signal_confluence(close)",
+      "ta.parkinson(high, low)",
+      "ta.garman_klass(high, low, close, open)",
+      "ta.gamma_levels(close, close, 3)",
+      "ta.voi(volume, volume)",
+      "ta.bid_ask_imbalance(volume, volume, close, close)",
+      "ta.cumulative_delta(close, volume, 3)",
+      "ta.volume_momentum(volume, 3)",
+      "ta.volume_profile_low(close, volume, 3, 3)",
+      "ta.volume_thrust(close, volume, ta.sma(volume, 3), 0.3)",
+      "ta.breakout_detection(close, close + 1, close - 1)",
+      "ta.breakout_detection(100, 101, 99)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

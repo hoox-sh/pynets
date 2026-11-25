@@ -376,6 +376,22 @@ export type TaCallArgSpec =
       readonly message: string;
     }
   | {
+      readonly kind: "raw";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+      /** Runtime error message when the argument is absent. */
+      readonly message: string;
+      /** Compile fallback when the argument is absent (string literal value). */
+      readonly default?: string;
+    }
+  | {
+      readonly kind: "ignored";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+      /** Runtime error message when the argument is absent. */
+      readonly message: string;
+    }
+  | {
       readonly kind: "typicalExplicit";
       readonly highIndex: number;
       readonly lowIndex: number;
@@ -406,6 +422,11 @@ export interface TaContextCallSpec {
   readonly args: readonly TaCallArgSpec[];
   /** False for stateless kernels without a call-site argument. */
   readonly hasSite?: boolean;
+  /** Arguments that must not be series expressions (else the call is na). */
+  readonly seriesGuarded?: readonly {
+    readonly index: number;
+    readonly names: readonly string[];
+  }[];
   /** Record fields to expose as a Pine tuple (e.g. dmi). */
   readonly tupleFields?: readonly string[];
 }
@@ -453,6 +474,17 @@ const requiredArgs = (
   }[],
 ): readonly TaCallArgSpec[] =>
   slots.map(({ index, names }) => req(index, names, message));
+const raw = (
+  callIndex: number,
+  names: readonly string[],
+  message: string,
+  def?: string,
+): TaCallArgSpec => ({ kind: "raw", names, callIndex, message, default: def });
+const ignored = (
+  callIndex: number,
+  names: readonly string[],
+  message: string,
+): TaCallArgSpec => ({ kind: "ignored", names, callIndex, message });
 const typical = (
   highIndex: number,
   lowIndex: number,
@@ -1074,6 +1106,535 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
       { index: 1, names: ["current", "current_price"] },
       { index: 2, names: ["recovery_factor", "factor"] },
       { index: 3, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "sma_weighted",
+    method: "smaWeighted",
+    args: [
+      req(
+        0,
+        ["series", "source"],
+        "ta.sma_weighted() requires at least 2 arguments: series, period",
+      ),
+      req(
+        1,
+        ["period", "length"],
+        "ta.sma_weighted() requires at least 2 arguments: series, period",
+      ),
+      raw(
+        2,
+        ["weight_type", "weight"],
+        "ta.sma_weighted() requires at least 2 arguments: series, period",
+        "linear",
+      ),
+    ],
+  },
+  {
+    name: "engulfing",
+    method: "engulfing",
+    args: [
+      req(
+        0,
+        ["open"],
+        "ta.engulfing() requires 4 arguments: open, high, low, close",
+      ),
+      ignored(
+        1,
+        ["high"],
+        "ta.engulfing() requires 4 arguments: open, high, low, close",
+      ),
+      ignored(
+        2,
+        ["low"],
+        "ta.engulfing() requires 4 arguments: open, high, low, close",
+      ),
+      req(
+        3,
+        ["close"],
+        "ta.engulfing() requires 4 arguments: open, high, low, close",
+      ),
+    ],
+  },
+  {
+    name: "trend_confirmation_score",
+    method: "trendConfirmationScore",
+    hasSite: false,
+    args: [
+      ...requiredArgs("ta.trend_confirmation_score() requires 6 arguments", [
+        { index: 0, names: ["momentum"] },
+        { index: 1, names: ["trend_alignment"] },
+        { index: 2, names: ["strength"] },
+        { index: 3, names: ["rsi"] },
+        { index: 4, names: ["rsi_alignment"] },
+      ]),
+      ignored(
+        5,
+        ["support_distance"],
+        "ta.trend_confirmation_score() requires 6 arguments",
+      ),
+    ],
+  },
+  {
+    name: "optimal_entry_zone",
+    method: "optimalEntryZone",
+    args: [
+      ignored(0, ["high"], "ta.optimal_entry_zone() requires 4 arguments"),
+      ignored(1, ["low"], "ta.optimal_entry_zone() requires 4 arguments"),
+      raw(2, ["close"], "ta.optimal_entry_zone() requires 4 arguments"),
+      ignored(
+        3,
+        ["period", "length"],
+        "ta.optimal_entry_zone() requires 4 arguments",
+      ),
+    ],
+  },
+  {
+    name: "mean_reversion_entry",
+    method: "meanReversionEntry",
+    args: [
+      raw(
+        0,
+        ["price", "source"],
+        "ta.mean_reversion_entry() requires 5 arguments",
+      ),
+      raw(1, ["sma"], "ta.mean_reversion_entry() requires 5 arguments"),
+      raw(
+        2,
+        ["stdev", "std_dev"],
+        "ta.mean_reversion_entry() requires 5 arguments",
+      ),
+      req(4, ["threshold"], "ta.mean_reversion_entry() requires 5 arguments"),
+    ],
+  },
+  {
+    name: "regime_adaptive_signal",
+    method: "regimeAdaptiveSignal",
+    hasSite: false,
+    args: [
+      req(
+        0,
+        ["signal_strength", "strength"],
+        "ta.regime_adaptive_signal() requires 4 arguments",
+      ),
+      raw(
+        1,
+        ["volatility_regime", "vol_regime"],
+        "ta.regime_adaptive_signal() requires 4 arguments",
+        "",
+      ),
+      raw(
+        2,
+        ["trend_regime"],
+        "ta.regime_adaptive_signal() requires 4 arguments",
+        "",
+      ),
+      ignored(
+        3,
+        ["period", "length"],
+        "ta.regime_adaptive_signal() requires 4 arguments",
+      ),
+    ],
+  },
+  {
+    name: "correlation_filter",
+    method: "correlationFilter",
+    args: [
+      raw(
+        0,
+        ["signal1_list", "signal1", "s1"],
+        "ta.correlation_filter() requires 5 arguments",
+      ),
+      raw(
+        1,
+        ["signal2_list", "signal2", "s2"],
+        "ta.correlation_filter() requires 5 arguments",
+      ),
+      raw(
+        2,
+        ["signal3_list", "signal3", "s3"],
+        "ta.correlation_filter() requires 5 arguments",
+      ),
+      ignored(
+        3,
+        ["num_signals"],
+        "ta.correlation_filter() requires 5 arguments",
+      ),
+      req(4, ["threshold"], "ta.correlation_filter() requires 5 arguments"),
+    ],
+  },
+  {
+    name: "market_structure_pivot",
+    method: "marketStructurePivot",
+    args: [
+      raw(
+        0,
+        ["high_list", "high"],
+        "ta.market_structure_pivot() requires 5 arguments",
+      ),
+      raw(
+        1,
+        ["low_list", "low"],
+        "ta.market_structure_pivot() requires 5 arguments",
+      ),
+      ignored(
+        2,
+        ["close_list", "close"],
+        "ta.market_structure_pivot() requires 5 arguments",
+      ),
+      req(
+        3,
+        ["period", "left", "left_bars"],
+        "ta.market_structure_pivot() requires 5 arguments",
+      ),
+      req(
+        4,
+        ["mode", "right", "right_bars"],
+        "ta.market_structure_pivot() requires 5 arguments",
+      ),
+    ],
+  },
+  {
+    name: "pullback_bounce_level",
+    method: "pullbackBounceLevel",
+    args: [
+      raw(
+        0,
+        ["high_list", "high"],
+        "ta.pullback_bounce_level() requires 5 arguments",
+      ),
+      raw(
+        1,
+        ["low_list", "low"],
+        "ta.pullback_bounce_level() requires 5 arguments",
+      ),
+      ignored(
+        2,
+        ["close_list", "close"],
+        "ta.pullback_bounce_level() requires 5 arguments",
+      ),
+      req(
+        3,
+        ["trend_direction", "trend_dir"],
+        "ta.pullback_bounce_level() requires 5 arguments",
+      ),
+      req(4, ["lookback"], "ta.pullback_bounce_level() requires 5 arguments"),
+    ],
+  },
+  {
+    name: "volatility_regime_score",
+    method: "volatilityRegimeScore",
+    args: [
+      raw(
+        0,
+        ["atr_list", "atr"],
+        "ta.volatility_regime_score() requires 4 arguments",
+      ),
+      raw(
+        1,
+        ["volatility_list", "volatility"],
+        "ta.volatility_regime_score() requires 4 arguments",
+      ),
+      raw(
+        2,
+        ["vix_list", "vix"],
+        "ta.volatility_regime_score() requires 4 arguments",
+      ),
+      req(
+        3,
+        ["threshold"],
+        "ta.volatility_regime_score() requires 4 arguments",
+      ),
+    ],
+  },
+  {
+    name: "advanced_breakout_detector",
+    method: "advancedBreakoutDetector",
+    args: [
+      raw(
+        0,
+        ["price_list", "price"],
+        "ta.advanced_breakout_detector() requires 5 arguments",
+      ),
+      raw(
+        1,
+        ["volume_list", "volume"],
+        "ta.advanced_breakout_detector() requires 5 arguments",
+      ),
+      req(2, ["level"], "ta.advanced_breakout_detector() requires 5 arguments"),
+      req(
+        3,
+        ["lookback"],
+        "ta.advanced_breakout_detector() requires 5 arguments",
+      ),
+      req(
+        4,
+        ["volume_multiplier", "vol_mult"],
+        "ta.advanced_breakout_detector() requires 5 arguments",
+      ),
+    ],
+  },
+  {
+    name: "divergence_detector",
+    method: "divergenceDetector",
+    args: [
+      raw(
+        0,
+        ["price_list", "price"],
+        "ta.divergence_detector() requires 3 arguments",
+      ),
+      raw(
+        1,
+        ["indicator_list", "indicator"],
+        "ta.divergence_detector() requires 3 arguments",
+      ),
+      req(2, ["lookback"], "ta.divergence_detector() requires 3 arguments"),
+    ],
+  },
+  {
+    name: "momentum_divergence",
+    method: "momentumDivergence",
+    args: [
+      raw(0, ["price"], "ta.momentum_divergence() requires 3 arguments"),
+      raw(
+        1,
+        ["momentum_fast", "mom_fast"],
+        "ta.momentum_divergence() requires 3 arguments",
+      ),
+      raw(
+        2,
+        ["momentum_slow", "mom_slow"],
+        "ta.momentum_divergence() requires 3 arguments",
+      ),
+    ],
+  },
+  {
+    name: "spread_analysis",
+    method: "spreadAnalysis",
+    args: [
+      raw(0, ["bid"], "ta.spread_analysis() requires 3 arguments"),
+      raw(1, ["ask"], "ta.spread_analysis() requires 3 arguments"),
+      req(2, ["period", "length"], "ta.spread_analysis() requires 3 arguments"),
+    ],
+  },
+  {
+    name: "employment_cycle_indicator",
+    method: "employmentCycleIndicator",
+    args: [
+      raw(
+        0,
+        ["cyclical_stocks", "cyclical"],
+        "ta.employment_cycle_indicator() requires 3 arguments",
+      ),
+      raw(
+        1,
+        ["defensive_stocks", "defensive"],
+        "ta.employment_cycle_indicator() requires 3 arguments",
+      ),
+      raw(
+        2,
+        ["unemployment_proxy", "unemployment"],
+        "ta.employment_cycle_indicator() requires 3 arguments",
+      ),
+    ],
+  },
+  {
+    name: "gdp_growth_proxy",
+    method: "gdpGrowthProxy",
+    args: [
+      raw(
+        0,
+        ["market_breadth", "breadth"],
+        "ta.gdp_growth_proxy() requires 3 arguments",
+      ),
+      raw(
+        1,
+        ["market_volume", "volume"],
+        "ta.gdp_growth_proxy() requires 3 arguments",
+      ),
+      raw(
+        2,
+        ["price_momentum", "momentum"],
+        "ta.gdp_growth_proxy() requires 3 arguments",
+      ),
+    ],
+  },
+  {
+    name: "inflation_proxy_indicator",
+    method: "inflationProxyIndicator",
+    args: [
+      raw(
+        0,
+        ["usd_index", "usd"],
+        "ta.inflation_proxy_indicator() requires 3 arguments",
+      ),
+      raw(
+        1,
+        ["commodity_prices", "commodities"],
+        "ta.inflation_proxy_indicator() requires 3 arguments",
+      ),
+      raw(
+        2,
+        ["bond_yields", "yields"],
+        "ta.inflation_proxy_indicator() requires 3 arguments",
+      ),
+    ],
+  },
+  {
+    name: "intelligent_strategy_synthesizer",
+    method: "intelligentStrategySynthesizer",
+    args: [
+      raw(
+        0,
+        ["trend_indicators", "trend"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+      ),
+      raw(
+        1,
+        ["momentum_indicators", "momentum"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+      ),
+      raw(
+        2,
+        ["volatility_indicators", "volatility"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+      ),
+      raw(
+        3,
+        ["volume_indicators", "volume"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+      ),
+      raw(
+        4,
+        ["market_condition", "market_regime"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+        "ranging",
+      ),
+      raw(
+        5,
+        ["risk_profile"],
+        "ta.intelligent_strategy_synthesizer() requires 6 arguments",
+        "balanced",
+      ),
+    ],
+  },
+  {
+    name: "signal_confluence",
+    method: "signalConfluence",
+    hasSite: false,
+    args: [raw(0, ["signals"], "ta.signal_confluence() requires 1 argument")],
+  },
+  {
+    name: "parkinson",
+    method: "parkinson",
+    hasSite: false,
+    seriesGuarded: [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+    ],
+    args: requiredArgs("ta.parkinson() requires 2 arguments: high, low", [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+    ]),
+  },
+  {
+    name: "garman_klass",
+    method: "garmanKlass",
+    hasSite: false,
+    seriesGuarded: [
+      { index: 0, names: ["high"] },
+      { index: 1, names: ["low"] },
+      { index: 2, names: ["close"] },
+      { index: 3, names: ["open"] },
+    ],
+    args: requiredArgs(
+      "ta.garman_klass() requires 4 arguments: high, low, close, open",
+      [
+        { index: 0, names: ["high"] },
+        { index: 1, names: ["low"] },
+        { index: 2, names: ["close"] },
+        { index: 3, names: ["open"] },
+      ],
+    ),
+  },
+  {
+    name: "gamma_levels",
+    method: "gammaLevels",
+    hasSite: false,
+    seriesGuarded: [
+      { index: 0, names: ["volatility"] },
+      { index: 1, names: ["current_price", "price"] },
+    ],
+    args: requiredArgs("ta.gamma_levels() requires 3 arguments", [
+      { index: 0, names: ["volatility"] },
+      { index: 1, names: ["current_price", "price"] },
+      { index: 2, names: ["period", "length"] },
+    ]),
+  },
+  {
+    name: "voi",
+    method: "voi",
+    hasSite: false,
+    args: [v(0, ["buy_volume", "buy"]), v(1, ["sell_volume", "sell"])],
+  },
+  {
+    name: "bid_ask_imbalance",
+    method: "bidAskImbalance",
+    hasSite: false,
+    args: [
+      v(0, ["bid_size", "bid"]),
+      v(1, ["ask_size", "ask"]),
+      v(2, ["bid_price"]),
+      v(3, ["ask_price"]),
+    ],
+  },
+  {
+    name: "cumulative_delta",
+    method: "cumulativeDelta",
+    args: [
+      v(0, ["close", "source"]),
+      v(1, ["volume"]),
+      n(2, ["period", "length"], 0),
+    ],
+  },
+  {
+    name: "volume_momentum",
+    method: "volumeMomentum",
+    args: [v(0, ["volume", "source"]), n(1, ["period", "length"], 0)],
+  },
+  {
+    name: "volume_profile_low",
+    method: "volumeProfileLow",
+    args: [
+      v(0, ["close", "source"]),
+      v(1, ["volume"]),
+      n(2, ["period", "length"], 0),
+      n(3, ["levels"], 0),
+    ],
+  },
+  {
+    name: "volume_thrust",
+    method: "volumeThrust",
+    args: [
+      v(0, ["close", "source"]),
+      v(1, ["volume"]),
+      v(2, ["volume_sma", "vol_sma", "sma"]),
+      n(3, ["sensitivity"], 0.3),
+    ],
+  },
+  {
+    name: "breakout_detection",
+    method: "breakoutDetection",
+    hasSite: false,
+    seriesGuarded: [
+      { index: 0, names: ["close", "source"] },
+      { index: 1, names: ["resistance"] },
+      { index: 2, names: ["support"] },
+    ],
+    args: requiredArgs("ta.breakout_detection() requires 3 arguments", [
+      { index: 0, names: ["close", "source"] },
+      { index: 1, names: ["resistance"] },
+      { index: 2, names: ["support"] },
     ]),
   },
 ];
