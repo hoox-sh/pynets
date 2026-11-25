@@ -1,4 +1,4 @@
-# Codecov configuration — hoox-sh/pynets
+# Codecov configuration — hoox-sh/pyne-ts
 
 codecov:
   require_ci_to_pass: true

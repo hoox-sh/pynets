@@ -8,8 +8,8 @@ Thank you for contributing.
 ## Setup
 
 ```bash
-git clone https://github.com/hoox-sh/pynets.git
-cd pynets
+git clone https://github.com/hoox-sh/pyne-ts.git
+cd pyne-ts
 bun install
 bun test
 bun run typecheck
@@ -45,7 +45,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing interpret builtins or the grammar.
 
 ## Publishing
 
-npm `@hoox-sh/pynets` is published from version tags (`v0.1.0`) by
+npm `@hoox-sh/pyne-ts` is published from version tags (`v0.1.0`) by
 [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
 Maintainers: bump `package.json` + `CHANGELOG.md`, tag, push.
 

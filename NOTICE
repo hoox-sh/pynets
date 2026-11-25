@@ -2,7 +2,7 @@ PyneTS — NOTICE
 ===============
 
 Copyright (c) 2026 HOOX · PYNE · jango-blockchained
-https://github.com/hoox-sh/pynets
+https://github.com/hoox-sh/pyne-ts
 
 License
 -------
@@ -21,16 +21,16 @@ package.json: AGPL-3.0-or-later
 
 Relationship to PYNE
 --------------------
-PyneTS (`@hoox-sh/pynets`) is the TypeScript / Bun counterpart of
+PyneTS (`@hoox-sh/pyne-ts`) is the TypeScript / Bun counterpart of
 **PYNE / pynescript**. Python `pynescript.runtime` is the source of
 truth: when semantics disagree, Python wins.
 
 The ANTLR4 grammars are **not** vendored here. `bun run generate` reads
 `PinescriptLexer.g4` / `PinescriptParser.g4` from a sibling or parent
-`hoox-sh/pyne` checkout (or `PYNESCRIPT_ROOT` / `PYNETS_GRAMMAR`).
+`hoox-sh/pyne` checkout (or `PYNESCRIPT_ROOT` / `PYNE_TS_GRAMMAR`).
 Do not fork those `.g4` files into this repository.
 
-In the PYNE repo this package is consumed only as the `pynets/` git
+In the PYNE repo this package is consumed only as the `pyne-ts/` git
 submodule.
 
 Related

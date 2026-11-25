@@ -86,7 +86,7 @@ bundle(join(dist, "index.js"), "node", false);
 bundle(join(dist, "browser.js"), "browser", true);
 bundle(join(dist, "parse.js"), "node", false, join(root, "src/ast/helper.ts"));
 // Same parse entry, but with antlr4's browser build (no `node:` imports) so
-// strict bundlers / CDNs can load `@hoox-sh/pynets/parse` everywhere.
+// strict bundlers / CDNs can load `@hoox-sh/pyne-ts/parse` everywhere.
 bundle(
   join(dist, "parse.browser.js"),
   "browser",

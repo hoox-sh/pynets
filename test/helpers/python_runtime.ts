@@ -30,7 +30,7 @@ export function pythonBin(): string {
   const dir = "/tmp/opencode";
   try {
     mkdirSync(dir, { recursive: true });
-    const script = `${dir}/pynets-pyne-python-${process.pid}.sh`;
+    const script = `${dir}/pyne-ts-pyne-python-${process.pid}.sh`;
     writeFileSync(
       script,
       `#!/bin/sh\nexport PYTHONPATH="${PYNE_ROOT}/src\${PYTHONPATH:+:$PYTHONPATH}"\nexec "${interpreter}" "$@"\n`,

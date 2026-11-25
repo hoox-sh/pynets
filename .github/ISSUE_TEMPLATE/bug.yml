@@ -27,4 +27,4 @@ body:
     id: version
     attributes:
       label: Version
-      placeholder: "@hoox/pynets 0.1.0 / git SHA"
+      placeholder: "@hoox-sh/pyne-ts 0.1.0 / git SHA"

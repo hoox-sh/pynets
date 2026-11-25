@@ -1,5 +1,5 @@
 {
-  "name": "@hoox-sh/pynets",
+  "name": "@hoox-sh/pyne-ts",
   "version": "0.11.0",
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -22,13 +22,13 @@
     "typescript",
     "bun"
   ],
-  "homepage": "https://github.com/hoox-sh/pynets",
+  "homepage": "https://github.com/hoox-sh/pyne-ts",
   "bugs": {
-    "url": "https://github.com/hoox-sh/pynets/issues"
+    "url": "https://github.com/hoox-sh/pyne-ts/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hoox-sh/pynets.git"
+    "url": "git+https://github.com/hoox-sh/pyne-ts.git"
   },
   "publishConfig": {
     "access": "public",
@@ -71,7 +71,7 @@
     }
   },
   "bin": {
-    "pynets": "./src/cli.ts"
+    "pyne-ts": "./src/cli.ts"
   },
   "engines": {
     "bun": ">=1.2.0",
@@ -82,7 +82,7 @@
     "build": "bun run scripts/build.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "pynets": "bun run src/cli.ts",
+    "pyne-ts": "bun run src/cli.ts",
     "pack:check": "bun run build && npm pack --dry-run",
     "prepack": "bun run build"
   },

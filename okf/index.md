@@ -1,11 +1,11 @@
 ---
 okf_version: "0.2"
-okf_bundle_name: "hoox-sh-pynets"
-okf_bundle_purpose: "Knowledge base for @hoox-sh/pynets."
+okf_bundle_name: "hoox-sh-pyne-ts"
+okf_bundle_purpose: "Knowledge base for @hoox-sh/pyne-ts."
 okf_bundle_tags: ["openorchestrate", "typescript"]
 ---
 
-# @hoox-sh/pynets
+# @hoox-sh/pyne-ts
 
 PyneTS — TypeScript / Bun Pine Script library (parse, unparse, interpret, stream). Python pynescript Runtime remains the source of truth.
 

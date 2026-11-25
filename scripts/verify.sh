@@ -204,7 +204,7 @@ run_step() {
   return 0
 }
 
-PROJECT='@hoox-sh/pynets'
+PROJECT='@hoox-sh/pyne-ts'
 printf '\n%s %s\n' "${CYAN}${BOLD}OpenOrchestrate${RESET}" "${DIM}· ${MODE} · ${PROJECT}${RESET}"
 printf '%s\n\n' "${DIM}${RULE}${RESET}"
 

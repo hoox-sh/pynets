@@ -7,7 +7,7 @@
 
 **TypeScript / Bun library for Pine Script — parse, unparse, interpret, compile, and stream.**
 
-**0.11.0** · npm [`@hoox-sh/pynets`](https://www.npmjs.com/package/@hoox-sh/pynets)
+**0.11.0** · npm [`@hoox-sh/pyne-ts`](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
 
 <div align="center">
 
@@ -16,9 +16,9 @@
 [![HOOX](https://img.shields.io/badge/HOOX-mesh-f38020?style=flat-square)](https://github.com/hoox-sh/hoox)
 [![PYNE](https://img.shields.io/badge/PYNE-engine-3776ab?style=flat-square)](https://github.com/hoox-sh/pyne)
 [![AXIS](https://img.shields.io/badge/AXIS-chart-5a0fc8?style=flat-square)](https://github.com/hoox-sh/axis)
-[![CI](https://img.shields.io/github/actions/workflow/status/hoox-sh/pynets/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/hoox-sh/pynets/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/hoox-sh/pynets/graph/badge.svg)](https://codecov.io/gh/hoox-sh/pynets)
-[![npm](https://img.shields.io/npm/v/@hoox-sh/pynets?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pynets)
+[![CI](https://img.shields.io/github/actions/workflow/status/hoox-sh/pyne-ts/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/hoox-sh/pyne-ts/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/hoox-sh/pyne-ts/graph/badge.svg)](https://codecov.io/gh/hoox-sh/pyne-ts)
+[![npm](https://img.shields.io/npm/v/@hoox-sh/pyne-ts?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-6b7280?style=flat-square)](LICENSE)
 
 <br/>
@@ -29,10 +29,10 @@
 [![Tests](https://img.shields.io/badge/tests-1%2C468-22c55e?style=flat-square)](test)
 [![Builtins](https://img.shields.io/badge/builtins-941%2F941-3776ab?style=flat-square)](PARITY.md)
 [![PYNE parity](https://img.shields.io/badge/PYNE-0.6.32-22c55e?style=flat-square)](PARITY.md)
-[![npm downloads](https://img.shields.io/npm/dm/@hoox-sh/pynets?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pynets)
+[![npm downloads](https://img.shields.io/npm/dm/@hoox-sh/pyne-ts?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-[hoox.sh](https://hoox.sh) · [PyneTS docs](https://hoox.sh/pyne/docs/pynets) · [parity](PARITY.md) · [changelog](CHANGELOG.md)
+[hoox.sh](https://hoox.sh) · [PyneTS docs](https://hoox.sh/pyne/docs/pyne-ts) · [parity](PARITY.md) · [changelog](CHANGELOG.md)
 
 </div>
 
@@ -54,7 +54,7 @@ Python [`pynescript.runtime`](https://github.com/hoox-sh/pyne) is the **source o
 | Parity target                 | **PYNE 0.6.32**                                                                      |
 | Bundles                       | index **1.3 MB** · browser **757 kB** · parser-only **587 kB** (browser: **335 kB**) |
 | Engines                       | interpret · JS compile (`new Function`) · auto                                       |
-| Package                       | `@hoox-sh/pynets` **0.11.0**, AGPL-3.0-or-later, Node 20+ (library) · Bun (CLI)      |
+| Package                       | `@hoox-sh/pyne-ts` **0.11.0**, AGPL-3.0-or-later, Node 20+ (library) · Bun (CLI)     |
 
 ---
 
@@ -147,7 +147,7 @@ A reachability test now asserts that every descriptor is routed through `EXTRA_T
 - `mode: "compile"` emits a JS bar loop (Python object-mode analog — **not** Numba nopython).
 - `transpile` / `compileScript` for host-side compilation.
 - `Runtime.run` with `mode: "auto"` tries compile, then interpret.
-- Subpath exports: `@hoox-sh/pynets/parse` and `@hoox-sh/pynets/runtime`.
+- Subpath exports: `@hoox-sh/pyne-ts/parse` and `@hoox-sh/pyne-ts/runtime`.
 - Generated declarations in `dist/types`.
 - `RuntimeOptions.maxBars` (default 100,000), `whileCap`, `forCap`, and `PineSeries({ maxSize })` for bounded memory.
 - `TaEngine.snapshot` / `restore` only touch dirty call sites on realtime ticks.
@@ -159,41 +159,43 @@ A reachability test now asserts that every descriptor is routed through `EXTRA_T
 **Library — Node 20+ or Bun:**
 
 ```bash
-npm install @hoox-sh/pynets   # Node 20+
-bun add @hoox-sh/pynets       # Bun
+npm install @hoox-sh/pyne-ts   # Node 20+
+bun add @hoox-sh/pyne-ts       # Bun
 ```
 
 ```js
-import { parse, Runtime } from "@hoox-sh/pynets";
+import { parse, Runtime } from "@hoox-sh/pyne-ts";
 ```
 
 Node and browsers get the Bun-built ESM in `dist/` (`bun run build`; `npm pack` runs it via `prepack`).
 
-**CLI — requires Bun on `PATH`.** The `pynets` bin ships as TypeScript source with a
-`#!/usr/bin/env bun` shebang; it is **not** runnable by plain Node (`npx pynets` on a
+**CLI — requires Bun on `PATH`.** The `pyne-ts` bin ships as TypeScript source with a
+`#!/usr/bin/env bun` shebang; it is **not** runnable by plain Node (`npx pyne-ts` on a
 Node-only machine will fail — the `node >=20` engine field covers the library, not the CLI):
 
 ```bash
-bunx pynets -- help           # or: bunx --bun pynets -- help
+bunx pyne-ts -- help           # or: bunx --bun pyne-ts -- help
 ```
 
 **CDN (ESM, no install)** — serves the published npm tarball as-is:
 
 ```html
 <script type="module">
-  import { Runtime } from "https://esm.sh/@hoox-sh/pynets@0.10.0";
+  import { Runtime } from "https://esm.sh/@hoox-sh/pyne-ts@0.10.0";
 </script>
 ```
 
 ```text
-https://esm.sh/@hoox-sh/pynets@0.10.0
-https://unpkg.com/@hoox-sh/pynets@0.10.0
-https://cdn.jsdelivr.net/npm/@hoox-sh/pynets@0.10.0
+https://esm.sh/@hoox-sh/pyne-ts@0.10.0
+https://unpkg.com/@hoox-sh/pyne-ts@0.10.0
+https://cdn.jsdelivr.net/npm/@hoox-sh/pyne-ts@0.10.0
 ```
 
-All three CDNs serve `0.10.0` (verified HTTP 200/206 on 2026-11-25). The `0.11.0`
-URLs return 404 until the `v0.11.0` tag publishes to npm. Pin an exact version
-in production.
+The package was renamed from `@hoox-sh/pynets` to `@hoox-sh/pyne-ts`; the CDN
+links above name the new package and go live with its first publish (the
+pre-rename `@hoox-sh/pynets@0.10.0` tarball stays reachable under the old
+name). HTTP 200/206 was verified for the old name on 2026-11-25; re-verify
+after the first `@hoox-sh/pyne-ts` publish. Pin an exact version in production.
 
 **Single-file binaries** — not published yet. Once the first tag ships, prebuilt
 `bun build --compile` binaries for linux-x64, linux-arm64, darwin-arm64 and
@@ -201,12 +203,12 @@ windows-x64 will be attached to each GitHub Release; every archive carries
 `LICENSE`, `NOTICE` and a source-tag pointer, plus a `SHA256SUMS` file. See
 [.github/workflows/release.yml](.github/workflows/release.yml). Binaries are
 unsigned — macOS Gatekeeper and Windows SmartScreen will warn on first run; see
-the release notes at https://github.com/hoox-sh/pynets/releases.
+the release notes at https://github.com/hoox-sh/pyne-ts/releases.
 
 Browser note: `mode: "compile"` uses `new Function`, so it needs a CSP
 `script-src 'unsafe-eval'` (or a worker with that policy). `mode: "auto"`
 falls back to interpret; use interpret mode under a strict CSP. For parser-only
-use, import `@hoox-sh/pynets/parse` — the `browser` export condition resolves to
+use, import `@hoox-sh/pyne-ts/parse` — the `browser` export condition resolves to
 the minified, `node:`-free `dist/parse.browser.js` (335 kB, vs 587 kB Node bundle,
 the 757 kB full browser entry and the 1.3 MB full entry).
 
@@ -217,7 +219,7 @@ This is not a Cloudflare Worker package.
 ## Quickstart
 
 ```ts
-import { parse, unparse, Runtime } from "@hoox-sh/pynets";
+import { parse, unparse, Runtime } from "@hoox-sh/pyne-ts";
 
 const src = `//@version=5
 indicator("sma")
@@ -302,7 +304,7 @@ Wired through one dispatcher (`src/runtime/interpret.ts`). Not a second engine.
 ## Run scripts
 
 ```ts
-import { Runtime } from "@hoox-sh/pynets";
+import { Runtime } from "@hoox-sh/pyne-ts";
 
 const rt = new Runtime("AAPL", {
   timeframe: "5",
@@ -360,7 +362,7 @@ import {
   MemoryProvider,
   StaticMapProvider,
   JsonBarProvider,
-} from "@hoox-sh/pynets";
+} from "@hoox-sh/pyne-ts";
 
 await rt.runProvider(source, new MemoryProvider(bars), { limit: 500 });
 
@@ -410,26 +412,26 @@ Rich TTY (PYNE volt palette). Pipes and CI stay plain: `check` prints `ok`, `run
   <img src="docs/assets/cli.gif" alt="PyneTS CLI — help, run Keltner, run strategy" width="720" />
 </p>
 <p align="center">
-  <img src="docs/assets/cli-check.png" alt="pynets check sma.pine" width="720" />
+  <img src="docs/assets/cli-check.png" alt="pyne-ts check sma.pine" width="720" />
 </p>
 <p align="center">
-  <img src="docs/assets/cli-run.png" alt="pynets run keltner.pine — three plots with sparklines" width="720" />
+  <img src="docs/assets/cli-run.png" alt="pyne-ts run keltner.pine — three plots with sparklines" width="720" />
 </p>
 <p align="center">
-  <img src="docs/assets/cli-strategy.png" alt="pynets run strategy_entry.pine — plot plus entry event" width="720" />
+  <img src="docs/assets/cli-strategy.png" alt="pyne-ts run strategy_entry.pine — plot plus entry event" width="720" />
 </p>
 <p align="center">
-  <img src="docs/assets/cli-dump.png" alt="pynets dump sma.pine — ASDL AST" width="720" />
+  <img src="docs/assets/cli-dump.png" alt="pyne-ts dump sma.pine — ASDL AST" width="720" />
 </p>
 
 ```bash
-bunx pynets -- help
-bunx pynets -- check script.pine
-bunx pynets -- format script.pine
-bunx pynets -- run script.pine --bars 20
-bunx pynets -- run strat.pine --commission 0.001 --slippage 1 --pyramiding 0
-bunx pynets -- dump script.pine --rich --full
-bunx pynets -- info
+bunx pyne-ts -- help
+bunx pyne-ts -- check script.pine
+bunx pyne-ts -- format script.pine
+bunx pyne-ts -- run script.pine --bars 20
+bunx pyne-ts -- run strat.pine --commission 0.001 --slippage 1 --pyramiding 0
+bunx pyne-ts -- dump script.pine --rich --full
+bunx pyne-ts -- info
 ```
 
 Put `--rich` / `--plain` **after** the command so `bun run` does not swallow them. `--plain` wins over leftover `FORCE_COLOR`. Exit codes: `0` ok, `1` syntax/runtime, `2` usage.
@@ -467,7 +469,7 @@ import {
   StaticMapProvider,
   JsonBarProvider,
   LibraryRegistry,
-} from "@hoox-sh/pynets";
+} from "@hoox-sh/pyne-ts";
 ```
 
 `src/index.ts` is the stable barrel. Generated ANTLR, parser internals, and CLI helpers are not re-exported.
@@ -495,8 +497,8 @@ Full status, structural aliases, and edge semantics: [`PARITY.md`](PARITY.md).
 Agent brief: [`AGENTS.md`](AGENTS.md) · contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md) · changes: [`CHANGELOG.md`](CHANGELOG.md) · parity: [`PARITY.md`](PARITY.md)
 
 ```bash
-git clone https://github.com/hoox-sh/pynets.git
-cd pynets
+git clone https://github.com/hoox-sh/pyne-ts.git
+cd pyne-ts
 bun install
 bun test
 bun run typecheck
@@ -509,7 +511,7 @@ Generated files under `src/generated/` are committed so `bun test` does not requ
 
 `bun run generate` needs the shared PYNE `.g4` files. They are **not** vendored here.
 
-Resolution (`scripts/generate-antlr.ts`): `PYNETS_GRAMMAR` → `PYNESCRIPT_ROOT` → parent PYNE checkout → sibling `../pynescript` or `../pyne`.
+Resolution (`scripts/generate-antlr.ts`): `PYNE_TS_GRAMMAR` → `PYNESCRIPT_ROOT` → parent PYNE checkout → sibling `../pynescript` or `../pyne`. (`PYNETS_GRAMMAR` still works as a deprecated alias for `PYNE_TS_GRAMMAR`.)
 
 ```bash
 # PYNE cloned next to this repo
@@ -525,7 +527,7 @@ Java is required only to regenerate. The ANTLR jar is cached in `.tools/` (gitig
 
 ```bash
 git clone --recurse-submodules https://github.com/hoox-sh/pyne.git
-cd pyne/pynets
+cd pyne/pyne-ts
 bun install && bun test
 ```
 
@@ -535,16 +537,16 @@ After a plain clone: `git submodule update --init --recursive`.
 
 ## Ecosystem
 
-| Product                                                               | Role                                                         | Docs                                                         |
-| --------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| [**HOOX**](https://github.com/hoox-sh/hoox)                           | Execution mesh: signal → risk → CEX / DEX hop → notify       | [docs.hoox.sh](https://docs.hoox.sh)                         |
-| [**PYNE**](https://github.com/hoox-sh/pyne)                           | Language engine: grammar, AST, Python runtime, LSP, Pro API  | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs)               |
-| [**AXIS**](https://github.com/hoox-sh/axis)                           | Installable charting PWA (Solid + Vite; offline via Pyodide) | [hoox.sh/axis/docs](https://hoox.sh/axis/docs)               |
-| [**PyneTS**](https://github.com/hoox-sh/pynets)                       | TypeScript / Bun library + CLI (this repo)                   | [hoox.sh/pyne/docs/pynets](https://hoox.sh/pyne/docs/pynets) |
-| [**pyne-worker**](https://github.com/hoox-sh/pyne-worker)             | Edge evaluate host for the Python engine (`POST /run`)       | [docs](https://hoox.sh/pyne/docs/pyne-worker)                |
-| [**pyne-agent-worker**](https://github.com/hoox-sh/pyne-agent-worker) | NL authoring (Workers AI™); optional `/run` validation       | [docs](https://hoox.sh/pyne/docs/agent)                      |
+| Product                                                               | Role                                                         | Docs                                                           |
+| --------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| [**HOOX**](https://github.com/hoox-sh/hoox)                           | Execution mesh: signal → risk → CEX / DEX hop → notify       | [docs.hoox.sh](https://docs.hoox.sh)                           |
+| [**PYNE**](https://github.com/hoox-sh/pyne)                           | Language engine: grammar, AST, Python runtime, LSP, Pro API  | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs)                 |
+| [**AXIS**](https://github.com/hoox-sh/axis)                           | Installable charting PWA (Solid + Vite; offline via Pyodide) | [hoox.sh/axis/docs](https://hoox.sh/axis/docs)                 |
+| [**PyneTS**](https://github.com/hoox-sh/pyne-ts)                      | TypeScript / Bun library + CLI (this repo)                   | [hoox.sh/pyne/docs/pyne-ts](https://hoox.sh/pyne/docs/pyne-ts) |
+| [**pyne-worker**](https://github.com/hoox-sh/pyne-worker)             | Edge evaluate host for the Python engine (`POST /run`)       | [docs](https://hoox.sh/pyne/docs/pyne-worker)                  |
+| [**pyne-agent-worker**](https://github.com/hoox-sh/pyne-agent-worker) | NL authoring (Workers AI™); optional `/run` validation       | [docs](https://hoox.sh/pyne/docs/agent)                        |
 
-PYNE consumes PyneTS **only** as the `pynets/` git submodule — never copy sources back into `hoox-sh/pyne`.
+PYNE consumes PyneTS **only** as the `pyne-ts/` git submodule — never copy sources back into `hoox-sh/pyne`.
 
 ---
 

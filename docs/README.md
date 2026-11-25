@@ -1,19 +1,19 @@
 # PyneTS documentation
 
-Product manuals live on the PYNE docs site (same structure as `hoox.sh/pyne/docs`). Author them in the PYNE checkout at `docs/pyne/pynets/` — this folder only holds CLI screenshots.
+Product manuals live on the PYNE docs site (same structure as `hoox.sh/pyne/docs`). Author them in the PYNE checkout at `docs/pyne/pyne-ts/` — this folder only holds CLI screenshots.
 
-| Page                 | URL                                               |
-| -------------------- | ------------------------------------------------- |
-| Hub                  | https://hoox.sh/pyne/docs/pynets                  |
-| Install              | https://hoox.sh/pyne/docs/pynets/install          |
-| CLI                  | https://hoox.sh/pyne/docs/pynets/cli              |
-| Runtime              | https://hoox.sh/pyne/docs/pynets/runtime          |
-| JS compile           | https://hoox.sh/pyne/docs/pynets/compile          |
-| Parity               | https://hoox.sh/pyne/docs/pynets/parity           |
-| Missing features     | https://hoox.sh/pyne/docs/pynets/missing-features |
-| Parity status (repo) | [`../PARITY.md`](../PARITY.md)                    |
-| Ecosystem            | https://hoox.sh/pyne/docs/reference/ecosystem     |
-| Modes                | https://hoox.sh/pyne/docs/enduser/reference/modes |
+| Page                 | URL                                                |
+| -------------------- | -------------------------------------------------- |
+| Hub                  | https://hoox.sh/pyne/docs/pyne-ts                  |
+| Install              | https://hoox.sh/pyne/docs/pyne-ts/install          |
+| CLI                  | https://hoox.sh/pyne/docs/pyne-ts/cli              |
+| Runtime              | https://hoox.sh/pyne/docs/pyne-ts/runtime          |
+| JS compile           | https://hoox.sh/pyne/docs/pyne-ts/compile          |
+| Parity               | https://hoox.sh/pyne/docs/pyne-ts/parity           |
+| Missing features     | https://hoox.sh/pyne/docs/pyne-ts/missing-features |
+| Parity status (repo) | [`../PARITY.md`](../PARITY.md)                     |
+| Ecosystem            | https://hoox.sh/pyne/docs/reference/ecosystem      |
+| Modes                | https://hoox.sh/pyne/docs/enduser/reference/modes  |
 
 Current parity snapshot: **PYNE 0.6.32** (`bun test` 1394 pass; all 941
 registered builtin names resolve). The repo

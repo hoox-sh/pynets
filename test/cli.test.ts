@@ -15,7 +15,7 @@ import {
 } from "../src/cli.ts";
 import pkg from "../package.json";
 
-const PYNETS = join(import.meta.dir, "..");
+const PYNE_TS = join(import.meta.dir, "..");
 
 const GOOD = `//@version=5
 indicator("cli")
@@ -23,7 +23,7 @@ plot(close)
 `;
 
 function writePine(source: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "pynets-cli-"));
+  const dir = mkdtempSync(join(tmpdir(), "pyne-ts-cli-"));
   const file = join(dir, "script.pine");
   writeFileSync(file, source, "utf8");
   return file;
@@ -34,7 +34,7 @@ function runCli(
   env?: Record<string, string | undefined>,
 ): { code: number; stdout: string; stderr: string } {
   const proc = Bun.spawnSync(["bun", "src/cli.ts", ...args], {
-    cwd: PYNETS,
+    cwd: PYNE_TS,
     stdout: "pipe",
     stderr: "pipe",
     env: { ...process.env, ...env },
@@ -58,7 +58,7 @@ function hasStack(text: string): boolean {
   return /\n\s+at\s+\S+/.test(text);
 }
 
-describe("pynets CLI", () => {
+describe("pyne-ts CLI", () => {
   test("check good script", () => {
     const file = writePine(GOOD);
     const r = cli("check", file);
@@ -97,14 +97,14 @@ describe("pynets CLI", () => {
     expect(r.stdout).toContain("check");
     expect(r.stdout).toContain("format");
     expect(r.stdout).toContain("run");
-    expect(r.stdout).toContain("pynets");
+    expect(r.stdout).toContain("pyne-ts");
   });
 
   test("info is JSON on a pipe", () => {
     const r = cli("info");
     expect(r.code).toBe(0);
     const payload = JSON.parse(r.stdout) as { name: string; version: string };
-    expect(payload.name).toBe("pynets");
+    expect(payload.name).toBe("pyne-ts");
     expect(payload.version).toBe(pkg.version);
   });
 
@@ -128,13 +128,13 @@ describe("pynets CLI", () => {
   });
 });
 
-describe("pynets CLI hardening", () => {
+describe("pyne-ts CLI hardening", () => {
   test("--plain wins over leftover FORCE_COLOR", () => {
     const r = runCli(["info", "--plain"], { FORCE_COLOR: "1", NO_COLOR: "" });
     expect(r.code).toBe(0);
     expect(r.stdout).not.toContain("\x1b");
     const payload = JSON.parse(r.stdout) as { name: string; rich: boolean };
-    expect(payload.name).toBe("pynets");
+    expect(payload.name).toBe("pyne-ts");
     expect(payload.rich).toBe(false);
   });
 
@@ -150,7 +150,7 @@ describe("pynets CLI hardening", () => {
   });
 
   test("missing file is exit 2, stderr, no stack", () => {
-    const r = cli("check", join(PYNETS, "no-such-pynets-cli-file.pine"));
+    const r = cli("check", join(PYNE_TS, "no-such-pyne-ts-cli-file.pine"));
     expect(r.code).toBe(2);
     expect(r.stderr).toContain("file not found");
     expect(hasStack(r.stderr)).toBe(false);

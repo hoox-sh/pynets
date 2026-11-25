@@ -8,7 +8,7 @@ status: stable
 
 # Architecture
 
-@hoox-sh/pynets uses OpenOrchestrate. Languages: TypeScript.
+@hoox-sh/pyne-ts uses OpenOrchestrate. Languages: TypeScript.
 
 ## Runtime surfaces
 
@@ -16,8 +16,8 @@ PyneTS — a TypeScript / Bun library that parses, unparses, and interprets Pine
 Script. It mirrors the Python `pynescript` public names (`parse`, `unparse`,
 `Runtime.run`); Python is the source of truth when semantics disagree.
 
-- **Entry points:** the `@hoox-sh/pynets` exports and the `pynets` CLI binary.
-- **Run:** `bun run build` to compile, `bun run pynets` for the CLI.
+- **Entry points:** the `@hoox-sh/pyne-ts` exports and the `pyne-ts` CLI binary.
+- **Run:** `bun run build` to compile, `bun run pyne-ts` for the CLI.
 - **Verify:** `./scripts/verify.sh` runs `bun fmt --check`,
   `bun run typecheck`, and `bun run test`.
 

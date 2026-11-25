@@ -620,8 +620,8 @@ function infoPayload(ui: Rich): {
   docs: string;
 } {
   return {
-    name: "pynets",
-    package: "@hoox-sh/pynets",
+    name: "pyne-ts",
+    package: "@hoox-sh/pyne-ts",
     version: VERSION,
     runtime: "bun",
     bun: typeof Bun !== "undefined" ? Bun.version : null,
@@ -642,7 +642,7 @@ function info(ui: Rich, asJson: boolean): void {
   ui.table(
     ["key", "value"],
     [
-      ["package", "@hoox-sh/pynets"],
+      ["package", "@hoox-sh/pyne-ts"],
       ["version", VERSION],
       ["runtime", `bun ${payload.bun ?? "?"}`],
       ["engine", "interpret + compile (JS emit)"],
@@ -682,7 +682,10 @@ function main(): void {
   }
 
   if (file == null) {
-    failUsage(ui, `error: missing file\nusage: pynets ${cmd} <file> [options]`);
+    failUsage(
+      ui,
+      `error: missing file\nusage: pyne-ts ${cmd} <file> [options]`,
+    );
   }
 
   if (cmd === "check") {

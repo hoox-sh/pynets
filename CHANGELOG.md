@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING:** the repository, npm package, and CLI bin were renamed `pynets` → `pyne-ts`.
+
+  - npm package `@hoox-sh/pynets` → `@hoox-sh/pyne-ts`; repository and all GitHub URLs moved from `github.com/hoox-sh/pynets` to `github.com/hoox-sh/pyne-ts` (issues, releases, raw/badge/CDN links). The pre-rename `@hoox-sh/pynets` tarballs stay on npm under the old name; new releases publish as `@hoox-sh/pyne-ts`.
+  - CLI bin renamed `pynets` → `pyne-ts` (`bunx pyne-ts` / `npx`-style shims, `bun run pyne-ts`).
+  - Grammar override renamed `PYNETS_GRAMMAR` → `PYNE_TS_GRAMMAR`. `PYNETS_GRAMMAR` is still honored as a deprecated alias (with a warning) and will be removed in a future release.
+  - Release workflow asset names changed `pynets-*` → `pyne-ts-*`; `release.yml` source pointer and `publish.yml` comments updated to the new repo.
+  - `.oo` / OKF bundle id `hoox-sh-pynets` → `hoox-sh-pyne-ts`; `/pynets-parity` and `/pynets-generate` agent skills renamed to `/pyne-ts-parity` and `/pyne-ts-generate`.
+  - Version stays `0.11.0`; the rename ships in the next tagged release.
+
 ## [0.11.0] - 2026-11-25
 
 Descriptor-driven TA dispatch and the parity fixes it surfaced.

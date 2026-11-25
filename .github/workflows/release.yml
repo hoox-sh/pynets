@@ -77,22 +77,22 @@ jobs:
       - name: Compile binary
         run: |
           set -euo pipefail
-          asset="pynets-${{ matrix.asset }}"
+          asset="pyne-ts-${{ matrix.asset }}"
           stage="stage/${asset}"
           mkdir -p "${stage}" dist-release
           bun build --compile --minify --target="${{ matrix.target }}" \
-            src/cli.ts --outfile "${stage}/pynets${{ matrix.ext }}"
-          chmod +x "${stage}/pynets${{ matrix.ext }}" || true
+            src/cli.ts --outfile "${stage}/pyne-ts${{ matrix.ext }}"
+          chmod +x "${stage}/pyne-ts${{ matrix.ext }}" || true
           cp LICENSE NOTICE "${stage}/"
           # AGPL-3.0 §6: the corresponding source travels with the binary.
           printf '%s\n' \
-            "@hoox-sh/pynets — AGPL-3.0-or-later" \
+            "@hoox-sh/pyne-ts — AGPL-3.0-or-later" \
             "" \
-            "This archive contains the pynets CLI, built from source with" \
+            "This archive contains the pyne-ts CLI, built from source with" \
             "'bun build --compile --minify'. The corresponding source code is the" \
             "git ref this release was built from:" \
             "" \
-            "  https://github.com/hoox-sh/pynets/tree/${GITHUB_REF_NAME}" \
+            "  https://github.com/hoox-sh/pyne-ts/tree/${GITHUB_REF_NAME}" \
             "  (commit ${GITHUB_SHA})" \
             "" \
             "License: AGPL-3.0-or-later — see LICENSE in this archive." \
@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           want="$(grep -m1 '"version"' package.json | cut -d'"' -f4)"
-          got="$(./stage/pynets-linux-x64/pynets info | grep -o "\"version\":\"[^\"]*\"")"
+          got="$(./stage/pyne-ts-linux-x64/pyne-ts info | grep -o "\"version\":\"[^\"]*\"")"
           echo "package.json version: ${want}; binary reports: ${got}"
           [ "${got}" = "\"version\":\"${want}\"" ]
 
@@ -137,7 +137,7 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
         with:
-          name: pynets-${{ matrix.asset }}
+          name: pyne-ts-${{ matrix.asset }}
           path: dist-release/*
           if-no-files-found: error
           retention-days: 7
@@ -151,7 +151,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v7
         with:
-          pattern: pynets-*
+          pattern: pyne-ts-*
           path: release-assets
           merge-multiple: true
 
@@ -194,12 +194,12 @@ jobs:
           files: release-assets/*
           fail_on_unmatched_files: true
           body: |
-            Single-file `pynets` CLI binaries, built from this tag with `bun build --compile --minify`.
+            Single-file `pyne-ts` CLI binaries, built from this tag with `bun build --compile --minify`.
 
             Targets: linux-x64 · linux-arm64 · darwin-arm64 · windows-x64
 
             **Corresponding source (AGPL-3.0 §6):** the git tag this release was cut from —
-            https://github.com/hoox-sh/pynets/tree/${{ github.ref_name }}
+            https://github.com/hoox-sh/pyne-ts/tree/${{ github.ref_name }}
 
             **License:** AGPL-3.0-or-later — see `LICENSE` in this repo and inside each archive. `NOTICE` and a `SOURCE.txt` with the same source-tag pointer are included in every archive.
 
@@ -207,4 +207,4 @@ jobs:
 
             **Unsigned binaries:** macOS Gatekeeper / Windows SmartScreen may warn on first run. No code-signing certificates are in use yet.
 
-            Prefer npm? `bun add @hoox-sh/pynets` (or `bunx pynets`) — the npm package is published separately by the publish workflow and is not affected by this release.
+            Prefer npm? `bun add @hoox-sh/pyne-ts` (or `bunx pyne-ts`) — the npm package is published separately by the publish workflow and is not affected by this release.

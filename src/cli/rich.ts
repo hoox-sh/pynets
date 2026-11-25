@@ -116,12 +116,12 @@ export class Rich {
 
   banner(): void {
     if (!this.enabled) {
-      this.write(`PYNE pynets v${VERSION}`);
+      this.write(`PYNE pyne-ts v${VERSION}`);
       this.write("TypeScript Pine toolchain — parse · format · run");
       return;
     }
     this.write(
-      `${this.paint("accent", "◆ PYNE")} ${this.paint("fg", "pynets")} ${this.paint("muted", `v${VERSION}`)}`,
+      `${this.paint("accent", "◆ PYNE")} ${this.paint("fg", "pyne-ts")} ${this.paint("muted", `v${VERSION}`)}`,
     );
     this.write(
       this.paint("muted", "TypeScript Pine toolchain — parse · format · run"),
@@ -134,13 +134,13 @@ export class Rich {
     if (this.enabled) {
       this.write(this.paint("accent", "USAGE"));
       this.write(
-        `  ${this.paint("fg", "pynets")} ${this.paint("muted", "<command> [file] [options]")}`,
+        `  ${this.paint("fg", "pyne-ts")} ${this.paint("muted", "<command> [file] [options]")}`,
       );
       this.write("");
       this.write(this.paint("accent", "COMMANDS"));
     } else {
       this.write(
-        "usage: pynets <check|format|run|dump|info> [file] [--bars N] [--mode interpret|compile|auto] [--commission N] [--slippage N] [--pyramiding N] [--json] [--plain] [--rich] [--full]",
+        "usage: pyne-ts <check|format|run|dump|info> [file] [--bars N] [--mode interpret|compile|auto] [--commission N] [--slippage N] [--pyramiding N] [--json] [--plain] [--rich] [--full]",
       );
       this.write("");
       this.write("commands:");
@@ -201,19 +201,19 @@ export class Rich {
     else this.write("examples:");
     const examples: Array<[string, string]> = [
       [
-        "pynets run keltner.pine --bars 40",
+        "pyne-ts run keltner.pine --bars 40",
         "3 plots (mid / up / lo) + spark/last",
       ],
       [
-        "pynets run strategy_entry.pine",
+        "pyne-ts run strategy_entry.pine",
         "strategy events table (bar, type, id)",
       ],
       [
-        "pynets run strat.pine --commission 0.001 --slippage 1 --pyramiding 0",
+        "pyne-ts run strat.pine --commission 0.001 --slippage 1 --pyramiding 0",
         "broker flags on Runtime",
       ],
       [
-        "pynets dump script.pine --rich --full",
+        "pyne-ts dump script.pine --rich --full",
         "--rich after the command (bun will not eat it)",
       ],
     ];

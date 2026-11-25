@@ -1,4 +1,4 @@
-# Performance Guide — `@hoox-sh/pynets`
+# Performance Guide — `@hoox-sh/pyne-ts`
 
 ## Overview
 
