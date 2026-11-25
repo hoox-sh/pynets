@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="PyneTS — TypeScript / Bun Pine Script runtime">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#111a2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f38020"/>
+      <stop offset="0.55" stop-color="#3776ab"/>
+      <stop offset="1" stop-color="#5a0fc8"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c7d2fe"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3776ab"/>
+      <stop offset="1" stop-color="#5a0fc8"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="400" fill="url(#bg)"/>
+  <rect width="1280" height="6" fill="url(#accent)"/>
+
+  <g opacity="0.07" stroke="#8ea0c9" stroke-width="1">
+    <path d="M0 80h1280M0 160h1280M0 240h1280M0 320h1280"/>
+    <path d="M80 0v400M240 0v400M400 0v400M560 0v400M720 0v400M880 0v400M1040 0v400M1200 0v400"/>
+  </g>
+
+  <circle cx="620" cy="120" r="150" fill="#3776ab" opacity="0.10" filter="url(#glow)"/>
+  <circle cx="1120" cy="300" r="130" fill="#5a0fc8" opacity="0.12" filter="url(#glow)"/>
+
+  <text x="72" y="104" fill="#8ea0c9" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="4">HOOX · PYNE · AXIS</text>
+
+  <text x="68" y="204" fill="url(#title)" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="96" font-weight="800" letter-spacing="-3">PyneTS</text>
+
+  <text x="72" y="252" fill="#aab7d4" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="28" font-weight="400">TypeScript / Bun Pine Script runtime</text>
+
+  <text x="72" y="330" fill="#7f8db0" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="500">941 builtins · 165 TA descriptors · interpret + JS compile</text>
+
+  <rect x="790" y="78" width="418" height="244" rx="18" fill="#0e1526" stroke="#24304d" stroke-width="1.5"/>
+
+  <text x="818" y="112" fill="#7f8db0" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="2">RUNTIME.RUN</text>
+  <text x="818" y="142" fill="#dbe4ff" font-family="'SFMono-Regular', Consolas, 'Liberation Mono', monospace" font-size="16">const out = rt.run(src, bars)</text>
+
+  <rect x="1036" y="94" width="150" height="30" rx="15" fill="#12213a" stroke="#2f4a73"/>
+  <text x="1111" y="114" text-anchor="middle" fill="#8ec5ff" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="600">941 / 941 builtins</text>
+
+  <g>
+    <path d="M818 268 L850 250 L882 256 L914 228 L946 238 L978 206 L1010 216 L1042 188 L1074 198 L1106 170 L1138 180 L1170 152 L1180 156 L1180 292 L818 292 Z" fill="#3776ab" opacity="0.10"/>
+    <polyline points="818,268 850,250 882,256 914,228 946,238 978,206 1010,216 1042,188 1074,198 1106,170 1138,180 1170,152" fill="none" stroke="url(#line)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1170" cy="152" r="5" fill="#8ec5ff"/>
+  </g>
+
+  <text x="818" y="304" fill="#7f8db0" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">plots · series · fills · drawings</text>
+</svg>

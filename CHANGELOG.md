@@ -5,7 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-11-25
+
+Descriptor-driven TA dispatch and the parity fixes it surfaced.
+
+### Added
+
+- `src/runtime/ta_specs.ts` — shared descriptors for all **165** TA methods across **11** tables: source/length, context OHLCV, length + mult/offset, fixed context calls, condition/source, positional overloads, merged kwargs, runtime period-first (`bb`), pair gates (`pivothigh`/`pivotlow`), unary-or-rolling (`max`/`min`), and string-first (`pivot_point_levels`).
+- Argument kinds for `required`, `raw` (arrays/strings), `ignored` (required but unused), `list`, `seriesLast`, and `optionalNumber`, plus spec flags `tupleFields`, `hasSite: false`, `seriesGuarded`, and `sameLength`.
+- `TaEngine.cumMax` / `cumMin` — Python's expanding whole-history reduction for unary `ta.max` / `ta.min`.
+- Descriptor/manifest reachability test: every spec must be routed through `EXTRA_TA_NAMES` (or hot `TA_DISPATCH`), and every manifest name must have a descriptor.
+- Pre-push checks now scope format/lint to the pushed commit range (`OO_PUSH_RANGES`), so unrelated untracked files cannot block a push.
+- README redesign with a header banner, current numbers, descriptor tables, and expanded badges.
+
+### Changed
+
+- Interpret and compile now resolve every TA call through the same spec tables; `evalExtraTa` is a set of table lookups instead of per-builtin branches.
+- `ta.max` / `ta.min` use the expanding reduction for a single source and switch to the rolling alias when a period is supplied.
+- `ta.pivot_point_levels` supports the string type form on both backends.
+- `ta.tr` honors explicit `(high, low, close)` arguments; the no-arg form stays context-based.
+- `ta.supertrend` tuple/default handling is shared by interpret and compile.
+
+### Fixed
+
+- `ta.pivothigh` / `ta.pivotlow` confirm the center bar `right` bars back (`_pivot_confirm_window`): left ties confirm, the right side is strict.
+- `ta.tsi` returns the raw ratio in `[-1, 1]` (`_tsi`), not percent.
+- `ta.sar` seeds `low[0]`, emits `na` on the first valid bar, emits the seed on the second, then applies Wilder's step with the previous-two-bar clamp (`_sar_inc_update`).
+- `ta.pivot_point_levels("Traditional")` no longer maps the string type to `na`.
+- `ta.ao` / `ta.aroon` follow Python's legacy positional-then-keyword merge order (`ta.ao(slow=10)` binds `fast`).
+- `ta.kc`, `ta.dmi`, `ta.vwma`, `ta.stoch`, `ta.adx`, `ta.mfi`, `ta.cci`, and `ta.bb` resolve the same arguments and tuple output on both backends.
+- Compile gained the missing `ta.kc` explicit form, `ta.percentile_*`, and the `ta.pivot_point_levels` string form.
+- Compile `raw` arguments preserve strings instead of coercing them to `null`.
+- `ta.tr` and `ta.supertrend` are routed through the shared manifest (previously they had descriptors but were unreachable from `evalExtraTa`).
+
+## [0.10.1] - 2026-11-24
+
+Performance, memory bounds, and packaging.
 
 ### Added
 

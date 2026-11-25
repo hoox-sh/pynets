@@ -7,9 +7,11 @@
 
 **TypeScript / Bun library for Pine Script — parse, unparse, interpret, compile, and stream.**
 
-**0.10.1** · npm [`@hoox-sh/pynets`](https://www.npmjs.com/package/@hoox-sh/pynets)
+**0.11.0** · npm [`@hoox-sh/pynets`](https://www.npmjs.com/package/@hoox-sh/pynets)
 
 <div align="center">
+
+<img src="docs/assets/pynets-header.png" alt="PyneTS — TypeScript / Bun Pine Script runtime" width="100%" />
 
 [![HOOX](https://img.shields.io/badge/HOOX-mesh-f38020?style=flat-square)](https://github.com/hoox-sh/hoox)
 [![PYNE](https://img.shields.io/badge/PYNE-engine-3776ab?style=flat-square)](https://github.com/hoox-sh/pyne)
@@ -18,7 +20,17 @@
 [![codecov](https://codecov.io/gh/hoox-sh/pynets/graph/badge.svg)](https://codecov.io/gh/hoox-sh/pynets)
 [![npm](https://img.shields.io/npm/v/@hoox-sh/pynets?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pynets)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-6b7280?style=flat-square)](LICENSE)
+
+<br/>
+
 [![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh)
+[![Node](https://img.shields.io/badge/Node-20%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/tests-1%2C468-22c55e?style=flat-square)](test)
+[![Builtins](https://img.shields.io/badge/builtins-941%2F941-3776ab?style=flat-square)](PARITY.md)
+[![PYNE parity](https://img.shields.io/badge/PYNE-0.6.32-22c55e?style=flat-square)](PARITY.md)
+[![npm downloads](https://img.shields.io/npm/dm/@hoox-sh/pynets?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pynets)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 [hoox.sh](https://hoox.sh) · [PyneTS docs](https://hoox.sh/pyne/docs/pynets) · [parity](PARITY.md) · [changelog](CHANGELOG.md)
 
@@ -27,10 +39,6 @@
 PyneTS is the TypeScript/Bun member of the [PYNE](https://github.com/hoox-sh/pyne) toolchain. It is the same grammar, the same ASDL AST, and the same runtime contract as Python `pynescript` — exposed as a library and a TTY CLI.
 
 Python [`pynescript.runtime`](https://github.com/hoox-sh/pyne) is the **source of truth**. When semantics disagree, Python wins. This is not a TradingView platform certification.
-
-<p align="center">
-  <img src="docs/assets/cli.gif" alt="PyneTS CLI — help, run Keltner, run strategy" width="720" />
-</p>
 
 ---
 
@@ -46,7 +54,7 @@ Python [`pynescript.runtime`](https://github.com/hoox-sh/pyne) is the **source o
 | Parity target                 | **PYNE 0.6.32**                                                 |
 | Bundles                       | index **1.3 MB** · browser **757 kB** · parser-only **587 kB**  |
 | Engines                       | interpret · JS compile (`new Function`) · auto                  |
-| Package                       | `@hoox-sh/pynets` **0.10.1**, AGPL-3.0-or-later, Bun + Node 20+ |
+| Package                       | `@hoox-sh/pynets` **0.11.0**, AGPL-3.0-or-later, Bun + Node 20+ |
 
 ---
 
@@ -88,9 +96,11 @@ Most TypeScript Pine ports rewrite the language. PyneTS does not. It is the libr
 
 ---
 
-## What's new in 0.10
+## What's new
 
-### One descriptor table for every TA builtin
+### 0.11 — descriptor-driven TA
+
+#### One descriptor table for every TA builtin
 
 TA dispatch is no longer a pair of hand-written `if` chains. Both backends consume the same tables in [`src/runtime/ta_specs.ts`](src/runtime/ta_specs.ts), so interpret and compile resolve arguments identically.
 
@@ -113,7 +123,7 @@ Argument kinds cover the whole surface: `context`, `number` (period-like or fini
 
 A reachability test now asserts that every descriptor is routed through `EXTRA_TA_NAMES` (or the hot `TA_DISPATCH` set), and every manifest name has a descriptor.
 
-### Parity fixes surfaced by the refactor
+#### Parity fixes surfaced by the refactor
 
 - **`ta.pivothigh` / `ta.pivotlow`** confirm the center bar `right` bars back (`_pivot_confirm_window`); left ties confirm, the right side is strict.
 - **`ta.tsi`** returns the raw ratio in `[-1, 1]`, not percent.
@@ -123,14 +133,16 @@ A reachability test now asserts that every descriptor is routed through `EXTRA_T
 - **`ta.pivot_point_levels("Traditional")`** works in interpret and compile (strings were previously mapped to `na`).
 - **`ta.supertrend`**, **`ta.ao` / `ta.aroon`**, **`ta.kc`**, **`ta.dmi`**, **`ta.vwma`**, **`ta.stoch`**, **`ta.adx`**, **`ta.mfi`**, **`ta.cci`**, and **`ta.bb`** share the same argument resolution and tuple output on both backends.
 
-### Incremental streaming and realtime rollback
+### 0.10 — streaming, realtime rollback, and packaging
+
+#### Incremental streaming and realtime rollback
 
 - `RuntimeStream.push` / `updateLastBar` / `appendBars` / `close`.
 - Per-tick rollback of `var`, TA windows, containers (array / map / UDT / matrix, in place so aliases keep identity), plot cells, UDF-site state, and broker state.
 - `varip` initializes once and persists across historical bars; it re-runs its initializer on every realtime tick.
 - `Runtime.run(..., { realtimeLastBar: true })`, `realtimeFromBar`, `realtimeBars`, and `realtimeTicks`.
 
-### JS compile and packaging
+#### JS compile and packaging
 
 - `mode: "compile"` emits a JS bar loop (Python object-mode analog — **not** Numba nopython).
 - `transpile` / `compileScript` for host-side compilation.
@@ -370,6 +382,9 @@ Unresolved remote imports bind a soft stub (known helpers such as `index_2d_to_1
 
 Rich TTY (PYNE volt palette). Pipes and CI stay plain: `check` prints `ok`, `run` / `info` print JSON.
 
+<p align="center">
+  <img src="docs/assets/cli.gif" alt="PyneTS CLI — help, run Keltner, run strategy" width="720" />
+</p>
 <p align="center">
   <img src="docs/assets/cli-check.png" alt="pynets check sma.pine" width="720" />
 </p>
