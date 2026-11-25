@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - npm package `@hoox-sh/pynets` → `@hoox-sh/pyne-ts`; repository and all GitHub URLs moved from `github.com/hoox-sh/pynets` to `github.com/hoox-sh/pyne-ts` (issues, releases, raw/badge/CDN links). The pre-rename `@hoox-sh/pynets` tarballs stay on npm under the old name; new releases publish as `@hoox-sh/pyne-ts`.
   - CLI bin renamed `pynets` → `pyne-ts` (`bunx pyne-ts` / `npx`-style shims, `bun run pyne-ts`).
   - Grammar override renamed `PYNETS_GRAMMAR` → `PYNE_TS_GRAMMAR`. `PYNETS_GRAMMAR` is still honored as a deprecated alias (with a warning) and will be removed in a future release.
-  - Release workflow asset names changed `pynets-*` → `pyne-ts-*`; `release.yml` source pointer and `publish.yml` comments updated to the new repo.
+  - Release workflow asset names changed `pynets-*` → `pyne-ts-*`; `release.yml` source pointer updated to the new repo.
+  - `.github/workflows/publish.yml`: comments now reference `hoox-sh/pyne-ts`, but the OIDC/npmjs.com trusted-publisher note still points at the old repo and is flagged for the owner to re-point on npmjs.com (not fixed by the rename). Three functional lines changed: upload-artifact name (`hoox-sh-pyne-ts-pack`), the pack glob (`hoox-sh-pyne-ts-*.tgz`, required because `npm pack` now emits that name and the job uses `if-no-files-found: error`), and the environment url (npmjs package `@hoox-sh/pyne-ts`).
   - `.oo` / OKF bundle id `hoox-sh-pynets` → `hoox-sh-pyne-ts`; `/pynets-parity` and `/pynets-generate` agent skills renamed to `/pyne-ts-parity` and `/pyne-ts-generate`.
   - Version stays `0.11.0`; the rename ships in the next tagged release.
 
