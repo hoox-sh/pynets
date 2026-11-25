@@ -6,13 +6,16 @@
  * Enabled on TTY unless NO_COLOR / --plain; force with --rich or FORCE_COLOR.
  * `--plain` always wins over leftover FORCE_COLOR.
  */
+import pkg from "../../package.json";
+
 const ACCENT = [183, 239, 9] as const;
 const FG = [239, 239, 232] as const;
 const MUTED = [203, 204, 189] as const;
 const FAIL = [231, 0, 11] as const;
 const WARN = [235, 169, 65] as const;
 
-export const VERSION = "0.10.0";
+/** Single source of truth: package.json. */
+export const VERSION: string = pkg.version;
 
 type Rgb = readonly [number, number, number];
 

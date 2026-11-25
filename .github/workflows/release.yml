@@ -1,0 +1,210 @@
+# Release single-file CLI binaries on version tags.
+#
+# Builds `src/cli.ts` with `bun build --compile --minify` for the approved
+# target set (linux-x64, linux-arm64, darwin-arm64, windows-x64 — darwin-x64
+# deliberately excluded), archives each binary with LICENSE + NOTICE + a
+# source-tag pointer (AGPL-3.0 corresponding source), emits a SHA256SUMS file,
+# and attaches everything to the GitHub Release for the tag.
+#
+# Triggers: `v*` tag pushes only, plus `workflow_dispatch` as a dry run
+# (builds and uploads workflow artifacts; NOTHING is released).
+# It does not run on branches, does not touch publish.yml (npm publishing is
+# unchanged and stays authoritative), and creates no tags.
+#
+# Release upload mechanism: softprops/action-gh-release — chosen over
+# `gh release upload` because it creates the release if missing, uploads all
+# assets in one step, and is idempotent on re-runs (safe to re-run a failed
+# release job) without extra shell glue or a pre-existing release. It only
+# needs the default GITHUB_TOKEN with `contents: write`.
+#
+# Artifacts are unsigned. macOS Gatekeeper / Windows SmartScreen will warn on
+# first run; the release notes say so. Code signing is intentionally not in
+# scope (needs paid Apple/Microsoft certificates — owner decision).
+
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: # dry run: build + artifacts only, no GitHub Release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: bun-linux-x64, asset: linux-x64, ext: "", fmt: tar.gz }
+          - {
+              target: bun-linux-arm64,
+              asset: linux-arm64,
+              ext: "",
+              fmt: tar.gz,
+            }
+          - {
+              target: bun-darwin-arm64,
+              asset: darwin-arm64,
+              ext: "",
+              fmt: tar.gz,
+            }
+          - {
+              target: bun-windows-x64,
+              asset: windows-x64,
+              ext: ".exe",
+              fmt: zip,
+            }
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Compile binary
+        run: |
+          set -euo pipefail
+          asset="pynets-${{ matrix.asset }}"
+          stage="stage/${asset}"
+          mkdir -p "${stage}" dist-release
+          bun build --compile --minify --target="${{ matrix.target }}" \
+            src/cli.ts --outfile "${stage}/pynets${{ matrix.ext }}"
+          chmod +x "${stage}/pynets${{ matrix.ext }}" || true
+          cp LICENSE NOTICE "${stage}/"
+          # AGPL-3.0 §6: the corresponding source travels with the binary.
+          printf '%s\n' \
+            "@hoox-sh/pynets — AGPL-3.0-or-later" \
+            "" \
+            "This archive contains the pynets CLI, built from source with" \
+            "'bun build --compile --minify'. The corresponding source code is the" \
+            "git ref this release was built from:" \
+            "" \
+            "  https://github.com/hoox-sh/pynets/tree/${GITHUB_REF_NAME}" \
+            "  (commit ${GITHUB_SHA})" \
+            "" \
+            "License: AGPL-3.0-or-later — see LICENSE in this archive." \
+            "Notices: see NOTICE in this archive." \
+            > "${stage}/SOURCE.txt"
+          if [ "${{ matrix.fmt }}" = "zip" ]; then
+            # python3 ships on every ubuntu-latest runner; avoids a zip dependency
+            python3 -c "import shutil; shutil.make_archive('dist-release/${asset}', 'zip', 'stage', '${asset}')"
+          else
+            tar -czf "dist-release/${asset}.tar.gz" -C stage "${asset}"
+          fi
+
+      - name: Smoke-test linux-x64 binary
+        if: matrix.target == 'bun-linux-x64'
+        run: |
+          set -euo pipefail
+          want="$(grep -m1 '"version"' package.json | cut -d'"' -f4)"
+          got="$(./stage/pynets-linux-x64/pynets info | grep -o "\"version\":\"[^\"]*\"")"
+          echo "package.json version: ${want}; binary reports: ${got}"
+          [ "${got}" = "\"version\":\"${want}\"" ]
+
+      - name: Verify archive contents
+        run: |
+          set -euo pipefail
+          for f in dist-release/*; do
+            echo "== ${f}"
+            case "${f}" in
+              *.zip)    unzip -l "${f}" ;;
+              *.tar.gz) tar -tzf "${f}" ;;
+            esac
+          done
+          for f in dist-release/*; do
+            case "${f}" in
+              *.zip)    listing="$(unzip -Z1 "${f}")" ;;
+              *.tar.gz) listing="$(tar -tzf "${f}")" ;;
+            esac
+            echo "${listing}" | grep -q "LICENSE"
+            echo "${listing}" | grep -q "NOTICE"
+            echo "${listing}" | grep -q "SOURCE.txt"
+          done
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pynets-${{ matrix.asset }}
+          path: dist-release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build]
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: pynets-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate and verify SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum *.tar.gz *.zip > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload release assets bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [package]
+    # Dry runs (workflow_dispatch) stop here: artifacts above are downloadable
+    # from the run, but no release is created.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # create the release and upload assets
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v7
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Attach archives and checksums to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          body: |
+            Single-file `pynets` CLI binaries, built from this tag with `bun build --compile --minify`.
+
+            Targets: linux-x64 · linux-arm64 · darwin-arm64 · windows-x64
+
+            **Corresponding source (AGPL-3.0 §6):** the git tag this release was cut from —
+            https://github.com/hoox-sh/pynets/tree/${{ github.ref_name }}
+
+            **License:** AGPL-3.0-or-later — see `LICENSE` in this repo and inside each archive. `NOTICE` and a `SOURCE.txt` with the same source-tag pointer are included in every archive.
+
+            **Checksums:** verify downloads with `sha256sum -c SHA256SUMS` (attached).
+
+            **Unsigned binaries:** macOS Gatekeeper / Windows SmartScreen may warn on first run. No code-signing certificates are in use yet.
+
+            Prefer npm? `bun add @hoox-sh/pynets` (or `bunx pynets`) — the npm package is published separately by the publish workflow and is not affected by this release.

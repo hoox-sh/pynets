@@ -13,6 +13,7 @@ import {
   resolveUserFile,
   UsageError,
 } from "../src/cli.ts";
+import pkg from "../package.json";
 
 const PYNETS = join(import.meta.dir, "..");
 
@@ -104,7 +105,7 @@ describe("pynets CLI", () => {
     expect(r.code).toBe(0);
     const payload = JSON.parse(r.stdout) as { name: string; version: string };
     expect(payload.name).toBe("pynets");
-    expect(payload.version).toBe("0.10.0");
+    expect(payload.version).toBe(pkg.version);
   });
 
   test("dump contains Script / Call", () => {

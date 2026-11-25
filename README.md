@@ -44,17 +44,17 @@ Python [`pynescript.runtime`](https://github.com/hoox-sh/pyne) is the **source o
 
 ## Numbers
 
-| Metric                        | Value                                                           |
-| ----------------------------- | --------------------------------------------------------------- |
-| PYNE-registered builtins      | **941 / 941** resolve                                           |
-| TA methods on shared tables   | **165**                                                         |
-| Dispatch names (bare + `ta.`) | **317**                                                         |
-| Descriptor tables             | **11**                                                          |
-| Tests                         | **1,468** across 122 files · 1,321 pass · 146 skip · 0 fail     |
-| Parity target                 | **PYNE 0.6.32**                                                 |
-| Bundles                       | index **1.3 MB** · browser **757 kB** · parser-only **587 kB**  |
-| Engines                       | interpret · JS compile (`new Function`) · auto                  |
-| Package                       | `@hoox-sh/pynets` **0.11.0**, AGPL-3.0-or-later, Bun + Node 20+ |
+| Metric                        | Value                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| PYNE-registered builtins      | **941 / 941** resolve                                                                |
+| TA methods on shared tables   | **165**                                                                              |
+| Dispatch names (bare + `ta.`) | **317**                                                                              |
+| Descriptor tables             | **11**                                                                               |
+| Tests                         | **1,468** across 122 files · 1,321 pass · 146 skip · 0 fail                          |
+| Parity target                 | **PYNE 0.6.32**                                                                      |
+| Bundles                       | index **1.3 MB** · browser **757 kB** · parser-only **587 kB** (browser: **335 kB**) |
+| Engines                       | interpret · JS compile (`new Function`) · auto                                       |
+| Package                       | `@hoox-sh/pynets` **0.11.0**, AGPL-3.0-or-later, Node 20+ (library) · Bun (CLI)      |
 
 ---
 
@@ -156,37 +156,61 @@ A reachability test now asserts that every descriptor is routed through `EXTRA_T
 
 ## Install
 
-Install with Bun (published TypeScript source — no bundle needed):
+**Library — Node 20+ or Bun:**
 
 ```bash
-bun add @hoox-sh/pynets
-bunx pynets -- help
-```
-
-Node and browsers use the Bun-built ESM in `dist/` (`bun run build`; `npm pack` runs it via `prepack`):
-
-```bash
-# Node 20+
-npm install @hoox-sh/pynets
+npm install @hoox-sh/pynets   # Node 20+
+bun add @hoox-sh/pynets       # Bun
 ```
 
 ```js
 import { parse, Runtime } from "@hoox-sh/pynets";
 ```
 
+Node and browsers get the Bun-built ESM in `dist/` (`bun run build`; `npm pack` runs it via `prepack`).
+
+**CLI — requires Bun on `PATH`.** The `pynets` bin ships as TypeScript source with a
+`#!/usr/bin/env bun` shebang; it is **not** runnable by plain Node (`npx pynets` on a
+Node-only machine will fail — the `node >=20` engine field covers the library, not the CLI):
+
+```bash
+bunx pynets -- help           # or: bunx --bun pynets -- help
+```
+
+**CDN (ESM, no install)** — serves the published npm tarball as-is:
+
 ```html
 <script type="module">
-  import { Runtime } from "https://esm.sh/@hoox-sh/pynets";
+  import { Runtime } from "https://esm.sh/@hoox-sh/pynets@0.10.0";
 </script>
 ```
+
+```text
+https://esm.sh/@hoox-sh/pynets@0.10.0
+https://unpkg.com/@hoox-sh/pynets@0.10.0
+https://cdn.jsdelivr.net/npm/@hoox-sh/pynets@0.10.0
+```
+
+All three CDNs serve `0.10.0` (verified HTTP 200/206 on 2026-11-25). The `0.11.0`
+URLs return 404 until the `v0.11.0` tag publishes to npm. Pin an exact version
+in production.
+
+**Single-file binaries** — not published yet. Once the first tag ships, prebuilt
+`bun build --compile` binaries for linux-x64, linux-arm64, darwin-arm64 and
+windows-x64 will be attached to each GitHub Release; every archive carries
+`LICENSE`, `NOTICE` and a source-tag pointer, plus a `SHA256SUMS` file. See
+[.github/workflows/release.yml](.github/workflows/release.yml). Binaries are
+unsigned — macOS Gatekeeper and Windows SmartScreen will warn on first run; see
+the release notes at https://github.com/hoox-sh/pynets/releases.
 
 Browser note: `mode: "compile"` uses `new Function`, so it needs a CSP
 `script-src 'unsafe-eval'` (or a worker with that policy). `mode: "auto"`
 falls back to interpret; use interpret mode under a strict CSP. For parser-only
-use, import `@hoox-sh/pynets/parse` (587 kB standalone bundle vs the 1.3 MB
-full entry and 757 kB browser entry).
+use, import `@hoox-sh/pynets/parse` — the `browser` export condition resolves to
+the minified, `node:`-free `dist/parse.browser.js` (335 kB, vs 587 kB Node bundle,
+the 757 kB full browser entry and the 1.3 MB full entry).
 
-The CLI still needs Bun on `PATH`. This is not a Cloudflare Worker package.
+This is not a Cloudflare Worker package.
 
 ---
 
