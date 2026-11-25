@@ -16,7 +16,7 @@ Descriptor-driven TA dispatch and the parity fixes it surfaced.
 - `TaEngine.cumMax` / `cumMin` — Python's expanding whole-history reduction for unary `ta.max` / `ta.min`.
 - Descriptor/manifest reachability test: every spec must be routed through `EXTRA_TA_NAMES` (or hot `TA_DISPATCH`), and every manifest name must have a descriptor.
 - Pre-push checks now scope format/lint to the pushed commit range (`OO_PUSH_RANGES`), so unrelated untracked files cannot block a push.
-- README redesign with a header banner, current numbers, descriptor tables, and expanded badges.
+- README redesign with the shared HOOX banner, current numbers, descriptor tables, and expanded badges.
 
 ### Changed
 

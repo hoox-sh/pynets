@@ -11,7 +11,7 @@
 
 <div align="center">
 
-<img src="docs/assets/pynets-header.png" alt="PyneTS — TypeScript / Bun Pine Script runtime" width="100%" />
+![HOOX — Distributed by design](brand/png/tagline-distributed-by-design-github-1280x640-br-split-dark.png)
 
 [![HOOX](https://img.shields.io/badge/HOOX-mesh-f38020?style=flat-square)](https://github.com/hoox-sh/hoox)
 [![PYNE](https://img.shields.io/badge/PYNE-engine-3776ab?style=flat-square)](https://github.com/hoox-sh/pyne)
