@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime, TaEngine } from "../src/index.ts";
-import { TA_METHODS } from "../src/runtime/ta_names.ts";
+import { EXTRA_TA_NAMES, TA_METHODS } from "../src/runtime/ta_names.ts";
 import {
   TA_CONDITION_CALL_SPECS,
   TA_CONTEXT_CALL_SPECS,
@@ -16,7 +16,10 @@ import {
   TA_OHLCV_SPECS,
   TA_OVERLOAD_SPECS,
   TA_RUNTIME_PAIR_GATE_SPECS,
+  TA_RUNTIME_PERIOD_FIRST_SPECS,
+  TA_RUNTIME_STRING_FIRST_SPECS,
   TA_SRC_LEN_SPECS,
+  TA_UNARY_OR_ROLLING_SPECS,
 } from "../src/runtime/ta_specs.ts";
 
 const BARS = Array.from({ length: 40 }, (_, i) => ({
@@ -29,6 +32,45 @@ const BARS = Array.from({ length: 40 }, (_, i) => ({
 }));
 
 describe("TA source/length specs", () => {
+  test("every descriptor name is reachable from the TA manifest", () => {
+    const hotDispatch = new Set(
+      TA_SRC_LEN_SPECS.filter((spec) => spec.interpretDispatch).map(
+        (spec) => spec.name,
+      ),
+    );
+    const specNames = new Set([
+      ...TA_SRC_LEN_SPECS.map((spec) => spec.name),
+      ...TA_OHLCV_SPECS.map((spec) => spec.name),
+      ...TA_LEN_EXTRA_SPECS.map((spec) => spec.name),
+      ...TA_CONTEXT_CALL_SPECS.map((spec) => spec.name),
+      ...TA_CONDITION_CALL_SPECS.map((spec) => spec.name),
+      ...TA_OVERLOAD_SPECS.map((spec) => spec.name),
+      ...TA_MERGED_KWARG_SPECS.map((spec) => spec.name),
+      ...TA_RUNTIME_PERIOD_FIRST_SPECS.map((spec) => spec.name),
+      ...TA_RUNTIME_PAIR_GATE_SPECS.map((spec) => spec.name),
+      ...TA_UNARY_OR_ROLLING_SPECS.map((spec) => spec.name),
+      ...TA_RUNTIME_STRING_FIRST_SPECS.map((spec) => spec.name),
+    ]);
+    for (const name of specNames) {
+      if (hotDispatch.has(name)) continue;
+      expect(
+        EXTRA_TA_NAMES.has(name) || EXTRA_TA_NAMES.has(`ta.${name}`),
+        `${name} in EXTRA_TA_NAMES`,
+      ).toBe(true);
+    }
+    const manifest = new Set(
+      [...EXTRA_TA_NAMES].map((name) =>
+        name.startsWith("ta.") ? name.slice(3) : name,
+      ),
+    );
+    for (const name of manifest) {
+      expect(
+        specNames.has(name) || hotDispatch.has(name),
+        `${name} has a descriptor`,
+      ).toBe(true);
+    }
+  });
+
   test("names are unique, compile-visible, and backed by TaEngine methods", () => {
     const names = new Set<string>();
     const proto = TaEngine.prototype as unknown as Record<string, unknown>;

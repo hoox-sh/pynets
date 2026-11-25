@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1467 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1468 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
