@@ -365,6 +365,10 @@ describe("TA source/length specs", () => {
       "ta.volume_profile_high(close, volume)",
       "ta.rsi_divergence(ta.rsi(close, 3), 3)",
       "ta.rsi_oversold_overbought(ta.rsi(close, 3), 30, 70)",
+      "ta.swma(close)",
+      "ta.swma(close, 4)",
+      "ta.swma(close, length=3)",
+      "ta.expected_value(array.from(1, 2), array.from(0.5, 0.5))",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
@@ -442,6 +446,15 @@ describe("TA source/length specs", () => {
       );
       expect(interpreted.error ?? "", call).toContain(message);
     }
+  });
+
+  test("same-length list descriptors reject mismatched arrays", () => {
+    const src = `indicator("t")\nplot(ta.expected_value(array.from(1, 2), array.from(0.5)), "v")`;
+    const message = "Returns and probabilities must have same length";
+    const interpreted = new Runtime("TEST").run(src, BARS);
+    const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+    expect(interpreted.error ?? "").toContain(message);
+    expect(compiled.error ?? "").toContain(message);
   });
 
   test("tuple context descriptors match across backends", () => {

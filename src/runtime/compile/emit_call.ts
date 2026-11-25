@@ -567,6 +567,8 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
       return cellList(pick(args, arg.callIndex, [...arg.names], "null"));
     case "seriesLast":
       return cellLast(pick(args, arg.callIndex, [...arg.names], "null"));
+    case "optionalNumber":
+      return finiteOr(pick(args, arg.callIndex, [...arg.names], "null"), "0");
     case "value":
       return pick(args, arg.callIndex, [...arg.names], "null");
     case "typicalExplicit": {
@@ -1905,16 +1907,26 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
         ignoredParts.push(emitSpecArg(arg, args));
         continue;
       }
+      if (
+        arg.kind === "optionalNumber" &&
+        !hasArg(args, arg.callIndex, [...arg.names])
+      ) {
+        continue;
+      }
       parts.push(emitSpecArg(arg, args));
     }
     const call =
       callSpec.hasSite === false
         ? taPure(callSpec.method, parts)
         : taCall(callSpec.method, site, parts);
-    const expr =
+    let expr =
       ignoredParts.length === 0
         ? call
         : `(() => { ${ignoredParts.map((part) => `${part};`).join(" ")} return ${call}; })()`;
+    if (callSpec.sameLength != null) {
+      const message = JSON.stringify(callSpec.sameLength);
+      expr = `(() => { const __a = ${parts[0]}; const __b = ${parts[1]}; if (__a.length !== __b.length) throw new Error(${message}); return ${expr}; })()`;
+    }
     if (callSpec.tupleFields != null) {
       const fields = callSpec.tupleFields.map((field) => `__r.${field}`);
       return `(() => { const __r = ${expr}; return [${fields.join(", ")}]; })()`;
@@ -2075,13 +2087,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `(() => { const __r = ${call}; return [__r.st, __r.dir]; })()`;
   }
 
-  if (method === "swma") {
-    if (hasArg(args, 1, ["length", "period"])) {
-      return taCall("swma", site, [src(), len(1, "4")]);
-    }
-    return taCall("swma", site, [src()]);
-  }
-
   if (method === "pivot_point_levels") {
     return taPure("pivotPointLevels", [
       cellOf(pick(args, 0, ["high"], "null")),
@@ -2089,10 +2094,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       cellOf(pick(args, 2, ["close"], "null")),
       pick(args, 3, ["traditional"], "true"),
     ]);
-  }
-
-  if (method === "expected_value") {
-    return `__h.ta.expectedValue(${cellList(pick(args, 0, ["returns"], "null"))}, ${cellList(pick(args, 1, ["probabilities", "probs"], "null"))})`;
   }
 
   return "null";

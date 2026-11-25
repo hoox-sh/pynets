@@ -402,6 +402,12 @@ export type TaCallArgSpec =
       readonly callIndex: number;
     }
   | {
+      /** Omitted entirely when absent (kernel default applies). */
+      readonly kind: "optionalNumber";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+    }
+  | {
       readonly kind: "typicalExplicit";
       readonly highIndex: number;
       readonly lowIndex: number;
@@ -437,6 +443,8 @@ export interface TaContextCallSpec {
     readonly index: number;
     readonly names: readonly string[];
   }[];
+  /** When set, the first two list args must have equal length. */
+  readonly sameLength?: string;
   /** Record fields to expose as a Pine tuple (e.g. dmi). */
   readonly tupleFields?: readonly string[];
 }
@@ -504,6 +512,10 @@ const seriesLast = (
   callIndex: number,
   names: readonly string[],
 ): TaCallArgSpec => ({ kind: "seriesLast", names, callIndex });
+const optionalNumber = (
+  callIndex: number,
+  names: readonly string[],
+): TaCallArgSpec => ({ kind: "optionalNumber", names, callIndex });
 const typical = (
   highIndex: number,
   lowIndex: number,
@@ -1682,6 +1694,18 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
       v(1, ["oversold_level", "oversold"]),
       v(2, ["overbought_level", "overbought"]),
     ],
+  },
+  {
+    name: "swma",
+    method: "swma",
+    args: [source(0), optionalNumber(1, ["length", "period"])],
+  },
+  {
+    name: "expected_value",
+    method: "expectedValue",
+    hasSite: false,
+    sameLength: "Returns and probabilities must have same length",
+    args: [list(0, ["returns"]), list(1, ["probabilities", "probs"])],
   },
 ];
 

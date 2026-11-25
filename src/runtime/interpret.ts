@@ -4451,6 +4451,11 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       return seriesLastCell(
         evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
       );
+    case "optionalNumber": {
+      const valueArg = callArg(node.args, arg.callIndex, [...arg.names]);
+      if (valueArg == null) return undefined as unknown as Cell;
+      return lenOrDefault(node, env, arg.callIndex, [...arg.names], 0);
+    }
     case "typicalExplicit": {
       const h = unwrap(
         evalExpr(callArg(node.args, arg.highIndex, ["high"]), env),
@@ -4574,6 +4579,11 @@ function evalExtraTa(
         continue;
       }
       values.push(evalSpecArg(arg, node, env));
+    }
+    if (callSpec.sameLength != null) {
+      const first = values[0] as unknown as unknown[];
+      const second = values[1] as unknown as unknown[];
+      if (first.length !== second.length) runtimeError(callSpec.sameLength);
     }
     const result =
       callSpec.hasSite === false
@@ -4751,17 +4761,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.swma" || fname === "swma") {
-    if (typeof ta.swma !== "function") return NA;
-    const len = callArg(node.args, 1, ["length"]);
-    return (ta.swma as TaEngine["swma"]).call(
-      env.ta,
-      site,
-      srcArg(node, env),
-      len == null ? undefined : lenArg(node, env, 1),
-    );
-  }
-
   if (
     (fname === "ta.max" || fname === "ta.min") &&
     typeof ta.max === "function"
@@ -4844,17 +4843,6 @@ function evalExtraTa(
     );
   }
 
-  if (fname === "ta.expected_value" || fname === "expected_value") {
-    const msg =
-      "ta.expected_value() requires 2 arguments: returns, probabilities";
-    const returns = numericList(evalExpr(wave10aArg(0, ["returns"], msg), env));
-    const probs = numericList(
-      evalExpr(wave10aArg(1, ["probabilities", "probs"], msg), env),
-    );
-    if (returns.length !== probs.length)
-      runtimeError("Returns and probabilities must have same length");
-    return env.ta.expectedValue(returns, probs);
-  }
   // wave13-end
   // wave14-start — list-return + capstone synthesis
 
