@@ -4436,6 +4436,21 @@ function evalSpecArg(arg: TaCallArgSpec, node: Call, env: Env): Cell {
       evalExpr(valueArg, env);
       return NA;
     }
+    case "list": {
+      const raw = evalExpr(
+        callArg(node.args, arg.callIndex, [...arg.names]),
+        env,
+      );
+      const arr = asArray(raw);
+      if (arr == null) return [unwrap(raw)] as unknown as Cell;
+      const out: Cell[] = [];
+      for (let i = 0; i < arr.size(); i++) out.push(arr.get(i));
+      return out as unknown as Cell;
+    }
+    case "seriesLast":
+      return seriesLastCell(
+        evalExpr(callArg(node.args, arg.callIndex, [...arg.names]), env),
+      );
     case "typicalExplicit": {
       const h = unwrap(
         evalExpr(callArg(node.args, arg.highIndex, ["high"]), env),
@@ -4784,47 +4799,6 @@ function evalExtraTa(
     for (let i = 0; i < arr.size(); i++) out.push(arr.get(i));
     return out;
   };
-
-  if (
-    fname === "ta.rsi_oversold_overbought" ||
-    fname === "rsi_oversold_overbought"
-  ) {
-    const os = unwrap(
-      evalExpr(callArg(node.args, 1, ["oversold_level", "oversold"]), env),
-    );
-    const ob = unwrap(
-      evalExpr(callArg(node.args, 2, ["overbought_level", "overbought"]), env),
-    );
-    return env.ta.rsiOversoldOverbought(
-      unwrap(
-        evalExpr(callArg(node.args, 0, ["rsi_series", "rsi", "source"]), env),
-      ),
-      os ?? Number.NaN,
-      ob ?? Number.NaN,
-    );
-  }
-  if (fname === "ta.rsi_divergence" || fname === "rsi_divergence") {
-    const period = unwrap(
-      evalExpr(callArg(node.args, 1, ["period", "length"]), env),
-    );
-    return env.ta.rsiDivergence(
-      site,
-      seriesLastCell(
-        evalExpr(
-          callArg(node.args, 0, ["rsi_series", "series", "source"]),
-          env,
-        ),
-      ),
-      period ?? 0,
-    );
-  }
-
-  if (fname === "ta.volume_profile_high" || fname === "volume_profile_high") {
-    return env.ta.volumeProfileHigh(
-      wave10bList(0, ["close", "price", "source", "series"]),
-      wave10bList(1, ["volume"]),
-    );
-  }
 
   // wave10b-end
   // wave11-start — advanced / statistical ta.* surface

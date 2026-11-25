@@ -563,6 +563,10 @@ function emitSpecArg(arg: TaCallArgSpec, args: CallArgs): string {
       );
     case "ignored":
       return cellOf(pick(args, arg.callIndex, [...arg.names], "null"));
+    case "list":
+      return cellList(pick(args, arg.callIndex, [...arg.names], "null"));
+    case "seriesLast":
+      return cellLast(pick(args, arg.callIndex, [...arg.names], "null"));
     case "value":
       return pick(args, arg.callIndex, [...arg.names], "null");
     case "typicalExplicit": {
@@ -2076,22 +2080,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       return taCall("swma", site, [src(), len(1, "4")]);
     }
     return taCall("swma", site, [src()]);
-  }
-
-  if (method === "rsi_oversold_overbought") {
-    return `__h.ta.rsiOversoldOverbought(${cellOf(pick(args, 0, ["rsi_series", "rsi", "source"], "null"))}, ${cellOf(pick(args, 1, ["oversold_level", "oversold"], "null"))}, ${cellOf(pick(args, 2, ["overbought_level", "overbought"], "null"))})`;
-  }
-  if (method === "rsi_divergence") {
-    // Missing period is 0 (interpret `period ?? 0`), not the engine's null → na.
-    const period = `((__n) => (__n == null ? 0 : __n))(${cellOf(pick(args, 1, ["period", "length"], "null"))})`;
-    return taCall("rsiDivergence", site, [
-      cellLast(pick(args, 0, ["rsi_series", "series", "source"], "null")),
-      period,
-    ]);
-  }
-
-  if (method === "volume_profile_high") {
-    return `__h.ta.volumeProfileHigh(${cellList(pick(args, 0, ["close", "price", "source", "series"], "null"))}, ${cellList(pick(args, 1, ["volume"], "null"))})`;
   }
 
   if (method === "pivot_point_levels") {

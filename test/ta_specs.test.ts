@@ -362,6 +362,9 @@ describe("TA source/length specs", () => {
       "ta.volume_thrust(close, volume, ta.sma(volume, 3), 0.3)",
       "ta.breakout_detection(close, close + 1, close - 1)",
       "ta.breakout_detection(100, 101, 99)",
+      "ta.volume_profile_high(close, volume)",
+      "ta.rsi_divergence(ta.rsi(close, 3), 3)",
+      "ta.rsi_oversold_overbought(ta.rsi(close, 3), 30, 70)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;

@@ -392,6 +392,16 @@ export type TaCallArgSpec =
       readonly message: string;
     }
   | {
+      readonly kind: "list";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+    }
+  | {
+      readonly kind: "seriesLast";
+      readonly names: readonly string[];
+      readonly callIndex: number;
+    }
+  | {
       readonly kind: "typicalExplicit";
       readonly highIndex: number;
       readonly lowIndex: number;
@@ -485,6 +495,15 @@ const ignored = (
   names: readonly string[],
   message: string,
 ): TaCallArgSpec => ({ kind: "ignored", names, callIndex, message });
+const list = (callIndex: number, names: readonly string[]): TaCallArgSpec => ({
+  kind: "list",
+  names,
+  callIndex,
+});
+const seriesLast = (
+  callIndex: number,
+  names: readonly string[],
+): TaCallArgSpec => ({ kind: "seriesLast", names, callIndex });
 const typical = (
   highIndex: number,
   lowIndex: number,
@@ -1636,6 +1655,33 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
       { index: 1, names: ["resistance"] },
       { index: 2, names: ["support"] },
     ]),
+  },
+  {
+    name: "volume_profile_high",
+    method: "volumeProfileHigh",
+    hasSite: false,
+    args: [
+      list(0, ["close", "price", "source", "series"]),
+      list(1, ["volume"]),
+    ],
+  },
+  {
+    name: "rsi_divergence",
+    method: "rsiDivergence",
+    args: [
+      seriesLast(0, ["rsi_series", "series", "source"]),
+      n(1, ["period", "length"], 0),
+    ],
+  },
+  {
+    name: "rsi_oversold_overbought",
+    method: "rsiOversoldOverbought",
+    hasSite: false,
+    args: [
+      v(0, ["rsi_series", "rsi", "source"]),
+      v(1, ["oversold_level", "oversold"]),
+      v(2, ["overbought_level", "overbought"]),
+    ],
   },
 ];
 
