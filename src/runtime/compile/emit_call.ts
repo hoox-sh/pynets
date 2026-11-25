@@ -15,6 +15,8 @@ import {
   TA_OVERLOAD_BY_NAME,
   TA_RUNTIME_PAIR_GATE_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
+  TA_RUNTIME_STRING_FIRST_BY_NAME,
+  TA_UNARY_OR_ROLLING_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   type TaCallArgSpec,
 } from "../ta_specs.ts";
@@ -2055,19 +2057,37 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
     return `((__l, __r, __s) => (Number.isInteger(__l) && Number.isInteger(__r) ? ${pf} : ${sf}))(${first}, ${second}, ${sourceExpr})`;
   }
 
-  if (method === "max" || method === "min") {
-    const defSrc = method === "min" ? LOW : HIGH;
-    if (
-      args.pos.length >= 2 ||
-      Object.hasOwn(args.kw, "source") ||
-      Object.hasOwn(args.kw, "series")
-    ) {
-      return taCall(method, site, [src(), len(1, "14")]);
+  const unaryOrRolling = TA_UNARY_OR_ROLLING_BY_NAME.get(method);
+  if (unaryOrRolling != null) {
+    const rolling =
+      args.pos.length >= 2 || hasAnyKw(args, [...unaryOrRolling.lengthNames]);
+    const source = pick(args, 0, [...unaryOrRolling.sourceNames], "null");
+    if (!rolling) {
+      return taCall(unaryOrRolling.cumMethod, site, [source]);
     }
-    if (args.pos.length === 1 || Object.hasOwn(args.kw, "length")) {
-      return taCall(method, site, [defSrc, len(0, "14")]);
-    }
-    return taCall(method, site, [defSrc, "14"]);
+    return taCall(unaryOrRolling.rollMethod, site, [
+      source,
+      finiteOr(pick(args, 1, [...unaryOrRolling.lengthNames], "null"), "0"),
+    ]);
+  }
+  const stringFirst = TA_RUNTIME_STRING_FIRST_BY_NAME.get(method);
+  if (stringFirst != null) {
+    const parts = stringFirst.args.map((arg) => emitSpecArg(arg, args));
+    const names = parts.map((_, i) => `__a${i}`);
+    const contextCall = taCall(stringFirst.contextMethod, site, [
+      HIGH,
+      LOW,
+      CLOSE,
+    ]);
+    const fields = stringFirst.contextTupleFields.map(
+      (field) => `__r.${field}`,
+    );
+    const contextTuple = `(() => { const __r = ${contextCall}; return [${fields.join(", ")}]; })()`;
+    const numeric =
+      stringFirst.hasSite === false
+        ? taPure(stringFirst.method, names)
+        : taCall(stringFirst.method, site, names);
+    return `((${names.join(", ")}) => (typeof ${names[0]} === "string" ? ${contextTuple} : ${numeric}))(${parts.join(", ")})`;
   }
   if (method === "tr") {
     if (args.pos.length >= 3) {
@@ -2085,15 +2105,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
       pick(args, 1, ["atrPeriod", "length"], "10"),
     ]);
     return `(() => { const __r = ${call}; return [__r.st, __r.dir]; })()`;
-  }
-
-  if (method === "pivot_point_levels") {
-    return taPure("pivotPointLevels", [
-      cellOf(pick(args, 0, ["high"], "null")),
-      cellOf(pick(args, 1, ["low"], "null")),
-      cellOf(pick(args, 2, ["close"], "null")),
-      pick(args, 3, ["traditional"], "true"),
-    ]);
   }
 
   return "null";

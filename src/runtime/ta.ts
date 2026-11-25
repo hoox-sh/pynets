@@ -600,6 +600,8 @@ export class TaEngine {
   private readonly trSites = new Map<string, TrState>();
   private readonly highestSites = new Map<string, HighestLowestState>();
   private readonly lowestSites = new Map<string, HighestLowestState>();
+  private readonly cumMaxSites = new Map<string, Cell>();
+  private readonly cumMinSites = new Map<string, Cell>();
   private readonly stdevSites = new Map<string, StdevState>();
   private readonly changeSites = new Map<string, ChangeState>();
   private readonly wmaSites = new Map<string, WmaState>();
@@ -2706,6 +2708,24 @@ export class TaEngine {
   /** Alias of `lowest`. */
   min(site: string, source: Cell, period: number): Cell {
     return this.lowest(site, source, period);
+  }
+
+  /** Expanding max over valid samples (Python unary `ta.max`). */
+  cumMax(site: string, source: Cell): Cell {
+    const v = finiteCell(source);
+    const prev = this.cumMaxSites.get(site) ?? null;
+    const next = v === null ? prev : prev === null ? v : Math.max(prev, v);
+    this.cumMaxSites.set(site, next);
+    return next;
+  }
+
+  /** Expanding min over valid samples (Python unary `ta.min`). */
+  cumMin(site: string, source: Cell): Cell {
+    const v = finiteCell(source);
+    const prev = this.cumMinSites.get(site) ?? null;
+    const next = v === null ? prev : prev === null ? v : Math.min(prev, v);
+    this.cumMinSites.set(site, next);
+    return next;
   }
 
   /**

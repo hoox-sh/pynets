@@ -9,7 +9,7 @@ source tree — never a `pynescript` release installed in `.venv`.
 
 ## Verified
 
-`bun test` (1466 tests) and `bun run typecheck` are green against 0.6.32.
+`bun test` (1467 tests) and `bun run typecheck` are green against 0.6.32.
 
 ### Runtime semantics upgraded
 
@@ -196,8 +196,9 @@ array-valued names; Python's own compile mode returns na here).
    analytics with required arguments, add a `TaContextCallSpec` using
    `required` args (and `hasSite: false` for stateless kernels). Use `raw`
    for arrays/strings, `ignored` for required-but-unused slots, and
-   `seriesGuarded` for scalar-only kernels. `ta.max`/`ta.min` (unary
-   whole-series reduction) and `ta.pivot_point_levels` (string type
-   dispatch) still use dedicated handlers.
+   `seriesGuarded` for scalar-only kernels. For the unary/rolling split
+   (`ta.max`/`ta.min`), add a `TaUnaryOrRollingSpec`; for runtime
+   string-first dispatch (`ta.pivot_point_levels`), add a
+   `TaRuntimeStringFirstSpec`.
 5. Add a case to `test/interpret_wave*.test.ts` (Python parity + compile
    parity).

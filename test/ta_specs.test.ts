@@ -369,6 +369,13 @@ describe("TA source/length specs", () => {
       "ta.swma(close, 4)",
       "ta.swma(close, length=3)",
       "ta.expected_value(array.from(1, 2), array.from(0.5, 0.5))",
+      "ta.max(close)",
+      "ta.max(close, 3)",
+      "ta.max(high, 3)",
+      "ta.max(3)",
+      "ta.min(close)",
+      "ta.min(close, 3)",
+      "ta.min(3)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
@@ -445,6 +452,22 @@ describe("TA source/length specs", () => {
         BARS,
       );
       expect(interpreted.error ?? "", call).toContain(message);
+    }
+  });
+
+  test("pivot_point_levels string and numeric forms match", () => {
+    const scripts = [
+      `indicator("t")\nx = ta.pivot_point_levels(high[0], low[0], close[0])\nplot(x.pivot)\nplot(x.r1)\nplot(x.s1)`,
+      `indicator("t")\n[pp,r1,s1,r2,s2] = ta.pivot_point_levels("Traditional")\nplot(pp)\nplot(r1)\nplot(s1)\nplot(r2)\nplot(s2)`,
+    ];
+    for (const src of scripts) {
+      const compiled = new Runtime("TEST", { mode: "compile" }).run(src, BARS);
+      const interpreted = new Runtime("TEST").run(src, BARS);
+      expect(compiled.error).toBeUndefined();
+      expect(interpreted.error).toBeUndefined();
+      expect(Object.values(compiled.series)).toEqual(
+        Object.values(interpreted.series),
+      );
     }
   });
 

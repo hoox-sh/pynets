@@ -2197,3 +2197,84 @@ export const TA_RUNTIME_PAIR_GATE_BY_NAME: ReadonlyMap<
   string,
   TaRuntimePairGateSpec
 > = new Map(TA_RUNTIME_PAIR_GATE_SPECS.map((spec) => [spec.name, spec]));
+
+/**
+ * Python's `ta.max`/`ta.min`: a single source is an expanding reduction over
+ * the whole history; a second period argument switches to the rolling alias.
+ */
+export interface TaUnaryOrRollingSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** Expanding kernel used by the unary form. */
+  readonly cumMethod: string;
+  /** Rolling kernel used by the two-argument form. */
+  readonly rollMethod: string;
+  readonly sourceNames: readonly string[];
+  readonly lengthNames: readonly string[];
+}
+
+export const TA_UNARY_OR_ROLLING_SPECS: readonly TaUnaryOrRollingSpec[] = [
+  {
+    name: "max",
+    cumMethod: "cumMax",
+    rollMethod: "max",
+    sourceNames: ["source", "series"],
+    lengthNames: ["length"],
+  },
+  {
+    name: "min",
+    cumMethod: "cumMin",
+    rollMethod: "min",
+    sourceNames: ["source", "series"],
+    lengthNames: ["length"],
+  },
+];
+
+export const TA_UNARY_OR_ROLLING_BY_NAME: ReadonlyMap<
+  string,
+  TaUnaryOrRollingSpec
+> = new Map(TA_UNARY_OR_ROLLING_SPECS.map((spec) => [spec.name, spec]));
+
+/**
+ * Runtime string-first dispatch (`pivot_point_levels`): a string type uses
+ * the context tuple form; anything else uses the numeric form.
+ */
+export interface TaRuntimeStringFirstSpec {
+  /** Pine name without the `ta.` prefix. */
+  readonly name: string;
+  /** Site-ful context kernel for the string form. */
+  readonly contextMethod: string;
+  /** Record fields exposed as the string-form tuple. */
+  readonly contextTupleFields: readonly string[];
+  /** Numeric-form kernel. */
+  readonly method: string;
+  /** False when the numeric kernel has no call-site argument. */
+  readonly hasSite?: boolean;
+  readonly args: readonly TaCallArgSpec[];
+}
+
+export const TA_RUNTIME_STRING_FIRST_SPECS: readonly TaRuntimeStringFirstSpec[] =
+  [
+    {
+      name: "pivot_point_levels",
+      contextMethod: "pivotPoints",
+      contextTupleFields: ["pp", "r1", "s1", "r2", "s2"],
+      method: "pivotPointLevels",
+      hasSite: false,
+      args: [
+        raw(
+          0,
+          ["type", "high"],
+          "ta.pivot_point_levels() requires type+anchor or high, low, close",
+        ),
+        v(1, ["low"]),
+        v(2, ["close"]),
+        n(3, ["traditional"], 1),
+      ],
+    },
+  ];
+
+export const TA_RUNTIME_STRING_FIRST_BY_NAME: ReadonlyMap<
+  string,
+  TaRuntimeStringFirstSpec
+> = new Map(TA_RUNTIME_STRING_FIRST_SPECS.map((spec) => [spec.name, spec]));

@@ -217,6 +217,8 @@ import {
   TA_OVERLOAD_BY_NAME,
   TA_RUNTIME_PAIR_GATE_BY_NAME,
   TA_RUNTIME_PERIOD_FIRST_BY_NAME,
+  TA_RUNTIME_STRING_FIRST_BY_NAME,
+  TA_UNARY_OR_ROLLING_BY_NAME,
   TA_SRC_LEN_BY_NAME,
   TA_SRC_LEN_SPECS,
   type TaCallArgSpec,
@@ -4761,17 +4763,68 @@ function evalExtraTa(
     );
   }
 
-  if (
-    (fname === "ta.max" || fname === "ta.min") &&
-    typeof ta.max === "function"
-  ) {
-    const fn = fname === "ta.max" ? ta.max : ta.min;
-    return (fn as TaEngine["max"]).call(
+  const unaryOrRolling = TA_UNARY_OR_ROLLING_BY_NAME.get(base);
+  if (unaryOrRolling != null) {
+    const rolling =
+      positionalCount(node) >= 2 ||
+      hasKwarg(node, [...unaryOrRolling.lengthNames]);
+    const method = rolling
+      ? unaryOrRolling.rollMethod
+      : unaryOrRolling.cumMethod;
+    const fn = (ta as Record<string, unknown>)[method];
+    if (typeof fn !== "function") return NA;
+    const source = unwrap(
+      evalExpr(callArg(node.args, 0, [...unaryOrRolling.sourceNames]), env),
+    );
+    if (!rolling) {
+      return (fn as (site: string, source: Cell) => Cell).call(
+        env.ta,
+        site,
+        source,
+      );
+    }
+    return (fn as (site: string, source: Cell, length: number) => Cell).call(
       env.ta,
       site,
-      srcArg(node, env),
-      lenArg(node, env, 1),
+      source,
+      lenOrDefault(node, env, 1, [...unaryOrRolling.lengthNames], 0),
     );
+  }
+  const stringFirst = TA_RUNTIME_STRING_FIRST_BY_NAME.get(base);
+  if (stringFirst != null) {
+    const values = stringFirst.args.map((arg) => evalSpecArg(arg, node, env));
+    if (typeof values[0] === "string") {
+      const contextFn = (ta as Record<string, unknown>)[
+        stringFirst.contextMethod
+      ];
+      if (typeof contextFn !== "function") return NA;
+      const record = (
+        contextFn as (
+          site: string,
+          high: Cell,
+          low: Cell,
+          close: Cell,
+        ) => Record<string, Cell>
+      ).call(
+        env.ta,
+        site,
+        num(env.ctx.high),
+        num(env.ctx.low),
+        num(env.ctx.close),
+      );
+      return tupleOf(
+        stringFirst.contextTupleFields.map((field) => record[field] ?? NA),
+      );
+    }
+    const fn = (ta as Record<string, unknown>)[stringFirst.method];
+    if (typeof fn !== "function") return NA;
+    return stringFirst.hasSite === false
+      ? (fn as (...args: Cell[]) => Cell).call(env.ta, ...values)
+      : (fn as (site: string, ...args: Cell[]) => Cell).call(
+          env.ta,
+          site,
+          ...values,
+        );
   }
 
   // wave10a-start
@@ -4815,33 +4868,6 @@ function evalExtraTa(
 
   // wave12-end
   // wave13-start — history / sentiment / macro analytics
-
-  if (fname === "ta.pivot_point_levels" || fname === "pivot_point_levels") {
-    const msg =
-      "ta.pivot_point_levels() requires type+anchor or high, low, close";
-    const first = wave11(0, ["type", "high"], msg);
-    if (typeof first === "string") {
-      // Reference Pine type+anchor form → context pivot-point tuple.
-      if (typeof env.ta.pivotPoints !== "function") return NA;
-      const r = (env.ta.pivotPoints as TaEngine["pivotPoints"]).call(
-        env.ta,
-        site,
-        num(env.ctx.high),
-        num(env.ctx.low),
-        num(env.ctx.close),
-      );
-      return tupleOf([r.pp, r.r1, r.s1, r.r2, r.s2]);
-    }
-    const tradArg = callArg(node.args, 3, ["traditional"]);
-    const traditional =
-      tradArg == null ? true : unwrap(evalExpr(tradArg, env)) !== 0;
-    return env.ta.pivotPointLevels(
-      num(first),
-      wave11n(1, ["low"], msg),
-      wave11n(2, ["close"], msg),
-      traditional,
-    );
-  }
 
   // wave13-end
   // wave14-start — list-return + capstone synthesis
