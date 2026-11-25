@@ -1707,6 +1707,18 @@ export const TA_CONTEXT_CALL_SPECS: readonly TaContextCallSpec[] = [
     sameLength: "Returns and probabilities must have same length",
     args: [list(0, ["returns"]), list(1, ["probabilities", "probs"])],
   },
+  {
+    name: "supertrend",
+    method: "supertrend",
+    args: [
+      c("high"),
+      c("low"),
+      c("close"),
+      n(0, ["factor"], 3),
+      n(1, ["atrPeriod", "length"], 10),
+    ],
+    tupleFields: ["st", "dir"],
+  },
 ];
 
 export const TA_CONTEXT_CALL_BY_NAME: ReadonlyMap<string, TaContextCallSpec> =
@@ -1786,6 +1798,17 @@ const HIGH_LOW_VARIANTS = (
 ];
 
 export const TA_OVERLOAD_SPECS: readonly TaOverloadSpec[] = [
+  {
+    name: "tr",
+    method: "tr",
+    variants: [
+      {
+        minPositional: 3,
+        args: [v(0, ["high"]), v(1, ["low"]), v(2, ["close"])],
+      },
+      { args: [c("high"), c("low"), c("close")] },
+    ],
+  },
   { name: "highest", method: "highest", variants: HIGH_LOW_VARIANTS("high") },
   { name: "lowest", method: "lowest", variants: HIGH_LOW_VARIANTS("low") },
   { name: "willr", method: "willr", variants: WILLR_VARIANTS },

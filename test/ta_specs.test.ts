@@ -376,6 +376,9 @@ describe("TA source/length specs", () => {
       "ta.min(close)",
       "ta.min(close, 3)",
       "ta.min(3)",
+      "ta.tr()",
+      "ta.tr(high, low, close)",
+      "ta.tr(high + 1, low + 1, close + 1)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\nplot(${call}, "v")`;
@@ -488,6 +491,9 @@ describe("TA source/length specs", () => {
       "ta.zigzag(close, 3)",
       "ta.zigzag(close)",
       "ta.zigzag()",
+      "ta.supertrend()",
+      "ta.supertrend(2, 7)",
+      "ta.supertrend(factor=2, atrPeriod=7)",
     ];
     for (const call of calls) {
       const src = `indicator("t")\n[a,b,c] = ${call}\nplot(a)\nplot(b)\nplot(c)`;

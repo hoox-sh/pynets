@@ -385,13 +385,6 @@ const TA_DISPATCH: Map<
   (node: Call, env: Env, site: string) => Cell | undefined
 > = new Map<string, (node: Call, env: Env, site: string) => Cell | undefined>();
 
-TA_DISPATCH.set("ta.tr", (node, env, site) =>
-  taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
-);
-TA_DISPATCH.set("tr", (node, env, site) =>
-  taTr(env, site, num(env.ctx.high), num(env.ctx.low), num(env.ctx.close)),
-);
-
 for (const spec of TA_SRC_LEN_SPECS) {
   if (!spec.interpretDispatch) continue;
   const handler = (node: Call, env: Env, site: string): Cell | undefined => {
@@ -2814,9 +2807,6 @@ function evalCall(node: Call, env: Env): Value {
     const result = mathHandler(node, env);
     if (result !== undefined) return result;
   }
-  if (fname === "ta.supertrend" || fname === "supertrend") {
-    return evalSupertrend(node, env, site);
-  }
   const extraTa = evalExtraTa(fname, node, env, site);
   if (extraTa !== undefined) return extraTa;
   const mathVal = evalMathCall(fname, node, env);
@@ -3213,87 +3203,6 @@ function evalCall(node: Call, env: Env): Value {
   if (fname != null) {
     const udf = env.udfs.get(fname);
     if (udf) return evalUdf(udf, node, env);
-  }
-  return NA;
-}
-
-function evalSupertrend(node: Call, env: Env, site: string): Value {
-  const factor = numArg(node, env, 0, ["factor"], 3);
-  const period = namedOrLen(node, env, 1, ["atrPeriod", "length"], 10);
-  const st = taSupertrend(
-    env,
-    site,
-    num(env.ctx.high),
-    num(env.ctx.low),
-    num(env.ctx.close),
-    factor,
-    period,
-  );
-  return tupleOf([st.st, st.dir]);
-}
-
-function evalTr(node: Call, env: Env, site: string): Cell {
-  const positional = asArgs(node.args).filter((a) => argKeyword(a) == null);
-  if (positional.length >= 3) {
-    return taTr(
-      env,
-      site,
-      unwrap(evalExpr(positional[0]!.value, env)),
-      unwrap(evalExpr(positional[1]!.value, env)),
-      unwrap(evalExpr(positional[2]!.value, env)),
-    );
-  }
-  return taTr(
-    env,
-    site,
-    num(env.ctx.high),
-    num(env.ctx.low),
-    num(env.ctx.close),
-  );
-}
-
-function taSupertrend(
-  env: Env,
-  site: string,
-  high: Cell,
-  low: Cell,
-  close: Cell,
-  factor: number,
-  atrPeriod: number,
-): { st: Cell; dir: Cell } {
-  const fn = (env.ta as TaEngine & { supertrend?: TaEngine["supertrend"] })
-    .supertrend;
-  if (typeof fn === "function") {
-    return fn.call(env.ta, site, high, low, close, factor, atrPeriod);
-  }
-  const atrVal = env.ta.atr(`${site}:atr`, high, low, close, atrPeriod);
-  const atrF = atrVal == null || !Number.isFinite(atrVal) ? 0 : atrVal;
-  const h = high ?? 0;
-  const l = low ?? 0;
-  const c = close ?? h;
-  const mid = (h + l) / 2;
-  const upper = mid + factor * atrF;
-  const lower = mid - factor * atrF;
-  const dir = c >= mid ? -1 : 1;
-  return { st: dir < 0 ? lower : upper, dir };
-}
-
-function taTr(
-  env: Env,
-  site: string,
-  high: Cell,
-  low: Cell,
-  close: Cell,
-): Cell {
-  const fn = (env.ta as TaEngine & { tr?: TaEngine["tr"] }).tr;
-  if (typeof fn === "function") return fn.call(env.ta, site, high, low, close);
-  // Fallback: TR on bar 0 is high-low; otherwise na (no prev close).
-  if (env.barIndex === 0) {
-    const h = num(env.ctx.high);
-    const l = num(env.ctx.low);
-    if (h == null || l == null || !Number.isFinite(h) || !Number.isFinite(l))
-      return null;
-    return h - l;
   }
   return NA;
 }

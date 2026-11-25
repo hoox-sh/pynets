@@ -2089,23 +2089,6 @@ function emitTa(ctx: EmitCtx, method: string, args: CallArgs): string {
         : taCall(stringFirst.method, site, names);
     return `((${names.join(", ")}) => (typeof ${names[0]} === "string" ? ${contextTuple} : ${numeric}))(${parts.join(", ")})`;
   }
-  if (method === "tr") {
-    if (args.pos.length >= 3) {
-      return taCall("tr", site, [args.pos[0]!, args.pos[1]!, args.pos[2]!]);
-    }
-    return taCall("tr", site, [HIGH, LOW, CLOSE]);
-  }
-
-  if (method === "supertrend") {
-    const call = taCall("supertrend", site, [
-      HIGH,
-      LOW,
-      CLOSE,
-      pick(args, 0, ["factor"], "3"),
-      pick(args, 1, ["atrPeriod", "length"], "10"),
-    ]);
-    return `(() => { const __r = ${call}; return [__r.st, __r.dir]; })()`;
-  }
 
   return "null";
 }
