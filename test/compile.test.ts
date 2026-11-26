@@ -9,8 +9,8 @@ import {
   compileEligible,
   clearCompileCache,
   compileCacheStats,
-} from "../src/runtime/compile/index.ts";
-import { runScript } from "../src/runtime/compile/engine.ts";
+  runScript,
+} from "../src/runtime/compile.ts";
 import { Runtime } from "../src/index.ts";
 
 const CLOSES = [1, 2, 3, 4];

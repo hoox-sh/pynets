@@ -9,7 +9,7 @@ import {
   compileArray,
   compileMap,
   compileMatrix,
-} from "../src/runtime/compile/collections.ts";
+} from "../src/runtime/compile.ts";
 import { UdtType } from "../src/runtime/udt.ts";
 
 describe("compileArray", () => {

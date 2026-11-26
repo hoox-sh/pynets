@@ -45,7 +45,7 @@ export {
   CompileEmitError,
   CompileIneligibleError,
   CompileLoadError,
-} from "./runtime/compile/index.ts";
+} from "./runtime/compile.ts";
 export type {
   CompileBackend,
   CompileCacheStats,
@@ -53,7 +53,7 @@ export type {
   CompilePlotMeta,
   CompiledScript,
   RuntimeMode,
-} from "./runtime/compile/index.ts";
+} from "./runtime/compile.ts";
 export { NA, PineSeries } from "./runtime/series.ts";
 export { TaEngine } from "./runtime/ta.ts";
 export type { BrokerSettings, StrategySummary } from "./runtime/strategy.ts";

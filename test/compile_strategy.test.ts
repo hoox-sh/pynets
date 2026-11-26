@@ -4,10 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Runtime } from "../src/index.ts";
-import {
-  compileEligible,
-  compileToResult,
-} from "../src/runtime/compile/index.ts";
+import { compileEligible, compileToResult } from "../src/runtime/compile.ts";
 
 const BARS = [10, 11, 12, 13, 14].map((close) => ({
   open: close,

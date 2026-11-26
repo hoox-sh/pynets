@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { dump, interpret, parse, unparse } from "../src/index.ts";
 import { PinescriptSyntaxError } from "../src/parser/error.ts";
-import { compileToResult } from "../src/runtime/compile/index.ts";
+import { compileToResult } from "../src/runtime/compile.ts";
 
 const BARS = [100.5, 101.5, 102.5, 103.5, 104.5].map((close) => ({ close }));
 

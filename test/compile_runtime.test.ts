@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
-import { createCompileHelpers } from "../src/runtime/compile/runtime.ts";
+import { createCompileHelpers } from "../src/runtime/compile.ts";
 
 describe("createCompileHelpers", () => {
   const h = createCompileHelpers();

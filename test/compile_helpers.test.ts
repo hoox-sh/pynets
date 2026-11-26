@@ -29,7 +29,7 @@ import {
   safeNeg,
   safeSub,
   toFloatArr,
-} from "../src/runtime/compile/helpers.ts";
+} from "../src/runtime/compile.ts";
 
 describe("naNum", () => {
   test("null / NaN / Infinity → null", () => {

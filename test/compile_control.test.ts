@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { describe, expect, test } from "bun:test";
-import { compileScript } from "../src/runtime/compile/index.ts";
+import { compileScript } from "../src/runtime/compile.ts";
 import { Runtime } from "../src/index.ts";
 
 const BARS = [1, 2, 3, 4, 5].map((close, i) => ({

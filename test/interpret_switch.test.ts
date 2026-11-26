@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { dump, interpret, parse } from "../src/index.ts";
-import { compileToResult } from "../src/runtime/compile/index.ts";
+import { compileToResult } from "../src/runtime/compile.ts";
 
 const BARS = [1, 2, 3, 4, 5].map((close) => ({ close }));
 

@@ -32,6 +32,10 @@ jobs:
         run: bun run typecheck
         timeout-minutes: 5
 
+      - name: Boundaries
+        run: bun run lint:boundaries
+        timeout-minutes: 5
+
       - name: Test (coverage)
         run: bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage
         timeout-minutes: 10
