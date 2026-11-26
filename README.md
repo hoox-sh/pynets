@@ -7,7 +7,7 @@
 
 **TypeScript / Bun library for Pine Script — parse, unparse, interpret, compile, and stream.**
 
-**0.11.0** · npm [`@hoox-sh/pyne-ts`](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
+**0.11.1** · npm [`@hoox-sh/pyne-ts`](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
 
 <div align="center">
 
@@ -32,7 +32,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@hoox-sh/pyne-ts?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@hoox-sh/pyne-ts)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-[hoox.sh](https://hoox.sh) · [PyneTS docs](https://hoox.sh/pyne/docs/pyne-ts) · [parity](PARITY.md) · [changelog](CHANGELOG.md)
+[hoox.sh](https://hoox.sh) · [PyneTS docs](https://hoox.sh/pyne-ts/docs) · [parity](PARITY.md) · [changelog](CHANGELOG.md)
 
 </div>
 
@@ -50,11 +50,11 @@ Python [`pynescript.runtime`](https://github.com/hoox-sh/pyne) is the **source o
 | TA methods on shared tables   | **165**                                                                              |
 | Dispatch names (bare + `ta.`) | **317**                                                                              |
 | Descriptor tables             | **11**                                                                               |
-| Tests                         | **1,468** across 122 files · 1,321 pass · 146 skip · 0 fail                          |
+| Tests                         | **1,468** across 122 files · 1,322 pass · 146 skip · 0 fail                          |
 | Parity target                 | **PYNE 0.6.32**                                                                      |
 | Bundles                       | index **1.3 MB** · browser **757 kB** · parser-only **587 kB** (browser: **335 kB**) |
 | Engines                       | interpret · JS compile (`new Function`) · auto                                       |
-| Package                       | `@hoox-sh/pyne-ts` **0.11.0**, AGPL-3.0-or-later, Node 20+ (library) · Bun (CLI)     |
+| Package                       | `@hoox-sh/pyne-ts` **0.11.1**, AGPL-3.0-or-later, Node 20+ (library) · Bun (CLI)     |
 
 ---
 
@@ -481,7 +481,7 @@ import {
 | Check                         | Result                                                |
 | ----------------------------- | ----------------------------------------------------- |
 | PYNE-registered builtin names | **941 / 941** resolve                                 |
-| Test suite                    | **1,468** tests · 1,321 pass · 146 skip · 0 fail      |
+| Test suite                    | **1,468** tests · 1,322 pass · 146 skip · 0 fail      |
 | Typecheck                     | `tsc --noEmit` clean                                  |
 | Reference                     | **PYNE 0.6.32** local checkout                        |
 | TA dispatch                   | **165** methods · **11** tables · interpret = compile |
@@ -537,14 +537,14 @@ After a plain clone: `git submodule update --init --recursive`.
 
 ## Ecosystem
 
-| Product                                                               | Role                                                         | Docs                                                           |
-| --------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
-| [**HOOX**](https://github.com/hoox-sh/hoox)                           | Execution mesh: signal → risk → CEX / DEX hop → notify       | [docs.hoox.sh](https://docs.hoox.sh)                           |
-| [**PYNE**](https://github.com/hoox-sh/pyne)                           | Language engine: grammar, AST, Python runtime, LSP, Pro API  | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs)                 |
-| [**AXIS**](https://github.com/hoox-sh/axis)                           | Installable charting PWA (Solid + Vite; offline via Pyodide) | [hoox.sh/axis/docs](https://hoox.sh/axis/docs)                 |
-| [**PyneTS**](https://github.com/hoox-sh/pyne-ts)                      | TypeScript / Bun library + CLI (this repo)                   | [hoox.sh/pyne/docs/pyne-ts](https://hoox.sh/pyne/docs/pyne-ts) |
-| [**pyne-worker**](https://github.com/hoox-sh/pyne-worker)             | Edge evaluate host for the Python engine (`POST /run`)       | [docs](https://hoox.sh/pyne/docs/pyne-worker)                  |
-| [**pyne-agent-worker**](https://github.com/hoox-sh/pyne-agent-worker) | NL authoring (Workers AI™); optional `/run` validation       | [docs](https://hoox.sh/pyne/docs/agent)                        |
+| Product                                                               | Role                                                         | Docs                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| [**HOOX**](https://github.com/hoox-sh/hoox)                           | Execution mesh: signal → risk → CEX / DEX hop → notify       | [docs.hoox.sh](https://docs.hoox.sh)                 |
+| [**PYNE**](https://github.com/hoox-sh/pyne)                           | Language engine: grammar, AST, Python runtime, LSP, Pro API  | [hoox.sh/pyne/docs](https://hoox.sh/pyne/docs)       |
+| [**AXIS**](https://github.com/hoox-sh/axis)                           | Installable charting PWA (Solid + Vite; offline via Pyodide) | [hoox.sh/axis/docs](https://hoox.sh/axis/docs)       |
+| [**PyneTS**](https://github.com/hoox-sh/pyne-ts)                      | TypeScript / Bun library + CLI (this repo)                   | [hoox.sh/pyne-ts/docs](https://hoox.sh/pyne-ts/docs) |
+| [**pyne-worker**](https://github.com/hoox-sh/pyne-worker)             | Edge evaluate host for the Python engine (`POST /run`)       | [docs](https://hoox.sh/pyne/docs/pyne-worker)        |
+| [**pyne-agent-worker**](https://github.com/hoox-sh/pyne-agent-worker) | NL authoring (Workers AI™); optional `/run` validation       | [docs](https://hoox.sh/pyne/docs/agent)              |
 
 PYNE consumes PyneTS **only** as the `pyne-ts/` git submodule — never copy sources back into `hoox-sh/pyne`.
 

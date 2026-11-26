@@ -1,0 +1,29 @@
+PyneTS — consolidated docs index for LLM consumption
+Generated: 2026-11-26
+Source: github.com/hoox-sh/pyne-ts/docs
+Public: https://hoox.sh/pyne-ts/docs
+Repository: https://github.com/hoox-sh/pyne-ts
+
+PyneTS is the TypeScript / Bun library for Pine Script: parse, unparse,
+interpret, JS-compile. Python pynescript is the source of truth; when
+semantics disagree, Python wins. Package: @hoox-sh/pyne-ts (current 0.11.1).
+Not a Cloudflare Worker, not Numba, not a TradingView product.
+
+PAGES
+- https://hoox.sh/pyne-ts/docs — PyneTS hub: what it is / is not, install quickstart, numbers vs PARITY.md, interface surface
+- https://hoox.sh/pyne-ts/docs/install — install via Bun / npm / esm.sh; Node vs Bun entries; CLI needs Bun; engines bun>=1.2, node>=20
+- https://hoox.sh/pyne-ts/docs/cli — pyne-ts check / format / run / dump / info; Rich TTY, JSON on pipes; exit codes 0/1/2
+- https://hoox.sh/pyne-ts/docs/runtime — Runtime.run contract: na is null, lookback, call-site TA, request.security without data → na, streaming + realtime windows, providers
+- https://hoox.sh/pyne-ts/docs/compile — mode compile|auto, JS bar-loop emit (Python object-mode analog, not Numba); shared descriptor tables with interpret
+- https://hoox.sh/pyne-ts/docs/parity — how to compare against Python Runtime.run; snapshot: PYNE 0.6.32, 941/941 builtins, 1,468 tests (interpret + compile)
+- https://hoox.sh/pyne-ts/docs/missing-features — current gap list vs Python pynescript.runtime (short) and what closed in waves 11-14
+
+AUTHORITY
+- PARITY.md in the repo (https://github.com/hoox-sh/pyne-ts/blob/main/PARITY.md) is the live parity status; the docs quote it, they do not replace it.
+- Python pynescript Runtime is the oracle for semantics. Never resolve a disagreement in favor of the TypeScript side without a Python repro.
+
+OTHER
+- Machine-readable site map: https://hoox.sh/pyne-ts/docs/llms.txt
+- PYNE (language runtime) docs: https://hoox.sh/pyne/docs
+- HOOX mesh docs: https://hoox.sh/docs
+- License: AGPL-3.0-or-later. Pine Script(TM) and TradingView(R) are trademarks of TradingView, Inc.

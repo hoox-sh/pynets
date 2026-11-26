@@ -1,0 +1,208 @@
+# Copyright (c) 2024-2026 HOOX · PyneTS · hoox-sh (jango_blockchained)
+
+#
+
+# This file is part of pyne-ts.
+
+#
+
+# pyne-ts is free software: you can redistribute it and/or modify
+
+# it under the terms of the GNU Affero General Public License as published by
+
+# the Free Software Foundation, either version 3 of the License, or
+
+# (at your option) any later version.
+
+#
+
+# pyne-ts is distributed in the hope that it will be useful,
+
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+
+# GNU Affero General Public License for more details.
+
+#
+
+# You should have received a copy of the GNU Affero General Public License
+
+# along with pyne-ts. If not, see <https://www.gnu.org/licenses/>.
+
+#
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+
+title: "PyneTS"
+description: "TypeScript / Bun library for Pine Script — parse, unparse, interpret, JS compile. Python pynescript is the source of truth."
+---
+
+# PyneTS
+
+**PyneTS** (`@hoox-sh/pyne-ts`, currently **0.11.1**) is the TypeScript / Bun library for Pine Script: `parse`, `unparse`, and `Runtime.run`. Public names match Python `pynescript`. Python `pynescript.runtime` is the **source of truth** — when semantics disagree, Python wins.
+
+This is **not** a Cloudflare Worker, **not** a Numba compile path, and **not** a TradingView platform substitute.
+
+Published on npm as [`@hoox-sh/pyne-ts`](https://www.npmjs.com/package/@hoox-sh/pyne-ts) (the pre-rename name `@hoox-sh/pynets` stays reachable for old lockfiles). Source: [github.com/hoox-sh/pyne-ts](https://github.com/hoox-sh/pyne-ts).
+
+<CardGroup cols={3}>
+  <Card title="Install" icon="bolt" href="/pyne-ts/docs/install">
+    bun add / npm install / esm.sh. CLI needs Bun.
+  </Card>
+  <Card title="Runtime" icon="cpu" href="/pyne-ts/docs/runtime">
+    na is null. Lookback, TA call-sites, foreign security → na.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/pyne-ts/docs/cli">
+    check / format / run / dump / info. Pipes stay JSON.
+  </Card>
+  <Card title="Compile" icon="layers" href="/pyne-ts/docs/compile">
+    JS bar-loop emit. mode interpret | compile | auto.
+  </Card>
+  <Card title="Parity" icon="crosshair" href="/pyne-ts/docs/parity">
+    Compare plots against Python Runtime.run on the same bars.
+  </Card>
+  <Card
+    title="Missing features"
+    icon="list"
+    href="/pyne-ts/docs/missing-features"
+  >
+    What still differs from Python, and what closed recently.
+  </Card>
+</CardGroup>
+
+## Abstract
+
+Most TypeScript Pine ports rewrite the language. PyneTS does not. It is the library-shaped port of **PYNE**: the same ANTLR grammar, the same ASDL field names (`kind`, `lineno`, `col_offset`, …), the same interpret contract.
+
+```
+Source (.pine / .pyne)
+  → shared PYNE .g4  (TS ANTLR target — not forked here)
+  → ASDL AST
+  → bar-loop  (interpret | JS compile | auto)
+  → plots / series / events / drawings / alerts
+```
+
+Standalone checkout: [github.com/hoox-sh/pyne-ts](https://github.com/hoox-sh/pyne-ts). PYNE consumes it **only** as the `pyne-ts/` git submodule — never copy sources into `hoox-sh/pyne`.
+
+```ts
+import { parse, unparse, Runtime } from "@hoox-sh/pyne-ts";
+
+const src = `//@version=5
+indicator("sma")
+plot(ta.sma(close, 3))
+`;
+
+const tree = parse(src);
+unparse(tree);
+
+const out = new Runtime("AAPL").run(src, [
+  { close: 1 },
+  { close: 2 },
+  { close: 3 },
+  { close: 4 },
+]);
+// out.plots, out.series, out.count
+// new Runtime("AAPL", { mode: "compile" }) — JS bar-loop emit (not Numba)
+// mode: "auto" tries compile, then interpret
+```
+
+## What this is / what this is not
+
+| Confused with         | Reality                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **pyne-worker**       | Python Cloudflare Worker. Vendors `pynescript.runtime`. `POST /run`. See [pyne-worker](https://hoox.sh/pyne/docs/pyne-worker). |
+| **pyne-agent-worker** | NL authoring host. Not an evaluate library. See [agent](https://hoox.sh/pyne/docs/agent).                                      |
+| **Python `pyne run`** | Compile-only smoke on synthetic bars. Python `pyne execute` and PyneTS `pyne-ts run` call `Runtime.run`.                       |
+| **Numba**             | Python compile backend. PyneTS compile is **JS emit** (object-mode analog).                                                    |
+| **AXIS engine**       | AXIS does not load this package.                                                                                               |
+
+## Numbers
+
+Snapshot from `PARITY.md` (PYNE **0.6.32**, 2026-11) — treat that file as the live source:
+
+| Metric                   | Value                                                          |
+| ------------------------ | -------------------------------------------------------------- |
+| PYNE-registered builtins | **941 / 941** resolve                                          |
+| Tests                    | **1,468** · 1,322 pass · 146 skip · 0 fail                     |
+| TA methods               | **165** on shared descriptor tables (11 tables)                |
+| Dispatch names           | **317** (bare + `ta.` prefix)                                  |
+| Parity target            | **PYNE 0.6.32**                                                |
+| Engines                  | interpret · JS compile · auto                                  |
+| Package                  | `@hoox-sh/pyne-ts` **0.11.1** · Node 20+ (library) · Bun (CLI) |
+
+<Note>
+  Parity claims on these pages are measured against the local PYNE checkout.
+  Numbers drift;
+  [`PARITY.md`](https://github.com/hoox-sh/pyne-ts/blob/main/PARITY.md) is the
+  authority. 146 tests skip unless PYNE is present on `PYTHONPATH`.
+</Note>
+
+## Interface surface
+
+| Name                                                     | Role                                              |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| `parse(source)`                                          | ANTLR → ASDL tree. Throws `PinescriptSyntaxError` |
+| `unparse(tree)`                                          | Tree → normalized source                          |
+| `dump(tree)`                                             | Debug dump                                        |
+| `tokenize(source)`                                       | Lexer tokens                                      |
+| `new Runtime(symbol, options).run(source, bars, extra?)` | Bar-loop evaluate                                 |
+| `Runtime.stream(source)`                                 | Push-driven re-eval                               |
+| `Runtime.runProvider(source, provider)`                  | Fetch bars then `run`                             |
+| `compileScript` / `transpile`                            | JS emit (not Numba)                               |
+| CLI `pyne-ts`                                            | `check` `format` `run` `dump` `info`              |
+
+Default `mode` is **`interpret`**. Constructor and per-call `extra` accept `mode: "interpret" | "compile" | "auto"`.
+
+## Internals (repo paths)
+
+Standalone ([hoox-sh/pyne-ts](https://github.com/hoox-sh/pyne-ts) / [`@hoox-sh/pyne-ts`](https://www.npmjs.com/package/@hoox-sh/pyne-ts)):
+
+| Path                       | Role                                                |
+| -------------------------- | --------------------------------------------------- |
+| `src/index.ts`             | Public barrel — do not re-export generated ANTLR    |
+| `src/ast/helper.ts`        | `parse` / `unparse` / `dump` / `tokenize`           |
+| `src/ast/nodes.ts`         | Hand-written ASDL nodes                             |
+| `src/generated/`           | ANTLR TS — **do not hand-edit**; `bun run generate` |
+| `src/runtime/interpret.ts` | `Runtime`, interpret host                           |
+| `src/runtime/ta_specs.ts`  | Shared TA descriptor tables (interpret + compile)   |
+| `src/runtime/compile/`     | JS emit (`transpile` / `compileScript`)             |
+| `src/cli.ts`               | TTY CLI                                             |
+| `test/interpret_*.test.ts` | Focused interpret tests                             |
+
+PYNE checkout: `pyne-ts/` submodule. Grammar SoT stays in PYNE `resource/*.g4`.
+
+## Failure modes
+
+| Symptom                                    | Cause                               | Fix                                                       |
+| ------------------------------------------ | ----------------------------------- | --------------------------------------------------------- |
+| Plots disagree with Python                 | Port bug or invented host behaviour | Fix TS. Python is the oracle.                             |
+| `request.security` returns `na`            | No foreign/HTF feed                 | Expected. Do not invent bars.                             |
+| `mode: "compile"` misses a builtin         | JS emit surface lag                 | Use `mode: "auto"` or `interpret`                         |
+| Importing in a Worker and expecting `/run` | This is a library                   | Use [pyne-worker](https://github.com/hoox-sh/pyne-worker) |
+| Editing `src/generated/*`                  | Overwritten on regen                | `bun run generate` after PYNE `.g4` change                |
+| `pyne-ts` CLI on a Node-only host          | `bin` is `src/cli.ts` (Bun)         | Run under Bun, or call `Runtime` from Node via `dist/`    |
+
+## Invariants
+
+1. **Python wins.** Do not invent TradingView platform behaviour that Python does not implement.
+2. **`na` is `null`.** Non-finite in/out is `na`. `na == na` is true. Any other comparison involving `na` is false.
+3. **Lookback:** `x[0]` current, `x[1]` previous, out of range or negative → `na`.
+4. **TA is one sample per bar**, state keyed by call-site (Python incremental kernels).
+5. **`request.security` foreign / HTF without a feed → `na`.** The chart series is never silently reused as another symbol.
+6. **Do not fork the grammar.** Edit `.g4` only in PYNE, then regenerate here.
+7. License: **AGPL-3.0-or-later**.
+
+## See also
+
+- [Install](/pyne-ts/docs/install)
+- [Runtime contract](/pyne-ts/docs/runtime)
+- [CLI](/pyne-ts/docs/cli)
+- [JS compile](/pyne-ts/docs/compile)
+- [Parity](/pyne-ts/docs/parity)
+- [Missing features](/pyne-ts/docs/missing-features)
+- [PYNE docs](https://hoox.sh/pyne/docs) — language runtime, the source of truth
+
+_Pine Script™ and TradingView® are trademarks of TradingView, Inc. PyneTS is an independent, unofficial implementation and is not affiliated with, authorized by, sponsored by, or endorsed by TradingView, Inc._

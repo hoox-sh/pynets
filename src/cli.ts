@@ -627,7 +627,7 @@ function infoPayload(ui: Rich): {
     bun: typeof Bun !== "undefined" ? Bun.version : null,
     mode: "interpret+compile",
     rich: ui.enabled,
-    docs: "https://hoox.sh/pyne",
+    docs: "https://hoox.sh/pyne-ts/docs",
   };
 }
 

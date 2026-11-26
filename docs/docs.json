@@ -1,0 +1,61 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "PyneTS",
+  "description": "TypeScript / Bun library for Pine Script — parse, unparse, interpret, and JS-compile. Python pynescript is the source of truth.",
+  "colors": {
+    "primary": "#A3E635",
+    "light": "#D9F99D",
+    "dark": "#4D7C0F"
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "seo": {
+    "indexing": "navigable",
+    "metatags": {
+      "og:site_name": "PyneTS Docs",
+      "og:title": "PyneTS — TypeScript / Bun Pine Script library",
+      "og:description": "Parse, unparse, interpret, and JS-compile Pine Script in TypeScript. 941 of 941 PYNE-registered builtins resolve. Python pynescript remains the runtime source of truth.",
+      "og:type": "website",
+      "canonical": "https://hoox.sh/pyne-ts/docs",
+      "robots": "index, follow"
+    }
+  },
+  "search": {
+    "prompt": "Search PyneTS docs..."
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/hoox-sh/pyne-ts"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["index", "install", "cli"]
+          },
+          {
+            "group": "Reference",
+            "pages": ["runtime", "compile"]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Reference",
+            "pages": ["parity", "missing-features"]
+          }
+        ]
+      }
+    ]
+  }
+}

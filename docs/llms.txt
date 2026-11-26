@@ -1,0 +1,40 @@
+# PyneTS — llms.txt
+# https://llmstxt.org/ — machine-readable project map for LLMs
+# Generated 2026-11-26
+
+# PyneTS
+> TypeScript / Bun library for Pine Script — parse, unparse, interpret, JS-compile
+
+PyneTS is the library-shaped port of PYNE: the same ANTLR grammar, the same ASDL AST, the same interpret contract. Python pynescript is the source of truth. Package: @hoox-sh/pyne-ts.
+
+## Primary
+
+- [Docs](https://hoox.sh/pyne-ts/docs): Full documentation hub
+- [Repository](https://github.com/hoox-sh/pyne-ts): Source
+- [Docs tree](https://github.com/hoox-sh/pyne-ts/tree/main/docs): MDX source of truth
+- [npm](https://www.npmjs.com/package/@hoox-sh/pyne-ts): Published package (0.11.1)
+- [llm.txt](https://hoox.sh/pyne-ts/docs/llm.txt): Plain-text index of every page
+- [llms.txt](https://hoox.sh/pyne-ts/docs/llms.txt): This file
+- [PYNE docs](https://hoox.sh/pyne/docs): Language runtime (separate product)
+- [HOOX docs](https://hoox.sh/docs): Edge trade mesh
+
+## Docs
+
+- [Overview](https://hoox.sh/pyne-ts/docs): What PyneTS is / is not, numbers, interface surface
+- [Install](https://hoox.sh/pyne-ts/docs/install): Bun / npm / esm.sh; Node vs Bun entries; CLI needs Bun
+- [CLI](https://hoox.sh/pyne-ts/docs/cli): check / format / run / dump / info; pipes stay JSON; exit codes
+- [Runtime](https://hoox.sh/pyne-ts/docs/runtime): run() contract, na semantics, streaming, realtime windows, providers
+- [Compile](https://hoox.sh/pyne-ts/docs/compile): JS bar-loop emit (mode compile|auto); not Numba; shared TA tables
+- [Parity](https://hoox.sh/pyne-ts/docs/parity): Python oracle workflow; snapshot PYNE 0.6.32 · 941/941 builtins
+- [Missing features](https://hoox.sh/pyne-ts/docs/missing-features): What still differs from Python; what closed in waves 11–14
+
+## Reference
+
+- [PARITY.md](https://github.com/hoox-sh/pyne-ts/blob/main/PARITY.md): Live parity status (the docs quote it, never replace it)
+- [CHANGELOG.md](https://github.com/hoox-sh/pyne-ts/blob/main/CHANGELOG.md): Release history
+- [CONTRIBUTING.md](https://github.com/hoox-sh/pyne-ts/blob/main/CONTRIBUTING.md): How to contribute
+
+## Optional
+
+- [HOOX llms.txt](https://hoox.sh/llms.txt)
+- [HOOX ai.txt](https://hoox.sh/ai.txt)
